@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# adpn-plugin-info: Extract and report properties and configuration parameters
+# contained in a LOCKSS Plugin JAR package.
+#
+# Usage: adpn-plugin-info [--help|<JARFILE>] [--format=<MIME>] [--quiet] [--<KEY>=<VALUE> ...]
+#
+# Key plugin properties, each required parameter, and each plugin property dependent on
+# those parameters will be printed out as one line of a table which can be represented in
+# plain text, TSV, or HTML table format.
+#
+#	--help			display these usage notes
+#	--format=<MIME>	supported values: text/plain, text/tab-separated-values, text/html
+# 	--quiet			quiet mode, don't add section headers to text/plain or text/html output
+#
+# Parameters can be filled in using switches of the format --<KEY>=<VALUE>
+# For example:
+#	--base_url=http://archives.alabama.gov/Lockss/ 	will set the parameter named 'base_url' to the value 'http://archives.alabama.gov/Lockss/'
+#	--subdirectory=NARA_documents 					will set the parameter named 'subdirectory' to the value 'NARA_documents'
+#
+# This script depends on:
+# - unzip (in order to extract the MANIFEST.MF and plugin XML file)
+# - jar-manifest-property.py to parse the MANIFEST.MF file of the JAR package (in order to find and extract the plugin XML file)
+# - lockss-plugin-props.py to parse and report data from the LOCKSS Plugin XML file
+#
+# @version 2019.0523
+
+##########################################################################################
+### CONFIGURATION: Set up some constants #################################################
+##########################################################################################
+SCRIPTDIR=`dirname $0`
+SCRIPT=`basename $0`
+PATH=${SCRIPTDIR}:${PATH}
+MANIFEST=MANIFEST.MF
+
+##########################################################################################
+### DEPENDENCIES: check for required command-line tools and Python scripts ###############
+##########################################################################################
+
+DEPENDENCY_FAILURE=""
+if [[ -z `which unzip` ]] ; then
+	echo 1>&2
+	echo Dependency Failure: unzip. This script requires the command-line UnZip tool. 1>&2
+	DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+unzip"
+fi
+if [[ -z `which jar-manifest-property.py` ]] ; then
+	echo 1>&2
+	echo Dependency Failure: jar-manifest-property.py. This script requires the jar-manifest-property.py Python script. 1>&2
+	DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+jar-manifest-property.py"
+fi
+if [[ -z `which lockss-plugin-props.py` ]] ; then
+	echo 1>&2
+	echo Dependency Failure: lockss-plugin-props.py. This script requires the lockss-plugin-props.py Python script. 1>&2
+	DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+lockss-plugin-props.py"
+fi
+
+if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
+	exit 1
+fi
+
+##########################################################################################
+### cmd line: --help tells us to display a usage note ####################################
+##########################################################################################
+
+if [[ "$1" =~ ^--help$ ]] ; then
+	echo "Usage: ${SCRIPT} <JARFILE> [parameters...]"
+	echo
+	echo "Output Parameters:"
+	echo "--format=<MIME>  supported values: text/plain, text/tab-separated-values, text/html"
+	echo "--quiet          quiet mode, don't add section headers to text/plain or text/html output"
+	echo
+	echo "Configuration Parameters for the plugin can be filled in using switches"
+	echo "of the format --<KEY>=<VALUE>"
+	echo
+	echo "For example:"
+	echo "--base_url=http://archives.alabama.gov/Lockss/ will set the parameter named 'base_url' to the value 'http://archives.alabama.gov/Lockss/'"
+	echo "--subdirectory=NARA_documents will set the parameter named 'subdirectory' to the value 'NARA_documents'"
+	exit 0
+fi
+
+##########################################################################################
+### cmd line: get the name of the jar file, if provided on the command line ##############
+##########################################################################################
+
+if [ ! -z "$1" ] ; then
+	JARFILE=$1
+	shift
+fi
+
+if [ ! -r "${JARFILE}" ] ; then
+	
+	if [ -r "${JARFILE}.jar" ] ; then
+		JARFILE="${JARFILE}.jar"
+	elif [ -r "${JARFILE}.zip" ] ; then
+		JARFILE="${JARFILE}.zip"
+	fi
+
+fi
+
+##########################################################################################
+### cmd line: --manifest=(...) to specify the name/path to the MANIFEST.MF file ##########
+##########################################################################################
+
+if [[ "$1" =~ ^--manifest=(.*)$ ]] ; then
+	MANIFEST="${BASH_REMATCH[1]}"
+	shift
+else
+	MANIFEST=MANIFEST.MF
+fi
+
+##########################################################################################
+### cmd line: any remaining parameters will be passed along to lockss-plugin-props.py ####
+##########################################################################################
+
+CMDLINE="$*"
+
+##########################################################################################
+# Let's proceed ##########################################################################
+##########################################################################################
+
+if [ -r "${JARFILE}" ] ; then
+	LINE=0
+	
+	( \
+		unzip -q -c "${JARFILE}" META-INF/${MANIFEST} \
+		| ${SCRIPTDIR}/jar-manifest-property.py - Lockss-Plugin Name \
+	) \
+	| while IFS="" read -a MANIFEST_LINE ; do
+		LINE=$((${LINE}+1))
+		if [[ "${LINE}" == 1 ]] ; then
+			#MANIFEST_LINE should be Lockss-Plugin="true"
+			if [[ "${MANIFEST_LINE}" != "true" ]] ; then
+				echo "[${SCRIPT}] error: Could not read ${MANIFEST} from ${JARFILE}"
+				exit # while
+			fi
+			
+		elif [[ "${LINE}" == 2 ]] ; then
+			#MANIFEST_LINE should be the relative path in the jarfile pointing to the XML
+			unzip -q -c "${JARFILE}" $MANIFEST_LINE | "${SCRIPTDIR}/lockss-plugin-props.py" - $CMDLINE
+		
+		fi
+		
+	done
+
+else
+	echo "[${SCRIPT}] error: Could not open JAR file '${JARFILE}'" 1>&2
+	exit 1
+fi
+	
