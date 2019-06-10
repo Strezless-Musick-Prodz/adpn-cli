@@ -225,6 +225,10 @@ if __name__ == '__main__':
 	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
 	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
 
+	if 'daemon' in switches :
+		if not 'url' in switches :
+			switches['url'] = urllib.parse.urljoin('http://' + switches['daemon'], '/DaemonStatus?table=Plugins&output=xml')
+
 	if (len(sys.argv) > 1) :
 		html = ''.join(fileinput.input(files=sys.argv[1:2]))
 	elif ('url' in switches) :
@@ -244,7 +248,12 @@ if __name__ == '__main__':
 	for pluginName in pluginJars.keys() :
 
 		if 'plugin' in switches :
-			if re.match(switches['plugin'], pluginName) :
+			if pluginName == switches['plugin'] :
+			
+				print(pluginJars[pluginName])
+		
+		elif 'plugin-regex' in switches :
+			if re.match(switches['plugin-regex'], pluginName) :
 			
 				print(pluginJars[pluginName])
 				
