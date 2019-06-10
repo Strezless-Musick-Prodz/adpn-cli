@@ -1,0 +1,108 @@
+#!/bin/bash
+#
+# lockss-ingest-test
+#
+# @version 2019.0610
+
+##########################################################################################
+### CONFIGURATION: Set up some constants #################################################
+##########################################################################################
+
+SCRIPTDIR=`dirname $0`
+SCRIPT=`basename $0`
+PATH=${SCRIPTDIR}:${PATH}
+
+PLUGINTXT=`mktemp`
+
+##########################################################################################
+### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
+##########################################################################################
+
+declare -a SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
+declare -a SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
+declare -a SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
+
+until [[ -z "$1" ]] ; do
+	if [[ "$1" =~ ^--([A-Za-z_0-9][^=]*)=\s*(.*)\s*$ ]] ; then
+		KEY="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[2]}"
+		
+		if [[ "daemon" == "${KEY}" || "plugin" == "${KEY}" || "plugin-regex" == "${KEY}" \
+		|| "user" == "${KEY}" || "pass" == "${KEY}" ]] ; then
+			SUBARGV_LOCKSSPLUGINURL+=("--${KEY}=${VALUE}")
+		elif [[ "proxy" == "${KEY}" || "port" == "${KEY}" ]] ; then
+			SUBARGV_LOCKSSRETRIEVEJAR+=("--${KEY}=${VALUE}")
+		else
+			SUBARGV_ADPNPLUGININFO+=("--${KEY}=${VALUE}")
+		fi
+	
+	else
+		SUBARGV_ADPNPLUGININFO+=("$1")
+	fi
+	
+	shift
+done
+
+##########################################################################################
+### lockss-plugin-url.py: Retrieve URL of the Plugin JAR package. ########################
+##########################################################################################
+
+JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
+
+if [ "$?" -eq 2 ] ; then
+	echo "MATCHING PLUGINS:"
+	echo "================="
+	echo "${JAR}"
+	
+elif [ ! -z "${JAR}" ] ; then
+
+	######################################################################################
+	### lockss-plugin-url.py | adpn-plugin-info: Retrieve & analyze Plugin JAR. ##########
+	######################################################################################
+
+	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
+	LOCKSSRETRIEVEJAR=$?
+	
+	cat ${PLUGINTXT}
+	
+	######################################################################################
+	### lockss-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ####
+	######################################################################################
+
+	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		echo ""
+		echo "URL RETRIEVAL TESTS:"
+		echo "--------------------"
+		( cat ${PLUGINTXT} | grep -P '^au_start_url\t' | lockss-ingest-test-url-ok.py ) || ERROR_ON="${ERROR_ON} au_start_url"
+		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | lockss-ingest-test-url-ok.py ) || ERROR_ON="${ERROR_ON} au_manifest"
+		
+	else
+	
+		echo ""
+		echo "TO DO NEXT:"
+		echo "-----------"
+		echo "*** Fill in all Plugin Parameters to perform URL retrieval tests."
+		
+	fi
+fi
+
+##########################################################################################
+### ERRORS: List any errors reported by subsidiary scripts ###############################
+##########################################################################################
+
+if [ ! -z "${ERROR_ON}" ] ; then
+
+	echo ""
+	echo "INGEST TEST ERRORS:"
+	echo "-------------------"
+	for mod in ${ERROR_ON} ; do
+		echo "Failed: ${mod}"
+	done
+fi
+
+##########################################################################################
+### CLEANUP: remove temporary output file ################################################
+##########################################################################################
+
+rm ${PLUGINTXT}
+
