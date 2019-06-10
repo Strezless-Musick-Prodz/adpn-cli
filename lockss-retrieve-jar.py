@@ -37,7 +37,7 @@ if __name__ == '__main__':
 	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
 
 	if len(switches['proxy']) > 0 :
-		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], switches['port'])
+		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))
 		socket.socket = socks.socksocket
 
 	errmesg = ""
