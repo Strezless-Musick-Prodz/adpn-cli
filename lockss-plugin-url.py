@@ -1,26 +1,30 @@
 #!/usr/bin/python3
 #
-# lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR package.
+# lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
 #
-# Usage: lockss-plugin-url.py [<XMLFILE>] [--help] [--url=<URL>] [--user=<USERNAME>] [--pass=<PASSWORD>] [--plugin=<NAME>]
-# [--format=<MIME>] [--quiet] [--<KEY>=<VALUE> ...]
+# Usage: lockss-plugin-url.py [<XMLFILE>] [--help] [--daemon=<HOST>|--url=<URL>] [--user=<USERNAME>] [--pass=<PASSWORD>] [--plugin=<NAME>|--plugin-regex=<PATTERN>]
 #
-# Key plugin properties, each required parameter, and each plugin property dependent on
-# those parameters will be printed out as one line of a table which can be represented in
-# plain text, TSV, or HTML table format.
+# Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
+# human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
+# human-readable title and JAR URL. The result will be printed out to stdout. 
 #
-#	--help			display these usage notes
-#	--format=<MIME>	supported values: text/plain, text/tab-separated-values, text/html
-# 	--quiet			quiet mode, don't add section headers to text/plain or text/html output
+#	--help					display these usage notes
+# 	--daemon=<HOST>			get plugin information from the LOCKSS Daemon whose at host <HOST>
+# 	--url=<URL>				get plugin information from Publisher Plugins page located at <URL>
+# 	--user=<USERNAME>		use <USERNAME> for HTTP Authentication when retrieving plugin details
+# 	--password=<PASSWORD> 	use <PASSWORD> for HTTP Authentication when retrieving plugin details
+# 	--plugin=<NAME>			display the URL for the plugin whose human-readable name exactly matches <NAME>
+# 	--plugin-regex=<PATTERN> display the URL for the plugin whose human-readable name matches <PATTERN>
 #
-# If no file name is provided, the script will read input from stdin
+# If no Daemon URL is provided using --daemon or --url then the script will attempt to
+# read an XML or HTML Plugin listing from a local file. If no file name is provided, then
+# the script will try to read the HTML or XML listing from stdin.
 #
-# Parameters can be filled in using switches of the format --<KEY>=<VALUE>
-# For example:
-#	--base_url=http://archives.alabama.gov/Lockss/ 	will set the parameter named 'base_url' to the value 'http://archives.alabama.gov/Lockss/'
-#	--subdirectory=NARA_documents 					will set the parameter named 'subdirectory' to the value 'NARA_documents'
+# If no HTTP username or password is provided on the command line, but the daemon requires
+# HTTP Authentication credentials, the script will prompt the user for the missing username
+# or password on stderr.
 #
-# @version 2019.0607
+# @version 2019.0610
 
 import sys, fileinput, re, json
 import urllib.request, urllib.parse
