@@ -245,20 +245,33 @@ if __name__ == '__main__':
 		print("No XML/HTML available to scrape.", file=sys.stderr)
 		sys.exit(1)
 	
-	for pluginName in pluginJars.keys() :
+	exitcode=2
+	urls = {}
+	if 'plugin' in switches :
+		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() if pluginName == switches['plugin'] ]
+		
+	elif 'plugin-regex' in switches :
 
-		if 'plugin' in switches :
-			if pluginName == switches['plugin'] :
-			
-				print(pluginJars[pluginName])
+		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() if re.match(switches['plugin-regex'], pluginName) ]
 		
-		elif 'plugin-regex' in switches :
-			if re.match(switches['plugin-regex'], pluginName) :
-			
-				print(pluginJars[pluginName])
-				
-		else :
 		
-			print(pluginName + "\t" + pluginJars[pluginName])
+	else :
+	
+		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() ]
 		
-	sys.exit(0)
+	if len(urls) > 2 :
+		
+		exitcode=2
+		for pair in urls :
+			print(pair[0] + "\t" + pair[1])
+
+	elif len(urls) == 1 :
+	
+		exitcode=0
+		print(urls[0][1])
+		
+	else :
+		
+		exitcode=1
+		
+	sys.exit(exitcode)
