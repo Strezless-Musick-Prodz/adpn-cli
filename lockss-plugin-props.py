@@ -132,6 +132,7 @@ class LockssPluginProps :
 		self.plugin_props = {}
 		self.config_props = {}
 		self.dependent_props = {}
+		self.exitcode = 0
 		
 		for s in pairs:
 			sKey = ''
@@ -235,6 +236,7 @@ class LockssPluginProps :
 					subbed = str(subs[p])
 				else :
 					subbed = "{" + p + "}"
+					self.exitcode=2
 				
 				ss.append(subbed)
 					
@@ -405,4 +407,6 @@ if __name__ == '__main__' :
 
 	# end for
 
+	sys.exit(lpp.exitcode)
+	
 # That's all, folks.
