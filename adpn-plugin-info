@@ -87,6 +87,18 @@ if [ ! -z "$1" ] ; then
 	shift
 fi
 
+CLEANUP=""
+if [ "-" == "${JARFILE}" ] ; then
+
+	JARFILE=`mktemp --suffix=.jar`
+	if [ -w "${JARFILE}" ] ; then
+	
+		cat - > "${JARFILE}"
+		CLEANUP="rm ${JARFILE}"
+	
+	fi
+fi
+
 if [ ! -r "${JARFILE}" ] ; then
 	
 	if [ -r "${JARFILE}.jar" ] ; then
@@ -118,7 +130,7 @@ CMDLINE="$*"
 # Let's proceed ##########################################################################
 ##########################################################################################
 
-if [ -r "${JARFILE}" ] ; then
+if [[ -r "${JARFILE}" && -s "${JARFILE}" ]] ; then
 	LINE=0
 	
 	( \
@@ -142,8 +154,15 @@ if [ -r "${JARFILE}" ] ; then
 		
 	done
 
+	if [ ! -z "${CLEANUP}" ] ; then
+		${CLEANUP}
+	fi
+	
 else
+	if [ ! -z "${CLEANUP}" ] ; then
+		${CLEANUP}
+	fi
+	
 	echo "[${SCRIPT}] error: Could not open JAR file '${JARFILE}'" 1>&2
 	exit 1
 fi
-	
