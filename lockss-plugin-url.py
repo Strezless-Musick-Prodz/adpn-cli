@@ -34,22 +34,32 @@ def KeyValuePair (switch) :
 	return (ref[1], ref[2])
 
 def LockssPropertySheet (html) :
-	soup = BeautifulSoup(html, 'html.parser')
-	forms = soup.find_all('form')
-
-	cols = { }
-	for form in forms :
-		formtables = form.find_all('table')
-		for table in formtables :
-			trs = table.find_all('tr')
-			for tr in trs :
-				tds = tr.find_all('td')
-				if len(tds) == 2 :
-					keyvalue = [ td.text for td in tds ]
-					key = ''.join([c for c in keyvalue[0] if c.isalpha()])
-					value = keyvalue[1]
-					cols[key] = value
+	stew = BeautifulSoup(html, 'html.parser')
 	
+	cols = { }
+	if len(stew.find_all('html')) > 0 :
+		forms = stew.find_all('form')
+
+		for form in forms :
+			formtables = form.find_all('table')
+			for table in formtables :
+				trs = table.find_all('tr')
+				for tr in trs :
+					tds = tr.find_all('td')
+					if len(tds) == 2 :
+						keyvalue = [ td.text for td in tds ]
+						key = ''.join([c for c in keyvalue[0] if c.isalpha()])
+						value = keyvalue[1]
+						cols[key] = value
+
+	elif len(stew.find_all('st:table')) > 0 :
+		tableName = stew.find('st:name').text
+		if ('PluginDetail' == tableName) :
+			for td in stew.find_all('st:summaryinfo') :
+				key = td.find('st:title').text
+				value = td.find('st:value').text
+				cols[key] = value
+				
 	return cols
 
 def do_output_http_error (e) :
@@ -77,6 +87,55 @@ def get_passwd (switches) :
 	else :
 		passwd = getpass(prompt="HTTP Password: ")
 	return passwd
+
+def get_xml_jars (soup, switches) :
+	cols = { }
+	pluginJars = { }
+
+	tablename = soup.find('st:name')
+	if "Plugins" == tablename.text :
+		col = 0
+		for tr in soup.find_all('st:row') :
+			for td in tr.find_all('st:cell') :
+				th = td.find('st:columnname').text
+				table = ''
+				key = ''
+				if 'plugin' == th :
+					table = td.find('st:name').text
+					key = td.find('st:key').text
+					
+					daemonurl = urllib.parse.urlsplit(switches['url'])
+					
+					iq = urllib.parse.parse_qs(daemonurl.query)
+					oq = { }
+					
+					oq['table'] = [ table ]
+					oq['key'] = [ key ]
+					oq['output'] = iq['output']
+					
+					oquery = urllib.parse.urlencode(oq, doseq=True)
+					
+					# list elements: scheme, netloc, path, params, query, fragment
+					linkedurl = urllib.parse.urlunparse([daemonurl.scheme, daemonurl.netloc, daemonurl.path, '', oquery, ''])
+
+					# retrieve URL of JAR file
+					try :
+						subxml = get_from_url(linkedurl, { **switches, **{'error': 'raise'} } )
+					except urllib.error.HTTPError :
+						subxml = ''
+				
+					props = LockssPropertySheet(subxml)
+					
+					if 'URL' in props :
+						Name = props['Name']
+						pluginJars[Name] = props['URL']
+					
+				# end for link
+			# end for td
+		# end for tr
+	# end for form
+	
+	return pluginJars
 
 def get_html_scrape_jars (soup) :
 	forms = soup.find_all('form')
@@ -125,10 +184,12 @@ def get_html_scrape_jars (soup) :
 
 def get_from_url (url, switches) :
 	try :
-		html = urllib.request.urlopen(switches['url']).read()
+		html = urllib.request.urlopen(url).read()
 	except urllib.error.HTTPError as e :
 		if 401 == e.code :
-			html = get_from_url_with_authentication(switches['url'], switches)
+			html = get_from_url_with_authentication(url, switches)
+		elif ('error' in switches) and (switches['error'] == 'raise' ) :
+			raise
 		else :
 			do_output_http_error(e)
 			sys.exit(e.code)
@@ -147,8 +208,12 @@ def get_from_url_with_authentication (url, switches) :
 	try :
 		html = urllib.request.urlopen(url).read()
 	except urllib.error.HTTPError as e :
-		do_output_http_error(e)
-		sys.exit(e.code)				
+		if ('error' in switches) and (switches['error'] == 'raise' ) :
+			raise
+		else :
+			do_output_http_error(e)
+			sys.exit(e.code)				
+
 	return html
 	
 if __name__ == '__main__':
@@ -166,10 +231,12 @@ if __name__ == '__main__':
 	soup = BeautifulSoup(html, 'html.parser')
 	if len(soup.find_all('html')) :
 		pluginJars = get_html_scrape_jars(soup)
+	elif len(soup.find_all('st:table')) :
+		pluginJars = get_xml_jars(soup, switches)	
 	else :
-		print("No HTML available to scrape.")
+		print("No XML/HTML available to scrape.", file=sys.stderr)
 		sys.exit(1)
-
+	
 	for pluginName in pluginJars.keys() :
 
 		if 'plugin' in switches :
