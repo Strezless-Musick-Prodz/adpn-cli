@@ -18,6 +18,7 @@ PLUGINTXT=`mktemp`
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
+declare -a _ARGV ; _ARGV=($0)
 declare -a SUBARGV_AUNAME ; SUBARGV_AUNAME=()
 declare -a SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
 declare -a SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
@@ -25,6 +26,7 @@ declare -a SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
 declare -a SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
 
 until [[ -z "$1" ]] ; do
+	_ARGV+=("$1")
 	if [[ "$1" =~ ^--([A-Za-z_0-9][^=]*)=\s*(.*)\s*$ ]] ; then
 		KEY="${BASH_REMATCH[1]}"
 		VALUE="${BASH_REMATCH[2]}"
@@ -53,11 +55,21 @@ done
 ### lockss-plugin-url.py: Retrieve URL of the Plugin JAR package. ########################
 ##########################################################################################
 
+if [[ -z "${SUBARGV_LOCKSSPLUGINURL[@]}" ]] ; then
+	read -p "LOCKSS Daemon Server: " DAEMON
+	SUBARGV_LOCKSSPLUGINURL+=("--daemon=${DAEMON}")
+
+	read -p "Publisher Plugin: " PUBLISHERPLUGIN
+	SUBARGV_LOCKSSPLUGINURL+=("--plugin-regex=${PUBLISHERPLUGIN}")
+fi
+
 JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
 
 if [ "$?" -eq 2 ] ; then
-	echo "MATCHING PLUGINS:"
-	echo "================="
+
+	echo ""
+	echo "MULTIPLE MATCHING PLUGINS:"
+	echo "=========================="
 	echo "${JAR}"
 	
 elif [ ! -z "${JAR}" ] ; then
@@ -69,30 +81,37 @@ elif [ ! -z "${JAR}" ] ; then
 	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
 	LOCKSSRETRIEVEJAR=$?
 	
-	if [[ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ]] ; then
-	
+	if [ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ] ; then
+
 		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
 		DU_BYTES=$(printf "%'d" "${DU_BYTES}")
 
 		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
 
 		FIND_FILECOUNT=$(find "${SUBARGV_STAGEDLOCAL[@]}" | wc -l)
-		
-		echo ""
-		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-			echo "INGEST INFORMATION AND PARAMETERS:"
-			echo "----------------------------------"
-		else 
-			echo "INGEST INFORMATION:"
-			echo "-------------------"
-		fi
-		
+
+	fi
+	
+	echo ""
+	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		echo "INGEST INFORMATION AND PARAMETERS:"
+		echo "----------------------------------"
+	else 
+		echo "INGEST INFORMATION:"
+		echo "-------------------"
+	fi
+
+	if [[ ! -z "${SUBARGV_AUNAME[@]}" ]] ; then
 		echo "NAME:		${SUBARGV_AUNAME[@]}"
+	fi
+	
+	if [[ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ]] ; then
 		echo "FILE SIZE: 	${DU_HUMANREADABLE} (${DU_BYTES} bytes, ${FIND_FILECOUNT} files)"
-		grep -P '^Plugin (Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-		fi
+	fi
+	
+	grep -P '^Plugin (Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 	fi
 	
 	######################################################################################
@@ -110,10 +129,37 @@ elif [ ! -z "${JAR}" ] ; then
 	else
 	
 		echo ""
-		echo "PARAMETERS TO BE FILLED IN:"
-		echo "---------------------------"
+		echo "PARAMETERS:"
+		echo "-----------"
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
+		echo ""
+		read -n1 -p "Read from console (Y/N)? " PARAMS_YN
+		
+		if [[ "${PARAMS_YN}" == "Y" || "${PARAMS_YN}" == "y" ]] ; then
+			echo ""
+			declare -a PLUGIN_LINE
+			
+			PARAMS_IN=`mktemp`
+			PARAMS_SWITCHES=`mktemp`
+			
+			for idx in ${!_ARGV[@]} ; do
+				if (( "${idx}" > 0 )) ; then
+					printf "%s\n" "${_ARGV[$idx]}" >> ${PARAMS_SWITCHES}
+				fi
+			done
+			
+			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} > ${PARAMS_IN}
+			while read -r -u3 -a PLUGIN_LINE ; do
+				read -p "${PLUGIN_LINE[0]} ${PLUGIN_LINE[1]}: " PARAM_VALUE
+				echo "--${PLUGIN_LINE[1]}=${PARAM_VALUE}" >> "${PARAMS_SWITCHES}"
+			done 3<"${PARAMS_IN}"
+			
+			cat ${PARAMS_SWITCHES} | xargs --delimiter='\n' "${_ARGV[0]}"
+			
+			rm "${PARAMS_IN}"
+			rm "${PARAMS_SWITCHES}"
+		fi
 	fi
 fi
 

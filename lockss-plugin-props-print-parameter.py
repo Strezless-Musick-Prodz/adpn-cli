@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import fileinput, re
+import fileinput, re, sys
 
 for line in fileinput.input() :
 	fields = line.rstrip().split("\t")
