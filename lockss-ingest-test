@@ -11,57 +11,108 @@
 SCRIPTDIR=`dirname $0`
 SCRIPT=`basename $0`
 PATH=${SCRIPTDIR}:${PATH}
+CONFFILE="${SCRIPTDIR}/lockss-ingest-test.defaults.conf"
 
 PLUGINTXT=`mktemp`
+
+declare -a _ARGV ; _ARGV=($0)
+declare -A SUBARGV_AUNAME ; SUBARGV_AUNAME=()
+declare -A SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
+declare -A SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
+declare -A SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
+declare -A SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
-declare -a _ARGV ; _ARGV=($0)
-declare -a SUBARGV_AUNAME ; SUBARGV_AUNAME=()
-declare -a SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
-declare -a SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
-declare -a SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
-declare -a SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
-
+CMDLINETXT=`mktemp`
 until [[ -z "$1" ]] ; do
 	_ARGV+=("$1")
-	if [[ "$1" =~ ^--([A-Za-z_0-9][^=]*)=\s*(.*)\s*$ ]] ; then
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+SWITCHFILES+=(${CMDLINETXT})
+
+shopt -s lastpipe
+cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+
+	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)=\s*(.*)\s*$ ]] ; then
 		KEY="${BASH_REMATCH[1]}"
 		VALUE="${BASH_REMATCH[2]}"
 		
-		if [[ "daemon" == "${KEY}" || "plugin" == "${KEY}" || "plugin-regex" == "${KEY}" \
-		|| "user" == "${KEY}" || "pass" == "${KEY}" ]] ; then
-			SUBARGV_LOCKSSPLUGINURL+=("--${KEY}=${VALUE}")
-		elif [[ "proxy" == "${KEY}" || "port" == "${KEY}" ]] ; then
-			SUBARGV_LOCKSSRETRIEVEJAR+=("--${KEY}=${VALUE}")
-		elif [[ "au_title" == "${KEY}" ]] ; then
-			SUBARGV_AUNAME+=("${VALUE}")
-		elif [[ "local" == "${KEY}" ]] ; then
-			SUBARGV_STAGEDLOCAL+=("${VALUE}")
-		else
-			SUBARGV_ADPNPLUGININFO+=("--${KEY}=${VALUE}")
-		fi
-	
-	else
-		SUBARGV_ADPNPLUGININFO+=("$1")
+		case "${KEY}" in
+			"daemon"|"plugin"|"plugin-regex"|"user"|"pass")
+				SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
+				;;
+			"proxy"|"port")
+				SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
+				;;
+			"au_title")
+				SUBARGV_AUNAME[$KEY]="${VALUE}"
+				;;
+			"local"|"remote")
+				SUBARGV_STAGEDLOCAL[$KEY]="${VALUE}"
+				;;
+			*)
+				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
+				;;
+		esac
+		
+	elif [[ ! -z "${SWITCH}" ]] ; then
+		SUBARGV_ADPNPLUGININFO[$SWITCH]="${SWITCH}"
 	fi
 	
-	shift
 done
+
+##########################################################################################
+### USER INPUT: get missing parameters from the user console if not command line #########
+##########################################################################################
+
+if [[ -z "${SUBARGV_AUNAME[au_title]}" ]] ; then
+	read -r -p "AU Name/Title: " AU_TITLE
+	_ARGV+=("--au_title=${AU_TITLE}")
+	SUBARGV_AUNAME[au_title]="${AU_TITLE}"
+fi
+
+if [[ -z "${SUBARGV_STAGEDLOCAL[local]}" && -z "${SUBARGV_STAGEDLOCAL[remote]}" ]] ; then
+	read -r -p "Local file location: " LOCALPATH
+	_ARGV+=("--local=${LOCALPATH}")
+	SUBARGV_STAGEDLOCAL[local]="${LOCALPATH}"
+fi
+
+if [[ -z "${SUBARGV_LOCKSSPLUGINURL[plugin-regex]}" ]] ; then
+	read -r -p "Publisher Plugin: " PUBLISHERPLUGIN
+	_ARGV+=("--plugin-regex=${PUBLISHERPLUGIN}")
+	SUBARGV_LOCKSSPLUGINURL[plugin-regex]="--plugin-regex=${PUBLISHERPLUGIN}"
+fi
+
+if [[ -z "${SUBARGV_LOCKSSPLUGINURL[daemon]}" ]] ; then
+	read -r -p "LOCKSS Daemon Server: " DAEMON
+	_ARGV+=("--daemon=${DAEMON}")
+	SUBARGV_LOCKSSPLUGINURL[daemon]="--daemon=${DAEMON}"
+fi
+
+if [[ -z "${SUBARGV_LOCKSSPLUGINURL[user]}" ]] ; then
+	read -r -p "LOCKSS Daemon Username: " DAEMONUSER
+	_ARGV+=("--user=${DAEMONUSER}")
+	SUBARGV_LOCKSSPLUGINURL[user]="--user=${DAEMONUSER}"
+fi
+
+if [[ -z "${SUBARGV_LOCKSSPLUGINURL[pass]}" ]] ; then
+	read -r -s -p "LOCKSS Daemon Password: " DAEMONPASS ; echo
+	_ARGV+=("--pass=${DAEMONPASS}")
+	SUBARGV_LOCKSSPLUGINURL[pass]="--pass=${DAEMONPASS}"
+fi
 
 ##########################################################################################
 ### lockss-plugin-url.py: Retrieve URL of the Plugin JAR package. ########################
 ##########################################################################################
-
-if [[ -z "${SUBARGV_LOCKSSPLUGINURL[@]}" ]] ; then
-	read -p "LOCKSS Daemon Server: " DAEMON
-	SUBARGV_LOCKSSPLUGINURL+=("--daemon=${DAEMON}")
-
-	read -p "Publisher Plugin: " PUBLISHERPLUGIN
-	SUBARGV_LOCKSSPLUGINURL+=("--plugin-regex=${PUBLISHERPLUGIN}")
-fi
 
 JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
 
@@ -81,14 +132,14 @@ elif [ ! -z "${JAR}" ] ; then
 	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
 	LOCKSSRETRIEVEJAR=$?
 	
-	if [ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ] ; then
+	if [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
 
-		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
+		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
 		DU_BYTES=$(printf "%'d" "${DU_BYTES}")
 
-		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
+		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
 
-		FIND_FILECOUNT=$(find "${SUBARGV_STAGEDLOCAL[@]}" | wc -l)
+		FIND_FILECOUNT=$(find "${SUBARGV_STAGEDLOCAL[local]}" | wc -l)
 
 	fi
 	
@@ -105,7 +156,7 @@ elif [ ! -z "${JAR}" ] ; then
 		echo "NAME:		${SUBARGV_AUNAME[@]}"
 	fi
 	
-	if [[ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ]] ; then
+	if [[ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ]] ; then
 		echo "FILE SIZE: 	${DU_HUMANREADABLE} (${DU_BYTES} bytes, ${FIND_FILECOUNT} files)"
 	fi
 	
@@ -129,15 +180,17 @@ elif [ ! -z "${JAR}" ] ; then
 	else
 	
 		echo ""
-		echo "PARAMETERS:"
-		echo "-----------"
+		echo "REQUIRED PARAMETERS:"
+		echo "--------------------"
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
 		echo ""
-		read -n1 -p "Read from console (Y/N)? " PARAMS_YN
+		read -n1 -p "Read from console (Y/N)? " PARAMS_YN ; echo ""
 		
 		if [[ "${PARAMS_YN}" == "Y" || "${PARAMS_YN}" == "y" ]] ; then
+			
 			echo ""
+			
 			declare -a PLUGIN_LINE
 			
 			PARAMS_IN=`mktemp`
@@ -151,11 +204,13 @@ elif [ ! -z "${JAR}" ] ; then
 			
 			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} > ${PARAMS_IN}
 			while read -r -u3 -a PLUGIN_LINE ; do
-				read -p "${PLUGIN_LINE[0]} ${PLUGIN_LINE[1]}: " PARAM_VALUE
-				echo "--${PLUGIN_LINE[1]}=${PARAM_VALUE}" >> "${PARAMS_SWITCHES}"
+				if [[ ! "${PLUGIN_LINE[1]}" =~ .*=.* ]] ; then
+					read -p "${PLUGIN_LINE[0]} ${PLUGIN_LINE[1]}: " PARAM_VALUE
+					echo "--${PLUGIN_LINE[1]}=${PARAM_VALUE}" >> "${PARAMS_SWITCHES}"
+				fi
 			done 3<"${PARAMS_IN}"
 			
-			cat ${PARAMS_SWITCHES} | xargs --delimiter='\n' "${_ARGV[0]}"
+			xargs -a "${PARAMS_SWITCHES}" --delimiter='\n' "${_ARGV[0]}"
 			
 			rm "${PARAMS_IN}"
 			rm "${PARAMS_SWITCHES}"
@@ -182,4 +237,4 @@ fi
 ##########################################################################################
 
 rm ${PLUGINTXT}
-
+rm ${CMDLINETXT}
