@@ -18,6 +18,8 @@ PLUGINTXT=`mktemp`
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
+declare -a SUBARGV_AUNAME ; SUBARGV_AUNAME=()
+declare -a SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
 declare -a SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
 declare -a SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
 declare -a SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
@@ -32,6 +34,10 @@ until [[ -z "$1" ]] ; do
 			SUBARGV_LOCKSSPLUGINURL+=("--${KEY}=${VALUE}")
 		elif [[ "proxy" == "${KEY}" || "port" == "${KEY}" ]] ; then
 			SUBARGV_LOCKSSRETRIEVEJAR+=("--${KEY}=${VALUE}")
+		elif [[ "au_title" == "${KEY}" ]] ; then
+			SUBARGV_AUNAME+=("${VALUE}")
+		elif [[ "local" == "${KEY}" ]] ; then
+			SUBARGV_STAGEDLOCAL+=("${VALUE}")
 		else
 			SUBARGV_ADPNPLUGININFO+=("--${KEY}=${VALUE}")
 		fi
@@ -60,28 +66,53 @@ elif [ ! -z "${JAR}" ] ; then
 	### lockss-plugin-url.py | adpn-plugin-info: Retrieve & analyze Plugin JAR. ##########
 	######################################################################################
 
-	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
+	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
 	LOCKSSRETRIEVEJAR=$?
 	
-	cat ${PLUGINTXT}
+	if [[ ! -z "${SUBARGV_STAGEDLOCAL[@]}" ]] ; then
+	
+		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
+		DU_BYTES=$(printf "%'d" "${DU_BYTES}")
+
+		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${SUBARGV_STAGEDLOCAL[@]}" | cut -f1`
+
+		FIND_FILECOUNT=$(find "${SUBARGV_STAGEDLOCAL[@]}" | wc -l)
+		
+		echo ""
+		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+			echo "INGEST INFORMATION AND PARAMETERS:"
+			echo "----------------------------------"
+		else 
+			echo "INGEST INFORMATION:"
+			echo "-------------------"
+		fi
+		
+		echo "NAME:		${SUBARGV_AUNAME[@]}"
+		echo "FILE SIZE: 	${DU_HUMANREADABLE} (${DU_BYTES} bytes, ${FIND_FILECOUNT} files)"
+		grep -P '^Plugin (Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		fi
+	fi
 	
 	######################################################################################
 	### lockss-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ####
 	######################################################################################
 
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		
 		echo ""
 		echo "URL RETRIEVAL TESTS:"
 		echo "--------------------"
 		( cat ${PLUGINTXT} | grep -P '^au_start_url\t' | lockss-ingest-test-url-ok.py ) || ERROR_ON="${ERROR_ON} au_start_url"
-		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | lockss-ingest-test-url-ok.py ) || ERROR_ON="${ERROR_ON} au_manifest"
+		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | lockss-ingest-test-url-ok.py ) || ERROR_ON="${ERROR_ON} au_manifest"		
 		
 	else
 	
 		echo ""
-		echo "TO DO NEXT:"
-		echo "-----------"
-		echo "*** Fill in all Plugin Parameters to perform URL retrieval tests."
+		echo "PARAMETERS TO BE FILLED IN:"
+		echo "---------------------------"
+		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
 	fi
 fi
