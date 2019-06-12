@@ -3,8 +3,23 @@
 import sys, os.path, fileinput, re
 import urllib.request
 
+reSwitch = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
+
+def KeyValuePair (switch) :
+	ref=re.match(reSwitch, switch)
+	return (ref[1], ref[3])
+
 if __name__ == '__main__' :
-	for line in fileinput.input() :
+
+	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
+	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
+
+	if len(sys.argv) > 1 :
+		input = fileinput.input(files=sys.argv[1:2])
+	else :
+		input = fileinput.input()
+
+	for line in input :
 		cols = line.rstrip().split("\t")
 		prop = cols[0]
 		url = cols[1]

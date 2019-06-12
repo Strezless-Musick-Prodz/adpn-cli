@@ -175,6 +175,9 @@ elif [ ! -z "${JAR}" ] ; then
 	######################################################################################
 
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		echo ""
+		echo -n "JSON PACKET:	"
+		cat ${PLUGINTXT} | lockss-plugin-props-print-parameter.py --output=application/json
 		
 		echo ""
 		echo "URL RETRIEVAL TESTS:"
