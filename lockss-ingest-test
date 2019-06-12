@@ -116,7 +116,12 @@ fi
 
 JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
 
-if [ "$?" -eq 2 ] ; then
+
+if [ -z "${JAR}" ] ; then
+
+	echo "[${SCRIPT}] No Publisher Plugin matches ${SUBARGV_LOCKSSPLUGINURL[@]}." 1>&2
+
+elif [ "$?" -eq 2 ] ; then
 
 	echo ""
 	echo "MULTIPLE MATCHING PLUGINS:"
