@@ -333,6 +333,10 @@ CUSTOMIZED PROPERTIES:
 		# Print out all successfully collected XML elements with their values
 		if len(txtPropertiesHeader) > 0 and not ('quiet' in subs) :
 			print(txtPropertiesHeader)
+
+		if 'jar' in subs :
+			print(txtPropertyLine % {"field": "jar", "description": "Plugin JAR", "value": esc(subs['jar']), "raw": esc(subs['jar'])})
+		
 		for field in displayed_items.keys() :
 			if field in self.plugin_props :
 				fs = self.interpolate_properties(self.plugin_props[field], subs)

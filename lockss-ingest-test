@@ -134,7 +134,7 @@ elif [ ! -z "${JAR}" ] ; then
 	### lockss-plugin-url.py | adpn-plugin-info: Retrieve & analyze Plugin JAR. ##########
 	######################################################################################
 
-	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
+	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values --jar="${JAR}" "${SUBARGV_ADPNPLUGININFO[@]}" > ${PLUGINTXT}
 	LOCKSSRETRIEVEJAR=$?
 	
 	if [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
@@ -165,7 +165,7 @@ elif [ ! -z "${JAR}" ] ; then
 		echo "FILE SIZE: 	${DU_HUMANREADABLE} (${DU_BYTES} bytes, ${FIND_FILECOUNT} files)"
 	fi
 	
-	grep -P '^Plugin (Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+	grep -P '^Plugin (JAR|Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 	fi
