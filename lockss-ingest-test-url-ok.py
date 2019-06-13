@@ -52,33 +52,89 @@ def KeyValuePair (switch) :
 
 if __name__ == '__main__' :
 
+	######################################################################################
+	## COMMAND LINE: pull switches out of sys.argv, parse into switches: dict ############
+	######################################################################################
+	
+	script = sys.argv[0]
+	script = os.path.basename(script)
+
+	defaults = {"proxy": "", "port": -1}
 	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
+	switches = {**defaults, **switches}
+	
 	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
 
+	######################################################################################
+	## PROXY: if --proxy/--port are provided, connect to SOCKS5 proxy and monkeypatch ####
+	######################################################################################
+	
+	if len(switches['proxy']) > 0 :
+		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))
+		socket.socket = socks.socksocket
+		
+	######################################################################################
+	## INPUT: read URLs line-by-line from stdin or from INPUTFILE ########################
+	######################################################################################
+	
 	if len(sys.argv) > 1 :
 		input = fileinput.input(files=sys.argv[1:2])
 	else :
 		input = fileinput.input()
 
+	exitcode = 0 # assume success
 	for line in input :
-		cols = line.rstrip().split("\t")
-		prop = cols[0]
-		url = cols[1]
+		cols = line.rstrip().split("\t", maxsplit=3)
+		if len(cols) > 1 :
+			prop = cols[0]
+			url = cols[1]
+		else :
+			prop = 'url'
+			url = cols[0]
+			
+		if len(cols) > 2 :
+			rest = cols[2]
+		else :
+			rest = ''
 
+		##################################################################################
+		## urlopen: Send HTTP GET Request and assess the response code. ##################
+		##################################################################################
+		
 		code = 200 # OK
 		try :
-			page = urllib.request.urlopen(cols[1]).read().rstrip
+			page = urllib.request.urlopen(url).read()
 		except urllib.request.HTTPError as e :
 			code = e.code
 			errmesg = e.reason
 		except urllib.request.URLError as e :
-			code = -1
-			errmesg = e.reason
+			if isinstance(e.reason, str) :
+				code = 601
+				errmesg = e.reason
+			elif isinstance(e.reason, socket.gaierror) :
+				code = 602
+				errmesg = "HOST FAILURE: " + str(e.reason)
+			elif isinstance(e.reason, socks.ProxyConnectionError) :
+				code = 603
+				errmesg = "PROXY FAILURE: " + e.reason.msg
+				errmesg = errmesg + ". Do you need to set up the proxy connection?"
+			else :
+				code = 604
+				errmesg = "UNRECOGNIZED URL FAILURE: " + str(e.reason)
+		except Exception as e :
+			code = 605
+			errmesg = "<Unrecognized Exception>"
+
+		##################################################################################
+		## OUTPUT: Print out TSV lines, [code, response, property, url, ...] #############
+		##################################################################################
 		
+		if code == 0 :
+			exitcode = (code - 200) # return an error code from first failure, if any
+			
 		if 200 == code :
-			print("200 OK", "\t", cols[0], "\t", cols[1], "\t", cols[2])
-			code = 0
+			print("200", "\t", "OK", "\t", prop, "\t", url, "\t", rest)
 		else :
-			print(str(code) + " " + errmesg, "\t", cols[0], "\t", cols[1], "\t", cols[2])
+			print(str(code), "\t", errmesg, "\t", prop, "\t", url, "\t", rest)
 		
-		sys.exit(code)
+	sys.exit(exitcode)

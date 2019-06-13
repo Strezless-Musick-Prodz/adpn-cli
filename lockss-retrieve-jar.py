@@ -41,24 +41,46 @@ if __name__ == '__main__':
 		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))
 		socket.socket = socks.socksocket
 
-	errmesg = ""
-	
-	try :
-		blob = urllib.request.urlopen(switches['url']).read()
-	except urllib.request.HTTPError as e :
-		errmesg = "HTTP ERROR " + str(e.code) + " " + e.reason
-		if 403 == e.code :
-			errmesg = errmesg + ". Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
-	except urllib.request.URLError as e :
-		mesg = "URL: <Unrecognized Error>"
-		if isinstance(e.reason, str) :
-			errmesg = "URL Error: " + e.reason
-		elif isinstance(e.reason, socks.ProxyConnectionError) :
-			errmesg = "PROXY FAILURE: " + e.reason.msg
-			errmesg = errmesg + ". Do you need to set up the proxy connection?"
-	except Exception as e :
-		mesg = "<Unrecognized Exception>"
+	firstTry = True
+	retry = False
 
+	while firstTry or retry :
+		errmesg = ""
+		firstTry = False
+		retry = False
+
+		try :
+			blob = urllib.request.urlopen(switches['url']).read()
+		except urllib.request.HTTPError as e :
+			errmesg = "HTTP ERROR " + str(e.code) + " " + e.reason
+			if 403 == e.code :
+				errmesg = errmesg + ". Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
+		except urllib.request.URLError as e :
+			mesg = "URL: <Unrecognized Error>"
+			if isinstance(e.reason, str) :
+				errmesg = "URL Error: " + e.reason
+			elif isinstance(e.reason, socks.ProxyConnectionError) :
+				errmesg = "PROXY FAILURE: " + e.reason.msg
+
+				if not retry and len(switches["tunnel"]) > 0 :
+					retry = True
+				else :
+					errmesg = errmesg + ". Do you need to set up the proxy connection?"
+					
+		except Exception as e :
+			mesg = "<Unrecognized Exception>"
+
+		if retry :
+			diag = "[%(script)s] %(errmesg)s. Trying to open SSH tunnel [%(tunnel)s]..." % {"script": script, "errmesg": errmesg, "tunnel": switches['tunnel']}
+			
+			print(diag, file=sys.stderr)
+		
+			fail=subprocess.call(["ssh", "-f", switches["tunnel"], "-D" + str(switches['port']), "sleep 3600"], stdout=sys.stderr);
+		
+			if fail :
+				print("Exit code: " + str(fail), file=sys.stderr)
+				retry = False
+			
 	if len(errmesg) > 0 :
 		print("[" + script + "] error: " + errmesg, file=sys.stderr)
 	else :
