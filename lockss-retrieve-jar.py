@@ -9,14 +9,15 @@
 #
 # Usage: lockss-retrieve-jar.py --url=<URL> [--proxy=<HOST>] [--port=<PORTNUMBER>]
 #
-# If no proxy host is provided, the script will assume localhost
-# If no proxy port is provided, the script will default to 31415
+# If no proxy host is provided, the script will assume no proxy
+# If no proxy port is provided, the script will default to 8080
 # To force a direct connection without a proxy, use --proxy=""
 #
 # @version 2019.0610
 
 import sys, os.path, re
 import socks, socket
+import subprocess
 
 import urllib.request
 
@@ -30,7 +31,7 @@ if __name__ == '__main__':
 	script = sys.argv[0]
 	script = os.path.basename(script)
 	
-	defaults = {"proxy": "localhost", "port": 31415}
+	defaults = {"proxy": "", "port": 8080, "tunnel": "", "tunnel-port": 22}
 	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
 	switches = {**defaults, **switches}
 

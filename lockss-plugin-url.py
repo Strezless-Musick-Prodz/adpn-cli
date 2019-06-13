@@ -2,19 +2,24 @@
 #
 # lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
 #
-# Usage: lockss-plugin-url.py [<XMLFILE>] [--help] [--daemon=<HOST>|--url=<URL>] [--user=<USERNAME>] [--pass=<PASSWORD>] [--plugin=<NAME>|--plugin-regex=<PATTERN>]
+# Usage: lockss-plugin-url.py [<XML>]
+# 	[--help]
+# 	[--daemon=<HOST>|--url=<URL>] [--user=<NAME>] [--pass=<PASSWORD>]
+# 	[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<FQCN>]
 #
 # Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
 # human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
 # human-readable title and JAR URL. The result will be printed out to stdout. 
 #
 #	--help					display these usage notes
-# 	--daemon=<HOST>			get plugin information from the LOCKSS Daemon whose at host <HOST>
-# 	--url=<URL>				get plugin information from Publisher Plugins page located at <URL>
-# 	--user=<USERNAME>		use <USERNAME> for HTTP Authentication when retrieving plugin details
-# 	--password=<PASSWORD> 	use <PASSWORD> for HTTP Authentication when retrieving plugin details
-# 	--plugin=<NAME>			display the URL for the plugin whose human-readable name exactly matches <NAME>
-# 	--plugin-regex=<PATTERN> display the URL for the plugin whose human-readable name matches <PATTERN>
+# 	--daemon=<HOST>			get plugin info from LOCKSS Daemon at host <HOST>
+# 	--url=<URL>				get plugin info from Publisher Plugins page located at <URL>
+# 	--user=<NAME>			use <NAME> for HTTP Auth when retrieving plugin details
+# 	--password=<PASSWORD> 	use <PASSWORD> for HTTP Auth when retrieving plugin details
+# 	--plugin=<NAME>			display URL for the plugin whose human-readable name exactly matches <NAME>
+# 	--plugin-regex=<PATTERN> 	display URL for the plugin name matching <PATTERN>
+# 	--plugin-keywords=<WORDS> 	display URL for the plugin name containing keywords <WORDS>
+# 	--plugin-id=<FQCN>		display URL for the plugin whose ID is <FQCN>
 #
 # If no Daemon URL is provided using --daemon or --url then the script will attempt to
 # read an XML or HTML Plugin listing from a local file. If no file name is provided, then

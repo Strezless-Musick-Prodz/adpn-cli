@@ -1,6 +1,33 @@
 #!/bin/bash
 #
-# lockss-ingest-test
+# lockss-ingest-test: Assemble information and run tests for a package of files staged for
+# ingest as a LOCKSS Archival Unit, given a local location, a LOCKSS Plugin and parameters
+# for the plugin.
+#
+# Switches can be provided on the command line, or interactively on the console at input
+# prompts. You can set default values for commonly-repeated switches (for example, if your
+# LOCKSS daemon is always at the same location, you won't need to re-enter that location
+# every time you run the script) by creating a plaintext file called:
+#
+# 		./lockss-ingest-test.defaults.conf
+#
+# where the conf file is located in the same directory as the lockss-ingest-test script.
+# The file should be a text/plain file, with one switch on each line of the file. If the
+# same switch is provided on the command line, the value on the command line overrides the
+# value provided in the defaults.conf file.
+#
+# Usage:
+#
+# 	lockss-ingest-test --local=<PATH>
+#
+# 		run without other parameters, the script will prompt on the console for AU title,
+# 		publisher plugin, and LOCKSS Daemon information, report back the required
+# 		parameters for the Publisher Plugin, and then allow the option to input parameters
+# 		and perform a test of the accessibility of the start URL and/or manifest page for
+# 		an HTTP GET.
+#
+# 	lockss-ingest-test [--daemon=<DAEMON> [--user=<USERNAME>] [--pass=<PASSWORD>]
+# 		[--plugin=<NAME>|--plugin-id=<FQCN>|--plugin-regex=<PATTERN>]
 #
 # @version 2019.0610
 
@@ -21,25 +48,70 @@ declare -A SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
 declare -A SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
 declare -A SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
 declare -A SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
+declare -A SUBARGV_TESTURLOK ; SUBARGV_TESTURLOK=()
+
+##########################################################################################
+### DEPENDENCIES: check for required command-line tools and Python scripts ###############
+##########################################################################################
+
+declare -A DEPENDENCIES ; DEPENDENCIES=(
+	[mktemp]="command-line %s tool"
+	[grep]="command-line %s tool"
+	[xargs]="command-line %s tool"
+	[du]="command-line %s tool"
+	[find]="command-line %s tool"
+	[adpn-plugin-info]="%s Bash script"
+	[lockss-plugin-url.py]="%s Python script"
+	[lockss-retrieve-jar.py]="%s Python script"
+	[lockss-plugin-props.py]="%s Python script"
+	[lockss-plugin-props-print-parameter.py]="%s Python script"
+	[lockss-ingest-test-url-ok.py]="%s Python script"
+)
+
+DEPENDENCY_FAILURE=""
+for CMD in "${!DEPENDENCIES[@]}" ; do
+	DESC=$(printf "${DEPENDENCIES[$CMD]}" "${CMD}")
+	if [[ -z $(which ${CMD}) ]] ; then
+		echo 1>&2
+		echo Dependency Failure: ${CMD}. This script requires the ${DESC}. 1>&2
+		DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+${CMD}"
+	fi
+done
+
+if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
+	exit 1
+fi
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
 CMDLINETXT=`mktemp`
+
+if [[ "$1" == "-" ]] ; then
+	./adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
+	shift
+	
+	cat "${CMDLINETXT}" | while IFS="" read -r SWITCH ; do
+		_ARGV+=("${SWITCH}")
+	done
+fi
+
 until [[ -z "$1" ]] ; do
 	_ARGV+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
 
-declare -a SWITCHFILES ; SWITCHFILES=()
-if [[ -r "${CONFFILE}" ]] ; then
-	SWITCHFILES+=(${CONFFILE})
-fi
 SWITCHFILES+=(${CMDLINETXT})
 
-shopt -s lastpipe
 cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 
 	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)=\s*(.*)\s*$ ]] ; then

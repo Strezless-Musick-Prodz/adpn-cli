@@ -1,4 +1,17 @@
 #!/usr/bin/python3
+#
+# lockss-plugin-props-print-parameter.py: accept a list of tab-separated values
+# representing key-value pairs of LOCKSS Plugin properties and parameters, reformat it
+# according to scripting needs and print it out in the desired format.
+#
+# Usage: <input> | lockss-plugin-props-print-parameter.py [--output=<FORMAT>]
+#
+# 	--output=<FORMAT> 	MIME-type of format for output.
+# 						Supported formats: text/plain, application/json
+#
+# Input: text/tab-separated values, usually piped output from lockss-plugin-props.py
+#
+# @version 2019.0612
 
 import fileinput, re, sys, json
 
