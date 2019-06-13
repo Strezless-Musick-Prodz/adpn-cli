@@ -26,10 +26,11 @@
 #
 # @version 2019.0610
 
-import sys, fileinput, re, json
+import sys, fileinput, re, json, os.path
 import urllib.request, urllib.parse
 from bs4 import BeautifulSoup
 from getpass import getpass
+from functools import reduce
 
 reSwitch = '--([0-9_A-z][^=]*)\s*=(.*)\s*$'
 
@@ -66,11 +67,11 @@ def LockssPropertySheet (html) :
 				
 	return cols
 
-def do_output_http_error (e) :
+def do_output_http_error (e, script) :
 	if 401 == e.code :
-		print("Authentication error: " + e.reason, file=sys.stderr)
+		print("[" + script + "] Authentication error: " + e.reason, file=sys.stderr)
 	else :
-		print("HTTP Error: " + e.code + " " + e.reason, file=sys.stderr)					
+		print("[" + script + "] HTTP Error: " + str(e.code) + " " + e.reason, file=sys.stderr)					
 
 def get_username (switches) :
 	if 'user' in switches :
@@ -124,7 +125,7 @@ def get_xml_jars (soup, switches) :
 
 					# retrieve URL of JAR file
 					try :
-						subxml = get_from_url(linkedurl, { **switches, **{'error': 'raise'} } )
+						subxml = get_from_url(linkedurl, { **switches, **{'error': 'raise'} }, '' )
 					except urllib.error.HTTPError :
 						subxml = ''
 				
@@ -132,7 +133,7 @@ def get_xml_jars (soup, switches) :
 					
 					if 'URL' in props :
 						Name = props['Name']
-						pluginJars[Name] = props['URL']
+						pluginJars[Name] = props
 					
 				# end for link
 			# end for td
@@ -175,7 +176,7 @@ def get_html_scrape_jars (soup) :
 						props = LockssPropertySheet(subhtml)
 						
 						if 'URL' in props :
-							pluginJars[td.text] = props['URL']
+							pluginJars[td.text] = props
 						
 					# end for link
 					
@@ -186,20 +187,21 @@ def get_html_scrape_jars (soup) :
 	
 	return pluginJars
 
-def get_from_url (url, switches) :
+def get_from_url (url, switches, script) :
 	try :
 		html = urllib.request.urlopen(url).read()
 	except urllib.error.HTTPError as e :
 		if 401 == e.code :
-			html = get_from_url_with_authentication(url, switches)
+			html = get_from_url_with_authentication(url, switches, script)
 		elif ('error' in switches) and (switches['error'] == 'raise' ) :
 			raise
 		else :
-			do_output_http_error(e)
+			do_output_http_error(e, script)
 			sys.exit(e.code)
+
 	return html
 	
-def get_from_url_with_authentication (url, switches) :
+def get_from_url_with_authentication (url, switches, script) :
 	user = get_username(switches)
 	passwd = get_passwd(switches)
 		
@@ -215,24 +217,41 @@ def get_from_url_with_authentication (url, switches) :
 		if ('error' in switches) and (switches['error'] == 'raise' ) :
 			raise
 		else :
-			do_output_http_error(e)
+			do_output_http_error(e, script)
 			sys.exit(e.code)				
 
 	return html
+
+def logical_product(sequence) :
+	return reduce(lambda carry, found: (carry and (not not found)), sequence, True)
+
+def keyword_match(keyword, text) :
+	return re.search('\\b' + re.escape(keyword), text, re.I);
+
+def make_keyword_match (text) :
+	return lambda keyword: keyword_match(keyword, text)
 	
 if __name__ == '__main__':
+	
+	script = sys.argv[0]
+	script = os.path.basename(script)
 
+	daemonUrl = 'http://%(daemon)s'
+	daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
+	
 	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
 	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
 
-	if 'daemon' in switches :
-		if not 'url' in switches :
-			switches['url'] = urllib.parse.urljoin('http://' + switches['daemon'], '/DaemonStatus?table=Plugins&output=xml')
+	if ('daemon' in switches and not 'url' in switches) :
+		switches['url'] = urllib.parse.urljoin(
+			daemonUrl % {'daemon': switches['daemon']},
+			(daemonPath % {'table': 'Plugins', 'key': '', 'output': 'xml'})
+		)
 
 	if (len(sys.argv) > 1) :
 		html = ''.join(fileinput.input(files=sys.argv[1:2]))
 	elif ('url' in switches) :
-		html = get_from_url(switches['url'], switches)	
+		html = get_from_url(switches['url'], switches, script)	
 	else :
 		html = ''.join(fileinput.input())
 	
@@ -242,24 +261,26 @@ if __name__ == '__main__':
 	elif len(soup.find_all('st:table')) :
 		pluginJars = get_xml_jars(soup, switches)	
 	else :
-		print("No XML/HTML available to scrape.", file=sys.stderr)
+		print("[" + script + "] No XML/HTML available to scrape.", file=sys.stderr)
 		sys.exit(1)
 	
 	exitcode=2
 	urls = {}
-	if 'plugin' in switches :
-		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() if pluginName == switches['plugin'] ]
-		
-	elif 'plugin-regex' in switches :
 
-		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() if re.match(switches['plugin-regex'], pluginName) ]
-		
-		
-	else :
+	plug_match=lambda name, row: True
+
+	if 'plugin' in switches :
+		plug_match=lambda name, row: (name.upper()==switches['plugin'].upper())
+	elif 'plugin-regex' in switches :
+		plug_match=lambda name, row: re.search(switches['plugin-regex'], name, re.I)
+	elif 'plugin-keywords' in switches :
+		plug_match=lambda name, row: logical_product(map(make_keyword_match(name), switches['plugin-keywords'].split()))
+	elif 'plugin-id' in switches :
+		plug_match=lambda name, row: (row['Id']==switches['plugin-id'])
 	
-		urls = [ (pluginName, pluginJars[pluginName]) for pluginName in pluginJars.keys() ]
+	urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
 		
-	if len(urls) > 2 :
+	if len(urls) > 1 :
 		
 		exitcode=2
 		for pair in urls :
