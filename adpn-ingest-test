@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# lockss-ingest-test: Assemble information and run tests for a package of files staged for
+# adpn-ingest-test: Assemble information and run tests for a package of files staged for
 # ingest as a LOCKSS Archival Unit, given a local location, a LOCKSS Plugin and parameters
 # for the plugin.
 #
@@ -9,16 +9,16 @@
 # LOCKSS daemon is always at the same location, you won't need to re-enter that location
 # every time you run the script) by creating a plaintext file called:
 #
-# 		./lockss-ingest-test.defaults.conf
+# 		./adpn-ingest-test.defaults.conf
 #
-# where the conf file is located in the same directory as the lockss-ingest-test script.
+# where the conf file is located in the same directory as the adpn-ingest-test script.
 # The file should be a text/plain file, with one switch on each line of the file. If the
 # same switch is provided on the command line, the value on the command line overrides the
 # value provided in the defaults.conf file.
 #
 # Usage:
 #
-# 	lockss-ingest-test --local=<PATH>
+# 	adpn-ingest-test --local=<PATH>
 #
 # 		run without other parameters, the script will prompt on the console for AU title,
 # 		publisher plugin, and LOCKSS Daemon information, report back the required
@@ -26,7 +26,7 @@
 # 		and perform a test of the accessibility of the start URL and/or manifest page for
 # 		an HTTP GET.
 #
-# 	lockss-ingest-test [--daemon=<DAEMON> [--user=<USERNAME>] [--pass=<PASSWORD>]
+# 	adpn-ingest-test [--daemon=<DAEMON> [--user=<USERNAME>] [--pass=<PASSWORD>]
 # 		[--plugin=<NAME>|--plugin-id=<FQCN>|--plugin-regex=<PATTERN>]
 #
 # @version 2019.0610
@@ -38,7 +38,7 @@
 SCRIPTDIR=`dirname $0`
 SCRIPT=`basename $0`
 PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/lockss-ingest-test.defaults.conf"
+CONFFILE="${SCRIPTDIR}/adpn-ingest-test.defaults.conf"
 
 PLUGINTXT=`mktemp`
 
@@ -65,7 +65,7 @@ declare -A DEPENDENCIES ; DEPENDENCIES=(
 	[lockss-retrieve-jar.py]="%s Python script"
 	[lockss-plugin-props.py]="%s Python script"
 	[lockss-plugin-props-print-parameter.py]="%s Python script"
-	[lockss-ingest-test-url-ok.py]="%s Python script"
+	[adpn-ingest-test-url-ok.py]="%s Python script"
 )
 
 DEPENDENCY_FAILURE=""
@@ -256,7 +256,7 @@ elif [ ! -z "${JAR}" ] ; then
 	fi
 	
 	######################################################################################
-	### lockss-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ####
+	### adpn-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ####
 	######################################################################################
 
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
@@ -267,8 +267,8 @@ elif [ ! -z "${JAR}" ] ; then
 		echo ""
 		echo "URL RETRIEVAL TESTS:"
 		echo "--------------------"
-		( cat ${PLUGINTXT} | grep -P '^au_start_url\t' | lockss-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_start_url"
-		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | lockss-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_manifest"		
+		( cat ${PLUGINTXT} | grep -P '^au_start_url\t' | adpn-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_start_url"
+		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | adpn-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_manifest"		
 		
 	else
 	
