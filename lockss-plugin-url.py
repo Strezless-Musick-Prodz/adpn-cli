@@ -71,55 +71,73 @@ class LockssPluginDetails :
 	@version 2019.0610"""
 
 	def __init__ (self, switches: dict = {}) :
-		pass
-		
+		self._switches = switches
+	
+	@property
+	def switches (self) :
+		return self._switches
+
+	def daemon_url (self) :
+		daemonUrl = 'http://%(daemon)s'
+		daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
+	
+		if ('daemon' in self.switches and not 'url' in self.switches) :
+			url = urllib.parse.urljoin(
+				daemonUrl % {'daemon': self.switches['daemon']},
+				(daemonPath % {'table': 'Plugins', 'key': '', 'output': 'xml'})
+			)
+		else :
+			url = self.switches['url']
+			
+		return url
+
 	def display_usage (self) :
 		print(self.__doc__)
 		sys.exit(0)
 
-	def template_list (self, count: int, switches: dict) -> tuple:
+	def template_list (self, count: int) -> tuple:
 		open = ""
 		close = ""
 		
-		if switches['output']=='text/html' and count > 0 :
+		if self.switches['output']=='text/html' and count > 0 :
 			open = "<ol>";
 			close = "</ol>"
 		
 		return (open, close)
 		
-	def template (self, link: tuple, count: int, switches: dict) -> tuple:
+	def template (self, link: tuple, count: int) -> tuple:
 		esc = lambda text, place: text
-		if switches['output']=='text/tab-separated-values' :
+		if self.switches['output']=='text/tab-separated-values' :
 			if len(urls)==1 :
 				line="%(url)s"
 			else :
 				line="%(name)s\t%(url)s"
-		elif switches['output']=='text/html' :
+		elif self.switches['output']=='text/html' :
 			esc = lambda text, place: html.escape(text)
 			line='<li><a href="%(url)s">%(name)s</a></li>'
 		
 		return (line, esc)
 		
-	def display (self, urls: list, switches: dict, script: str) :
+	def display (self, urls: list, script: str) :
 	
 		if len(urls)==1 :
 			exitcode=0
 		elif len(urls) > 1 :
 			exitcode=2
 		else :
-			criteria = dict([ (key, switches[key]) for key in switches if re.match('plugin(-[A-Za-z0-9]+)?', key, re.I) ])
+			criteria = dict([ (key, self.switches[key]) for key in self.switches if re.match('plugin(-[A-Za-z0-9]+)?', key, re.I) ])
 			
 			print("[%(script)s] No Plugins found matching criteria: " % {"script": script}, criteria, file=sys.stderr)
 			line = ""
 			exitcode=1
 		
-		(open, close) = self.template_list(len(urls), switches)
+		(open, close) = self.template_list(len(urls))
 		
 		if len(open) > 0 :
 			print(open)
 			
 		for pair in urls :
-			(line, esc) = self.template(pair, len(urls), switches)
+			(line, esc) = self.template(pair, len(urls))
 			print(line % {"name": esc(pair[0], "name"), "url": esc(pair[1], "url")})
 			
 		if len(close) > 0 :
@@ -183,7 +201,7 @@ def get_passwd (switches) :
 		passwd = getpass(prompt="HTTP Password: ")
 	return passwd
 
-def get_xml_jars (soup, switches) :
+def get_xml_jars (soup, url, switches) :
 	cols = { }
 	pluginJars = { }
 
@@ -199,7 +217,7 @@ def get_xml_jars (soup, switches) :
 					table = td.find('st:name').text
 					key = td.find('st:key').text
 					
-					daemonurl = urllib.parse.urlsplit(switches['url'])
+					daemonurl = urllib.parse.urlsplit(url)
 					
 					iq = urllib.parse.parse_qs(daemonurl.query)
 					oq = { }
@@ -232,7 +250,7 @@ def get_xml_jars (soup, switches) :
 	
 	return pluginJars
 
-def get_html_scrape_jars (soup) :
+def get_html_scrape_jars (soup, url) :
 	forms = soup.find_all('form')
 
 	cols = { }
@@ -256,7 +274,7 @@ def get_html_scrape_jars (soup) :
 					# retrieve URL of JAR file
 					for link in links :
 					
-						href = urllib.parse.urljoin(switches['url'], link.attrs['href'])
+						href = urllib.parse.urljoin(url, link.attrs['href'])
 						
 						try :
 							subhtml = urllib.request.urlopen(href).read()
@@ -326,34 +344,25 @@ if __name__ == '__main__':
 	script = sys.argv[0]
 	script = os.path.basename(script)
 
-	daemonUrl = 'http://%(daemon)s'
-	daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
-	
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/tab-separated-values"}).parse()
 
-	deets = LockssPluginDetails()	
+	deets = LockssPluginDetails(switches)	
 	if ('help' in switches) :
 		deets.display_usage()
 	
-	if ('daemon' in switches and not 'url' in switches) :
-		switches['url'] = urllib.parse.urljoin(
-			daemonUrl % {'daemon': switches['daemon']},
-			(daemonPath % {'table': 'Plugins', 'key': '', 'output': 'xml'})
-		)
-
 	if (len(sys.argv) > 1) :
 		blob = ''.join(fileinput.input())
-	elif ('url' in switches) :
-		blob = get_from_url(switches['url'], switches, script)	
+	elif not (deets.daemon_url() is None) :
+		blob = get_from_url(deets.daemon_url(), switches, script)	
 	else :
 		print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
 		blob = ''.join(fileinput.input())
 	
 	soup = BeautifulSoup(blob, 'html.parser')
 	if len(soup.find_all('html')) :
-		pluginJars = get_html_scrape_jars(soup)
+		pluginJars = get_html_scrape_jars(soup, deets.daemon_url())
 	elif len(soup.find_all('st:table')) :
-		pluginJars = get_xml_jars(soup, switches)	
+		pluginJars = get_xml_jars(soup, deets.daemon_url(), switches)	
 	else :
 		print("[%(script)s] No XML/HTML available to scrape." % {"script": script}, file=sys.stderr)
 		pluginJars = {}
@@ -371,4 +380,4 @@ if __name__ == '__main__':
 	
 	urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
 	
-	deets.display(urls, switches, script)
+	deets.display(urls, script)
