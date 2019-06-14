@@ -125,7 +125,7 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 			"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
 				SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
 				;;
-			"proxy"|"port")
+			"proxy"|"port"|"tunnel"|"tunnel-port")
 				SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
 				SUBARGV_TESTURLOK[$KEY]="--${KEY}=${VALUE}"
 				;;
