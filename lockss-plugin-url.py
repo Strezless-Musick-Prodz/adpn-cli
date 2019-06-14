@@ -287,7 +287,7 @@ or password on stderr.
 			raise
 		else :
 			exitcode = (e.code - 200) % 256			
-			do_output_http_error(e, self.script)
+			self.do_output_http_error(e)
 			sys.exit(exitcode)
 
 	def display_usage (self) :
@@ -344,6 +344,12 @@ or password on stderr.
 			
 		sys.exit(exitcode)
 	
+	def do_output_http_error (self, e: urllib.error.HTTPError) :
+		if 401 == e.code :
+			mesg = "Authentication error: %(reason)s"
+		else :
+			mesg = "HTTP Error: %(code)d %(reason)s"
+		print(("[%(script)s] " + mesg) % {"script": self.script, "code": e.code, "reason": e.reason}, file=sys.stderr)
 
 def LockssPropertySheet (blob) :
 	stew = BeautifulSoup(blob, 'html.parser')
@@ -373,12 +379,6 @@ def LockssPropertySheet (blob) :
 				cols[key] = value
 				
 	return cols
-
-def do_output_http_error (e, script) :
-	if 401 == e.code :
-		print("[" + script + "] Authentication error: " + e.reason, file=sys.stderr)
-	else :
-		print("[" + script + "] HTTP Error: " + str(e.code) + " " + e.reason, file=sys.stderr)					
 
 def logical_product(sequence) :
 	return reduce(lambda carry, found: (carry and (not not found)), sequence, True)
