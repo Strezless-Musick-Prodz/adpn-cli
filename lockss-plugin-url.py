@@ -139,7 +139,105 @@ class LockssPluginDetails :
 
 		return html
 
-	def do_handle_error (e: Exception, script: str) :
+	def get_xml_jars (self, soup) :
+		cols = { }
+		pluginJars = { }
+
+		url = self.daemon_url()
+		
+		tablename = soup.find('st:name')
+		if "Plugins" == tablename.text :
+			col = 0
+			for tr in soup.find_all('st:row') :
+				for td in tr.find_all('st:cell') :
+					th = td.find('st:columnname').text
+					table = ''
+					key = ''
+					if 'plugin' == th :
+						table = td.find('st:name').text
+						key = td.find('st:key').text
+						
+						daemonurl = urllib.parse.urlsplit(url)
+						
+						iq = urllib.parse.parse_qs(daemonurl.query)
+						oq = { }
+						
+						oq['table'] = [ table ]
+						oq['key'] = [ key ]
+						oq['output'] = iq['output']
+						
+						oquery = urllib.parse.urlencode(oq, doseq=True)
+						
+						# list elements: scheme, netloc, path, params, query, fragment
+						linkedurl = urllib.parse.urlunparse([daemonurl.scheme, daemonurl.netloc, daemonurl.path, '', oquery, ''])
+
+						# retrieve URL of JAR file
+						try :
+							subxml = self.get_from_url(linkedurl, { **self.switches, **{'error': 'raise'} }, '' )
+						except urllib.error.HTTPError :
+							subxml = ''
+					
+						props = LockssPropertySheet(subxml)
+						
+						if 'URL' in props :
+							Name = props['Name']
+							pluginJars[Name] = props
+						
+					# end for link
+				# end for td
+			# end for tr
+		# end for form
+		
+		return pluginJars
+
+	def get_html_scrape_jars (self, soup) :
+		forms = soup.find_all('form')
+
+		url = self.daemon_url()
+		
+		cols = { }
+		pluginJars = { }
+
+		for form in forms :
+			for tr in form.find_all('tr') :
+				col = 0
+				for td in tr.find_all('td') :
+					elClass = ''
+					if 'class' in td.attrs :
+						elClass = ''.join(td.attrs['class'])
+					
+					if elClass == 'colhead' :
+						cols[col] = td.text
+					elif col in cols :
+						th = cols[col]
+						
+						links = [ link for link in td.find_all('a') if ('Name' == th) ]
+
+						# retrieve URL of JAR file
+						for link in links :
+						
+							href = urllib.parse.urljoin(url, link.attrs['href'])
+							
+							try :
+								subhtml = urllib.request.urlopen(href).read()
+							except urllib.error.HTTPError :
+								subhtml = ''
+						
+							props = LockssPropertySheet(subhtml)
+							
+							if 'URL' in props :
+								pluginJars[td.text] = props
+							
+						# end for link
+						
+					col = col + 1
+				# end for td
+			# end for tr
+		# end for form
+		
+		return pluginJars
+
+	def do_handle_error (self, e: Exception, script: str) :
 	
 		if ('error' in self.switches) and (self.switches['error'] == 'raise' ) :
 			raise
@@ -238,100 +336,6 @@ def do_output_http_error (e, script) :
 	else :
 		print("[" + script + "] HTTP Error: " + str(e.code) + " " + e.reason, file=sys.stderr)					
 
-def get_xml_jars (soup, url, deets) :
-	cols = { }
-	pluginJars = { }
-
-	tablename = soup.find('st:name')
-	if "Plugins" == tablename.text :
-		col = 0
-		for tr in soup.find_all('st:row') :
-			for td in tr.find_all('st:cell') :
-				th = td.find('st:columnname').text
-				table = ''
-				key = ''
-				if 'plugin' == th :
-					table = td.find('st:name').text
-					key = td.find('st:key').text
-					
-					daemonurl = urllib.parse.urlsplit(url)
-					
-					iq = urllib.parse.parse_qs(daemonurl.query)
-					oq = { }
-					
-					oq['table'] = [ table ]
-					oq['key'] = [ key ]
-					oq['output'] = iq['output']
-					
-					oquery = urllib.parse.urlencode(oq, doseq=True)
-					
-					# list elements: scheme, netloc, path, params, query, fragment
-					linkedurl = urllib.parse.urlunparse([daemonurl.scheme, daemonurl.netloc, daemonurl.path, '', oquery, ''])
-
-					# retrieve URL of JAR file
-					try :
-						subxml = deets.get_from_url(linkedurl, { **deets.switches, **{'error': 'raise'} }, '' )
-					except urllib.error.HTTPError :
-						subxml = ''
-				
-					props = LockssPropertySheet(subxml)
-					
-					if 'URL' in props :
-						Name = props['Name']
-						pluginJars[Name] = props
-					
-				# end for link
-			# end for td
-		# end for tr
-	# end for form
-	
-	return pluginJars
-
-def get_html_scrape_jars (soup, url) :
-	forms = soup.find_all('form')
-
-	cols = { }
-	pluginJars = { }
-
-	for form in forms :
-		for tr in form.find_all('tr') :
-			col = 0
-			for td in tr.find_all('td') :
-				elClass = ''
-				if 'class' in td.attrs :
-					elClass = ''.join(td.attrs['class'])
-				
-				if elClass == 'colhead' :
-					cols[col] = td.text
-				elif col in cols :
-					th = cols[col]
-					
-					links = [ link for link in td.find_all('a') if ('Name' == th) ]
-
-					# retrieve URL of JAR file
-					for link in links :
-					
-						href = urllib.parse.urljoin(url, link.attrs['href'])
-						
-						try :
-							subhtml = urllib.request.urlopen(href).read()
-						except urllib.error.HTTPError :
-							subhtml = ''
-					
-						props = LockssPropertySheet(subhtml)
-						
-						if 'URL' in props :
-							pluginJars[td.text] = props
-						
-					# end for link
-					
-				col = col + 1
-			# end for td
-		# end for tr
-	# end for form
-	
-	return pluginJars
-	
 def logical_product(sequence) :
 	return reduce(lambda carry, found: (carry and (not not found)), sequence, True)
 
@@ -362,9 +366,9 @@ if __name__ == '__main__':
 	
 	soup = BeautifulSoup(blob, 'html.parser')
 	if len(soup.find_all('html')) :
-		pluginJars = get_html_scrape_jars(soup, deets.daemon_url())
+		pluginJars = deets.get_html_scrape_jars(soup)
 	elif len(soup.find_all('st:table')) :
-		pluginJars = get_xml_jars(soup, deets.daemon_url(), switches)	
+		pluginJars = deets.get_xml_jars(soup)	
 	else :
 		print("[%(script)s] No XML/HTML available to scrape." % {"script": script}, file=sys.stderr)
 		pluginJars = {}
