@@ -91,6 +91,63 @@ class LockssPluginDetails :
 			
 		return url
 
+	def get_username (self) :
+		if 'user' in self.switches :
+			user = self.switches['user']
+		else :
+			old_stdout = sys.stdout
+			try :
+				sys.stdout = sys.stderr
+				user = input("HTTP Username: ")
+			finally :
+				sys.stdout = old_stdout
+				
+		return user
+
+	def get_passwd (self) :
+		if 'pass' in self.switches :
+			passwd = self.switches['pass']
+		else :
+			passwd = getpass(prompt="HTTP Password: ")
+		return passwd
+
+	def get_from_url (self, url, script) :
+		try :
+			html = urllib.request.urlopen(url).read()
+		except urllib.error.HTTPError as e :
+			if 401 == e.code :
+				html = self.get_from_url_with_authentication(url, script)
+			else :
+				self.do_handle_error(e, script)
+
+		return html
+		
+	def get_from_url_with_authentication (self, url, script) :
+		user = self.get_username()
+		passwd = self.get_passwd()
+			
+		auth_handler = urllib.request.HTTPBasicAuthHandler()
+		auth_handler.add_password(realm="LOCKSS Admin", uri=url, user=user, passwd=passwd)
+		opener = urllib.request.build_opener(auth_handler)
+		
+		urllib.request.install_opener(opener)
+
+		try :
+			html = urllib.request.urlopen(url).read()
+		except urllib.error.HTTPError as e :
+			self.do_handle_error(e, script)
+
+		return html
+
+	def do_handle_error (e: Exception, script: str) :
+	
+		if ('error' in self.switches) and (self.switches['error'] == 'raise' ) :
+			raise
+		else :
+			exitcode = (e.code - 200) % 256			
+			do_output_http_error(e, script)
+			sys.exit(exitcode)
+
 	def display_usage (self) :
 		print(self.__doc__)
 		sys.exit(0)
@@ -181,27 +238,7 @@ def do_output_http_error (e, script) :
 	else :
 		print("[" + script + "] HTTP Error: " + str(e.code) + " " + e.reason, file=sys.stderr)					
 
-def get_username (switches) :
-	if 'user' in switches :
-		user = switches['user'] 
-	else :
-		old_stdout = sys.stdout
-		try :
-			sys.stdout = sys.stderr
-			user = input("HTTP Username: ")
-		finally :
-			sys.stdout = old_stdout
-			
-	return user
-
-def get_passwd (switches) :
-	if 'pass' in switches :
-		passwd = switches['pass']
-	else :
-		passwd = getpass(prompt="HTTP Password: ")
-	return passwd
-
-def get_xml_jars (soup, url, switches) :
+def get_xml_jars (soup, url, deets) :
 	cols = { }
 	pluginJars = { }
 
@@ -233,7 +270,7 @@ def get_xml_jars (soup, url, switches) :
 
 					# retrieve URL of JAR file
 					try :
-						subxml = get_from_url(linkedurl, { **switches, **{'error': 'raise'} }, '' )
+						subxml = deets.get_from_url(linkedurl, { **deets.switches, **{'error': 'raise'} }, '' )
 					except urllib.error.HTTPError :
 						subxml = ''
 				
@@ -294,42 +331,7 @@ def get_html_scrape_jars (soup, url) :
 	# end for form
 	
 	return pluginJars
-
-def get_from_url (url, switches, script) :
-	try :
-		html = urllib.request.urlopen(url).read()
-	except urllib.error.HTTPError as e :
-		if 401 == e.code :
-			html = get_from_url_with_authentication(url, switches, script)
-		elif ('error' in switches) and (switches['error'] == 'raise' ) :
-			raise
-		else :
-			do_output_http_error(e, script)
-			sys.exit(e.code)
-
-	return html
 	
-def get_from_url_with_authentication (url, switches, script) :
-	user = get_username(switches)
-	passwd = get_passwd(switches)
-		
-	auth_handler = urllib.request.HTTPBasicAuthHandler()
-	auth_handler.add_password(realm="LOCKSS Admin", uri=url, user=user, passwd=passwd)
-	opener = urllib.request.build_opener(auth_handler)
-	
-	urllib.request.install_opener(opener)
-
-	try :
-		html = urllib.request.urlopen(url).read()
-	except urllib.error.HTTPError as e :
-		if ('error' in switches) and (switches['error'] == 'raise' ) :
-			raise
-		else :
-			do_output_http_error(e, script)
-			sys.exit(e.code)				
-
-	return html
-
 def logical_product(sequence) :
 	return reduce(lambda carry, found: (carry and (not not found)), sequence, True)
 
@@ -353,7 +355,7 @@ if __name__ == '__main__':
 	if (len(sys.argv) > 1) :
 		blob = ''.join(fileinput.input())
 	elif not (deets.daemon_url() is None) :
-		blob = get_from_url(deets.daemon_url(), switches, script)	
+		blob = deets.get_from_url(deets.daemon_url(), script)	
 	else :
 		print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
 		blob = ''.join(fileinput.input())
