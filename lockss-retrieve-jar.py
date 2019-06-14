@@ -7,13 +7,26 @@
 # file will be dumped to stdout, so you will probably want to pipe
 # or redirect the binary output.
 #
-# Usage: lockss-retrieve-jar.py --url=<URL> [--proxy=<HOST>] [--port=<PORTNUMBER>]
+# Usage: lockss-retrieve-jar.py --url=<URL> [--proxy=<HOST>] [--port=<NUMBER>]
+# 			[--tunnel=<HOST>] [--tunnel-port=<NUMBER>]
 #
-# If no proxy host is provided, the script will assume no proxy
-# If no proxy port is provided, the script will default to 8080
-# To force a direct connection without a proxy, use --proxy=""
+# 	--url=<URL>		the URL of the JAR package to retrieve
 #
-# @version 2019.0610
+# 	--proxy=<HOST> 	the hostname of a SOCKS5 proxy to use in contacting host for HTTP GET
+# 	--port=<NUMBER>	a port number for the SOCKS5 proxy to use with --proxy=<HOST>
+# 		If you are using ssh tunneling for your proxy, these should probably be
+# 		--proxy="localhost" and a high free port number, e.g. --port=31415
+# 		If --proxy is omitted, the script assumes no proxy
+#		If --port is omitted, it defaults to port 8080
+#
+# 	--tunnel=<HOST> the hostname of a remote host providing SSH tunnels to a SOCKS5 proxy
+# 	--tunnel-port=<NUMBER> 	a port number for the **SSH connection** to the remote tunnel
+# 		This should be a remote ssh host and a valid port number for ssh connections,
+# 		e.g. --tunnel=adpnadah.alabama.gov --tunnel-port=22
+# 		If --tunnel is omitted, the host assumes no tunneling
+# 		If --tunnel-port is omitted, it defaults to port 22
+#
+# @version 2019.0614
 
 import sys, os.path, re
 import socks, socket
