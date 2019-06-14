@@ -2,33 +2,7 @@
 #
 # lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
 #
-# Usage: lockss-plugin-url.py [<XML>]
-# 	[--help]
-# 	[--daemon=<HOST>|--url=<URL>] [--user=<NAME>] [--pass=<PASSWORD>]
-# 	[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<FQCN>]
-#
-# Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
-# human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
-# human-readable title and JAR URL. The result will be printed out to stdout. 
-#
-#	--help					display these usage notes
-# 	--daemon=<HOST>			get plugin info from LOCKSS Daemon at host <HOST>
-# 	--url=<URL>				get plugin info from Publisher Plugins page located at <URL>
-# 	--user=<NAME>			use <NAME> for HTTP Auth when retrieving plugin details
-# 	--password=<PASSWORD> 	use <PASSWORD> for HTTP Auth when retrieving plugin details
-# 	--plugin=<NAME>			display URL for the plugin whose human-readable name exactly matches <NAME>
-# 	--plugin-regex=<PATTERN> 	display URL for the plugin name matching <PATTERN>
-# 	--plugin-keywords=<WORDS> 	display URL for the plugin name containing keywords <WORDS>
-# 	--plugin-id=<FQCN>		display URL for the plugin whose ID is <FQCN>
-#
-# If no Daemon URL is provided using --daemon or --url then the script will attempt to
-# read an XML or HTML Plugin listing from a local file. If no file name is provided, then
-# the script will try to read the HTML or XML listing from stdin.
-#
-# If no HTTP username or password is provided on the command line, but the daemon requires
-# HTTP Authentication credentials, the script will prompt the user for the missing username
-# or password on stderr.
-#
+# @see LockssPluginDetails.__doc__ for usage notes
 # @version 2019.0610
 
 import sys, fileinput, re, json, os.path
@@ -40,40 +14,43 @@ from functools import reduce
 from myLockssScripts import myPyCommandLine
 
 class LockssPluginDetails :
-	"""lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
+	"""
+Usage: lockss-plugin-url.py [<XML>] [--help]
+	[--daemon=<HOST>|--url=<URL>] [--user=<NAME>] [--pass=<PASSWORD>]
+	[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<FQCN>]
 
-	Usage: lockss-plugin-url.py [<XML>] [--help]
-		[--daemon=<HOST>|--url=<URL>] [--user=<NAME>] [--pass=<PASSWORD>]
-		[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<FQCN>]
+Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
+human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
+human-readable title and JAR URL. The result will be printed out to stdout. 
 
-	Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
-	human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
-	human-readable title and JAR URL. The result will be printed out to stdout. 
+	--help                   	display these usage notes
+	--daemon=<HOST>          	get info from LOCKSS Daemon at host <HOST>
+	--url=<URL>              	get info from Publisher Plugins page located at <URL>
+	--user=<NAME>           	use <NAME> for HTTP Auth when retrieving plugin details
+	--password=<PASS>         	use <PASS> for HTTP Auth when retrieving plugin details
+	--plugin=<NAME>         	display URL for the plugin whose human-readable name exactly matches <NAME>
+	--plugin-regex=<PATTERN> 	display URL for the plugin name matching <PATTERN>
+	--plugin-keywords=<WORDS> 	display URL for the plugin name containing keywords <WORDS>
+	--plugin-id=<FQCN>       	display URL for the plugin whose ID is <FQCN>
 
-		--help					display these usage notes
-		--daemon=<HOST>			get plugin info from LOCKSS Daemon at host <HOST>
-		--url=<URL>				get plugin info from Publisher Plugins page located at <URL>
-		--user=<NAME>			use <NAME> for HTTP Auth when retrieving plugin details
-		--password=<PASSWORD> 	use <PASSWORD> for HTTP Auth when retrieving plugin details
-		--plugin=<NAME>			display URL for the plugin whose human-readable name exactly matches <NAME>
-		--plugin-regex=<PATTERN> 	display URL for the plugin name matching <PATTERN>
-		--plugin-keywords=<WORDS> 	display URL for the plugin name containing keywords <WORDS>
-		--plugin-id=<FQCN>		display URL for the plugin whose ID is <FQCN>
+If no Daemon URL is provided using --daemon or --url then the script will attempt to
+read an XML or HTML Plugin listing from a local file. If no file name is provided, then
+the script will try to read the HTML or XML listing from stdin.
 
-	If no Daemon URL is provided using --daemon or --url then the script will attempt to
-	read an XML or HTML Plugin listing from a local file. If no file name is provided, then
-	the script will try to read the HTML or XML listing from stdin.
+If no HTTP username or password is provided on the command line, but the daemon requires
+HTTP Authentication credentials, the script will prompt the user for the missing username
+or password on stderr.
+	"""
 
-	If no HTTP username or password is provided on the command line, but the daemon requires
-	HTTP Authentication credentials, the script will prompt the user for the missing username
-	or password on stderr.
-
-	@version 2019.0610"""
-
-	def __init__ (self, switches: dict = {}) :
+	def __init__ (self, script: str, switches: dict = {}) :
 		self._switches = switches
 		self._soup = None
-	
+		self._script = script
+
+	@property
+	def script (self) :
+		return self._script
+
 	@property
 	def switches (self) :
 		return self._switches
@@ -81,26 +58,51 @@ class LockssPluginDetails :
 	@property
 	def soup (self) :
 		return self._soup
-		
+	
 	@soup.setter
 	def soup (self, soup) :
 		self._soup = soup
 		
 	def daemon_url (self) :
-		daemonUrl = 'http://%(daemon)s'
-		daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
 	
+		url = None
 		if ('daemon' in self.switches and not 'url' in self.switches) :
+			daemonUrl = 'http://%(daemon)s'
+			daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
+			
 			url = urllib.parse.urljoin(
 				daemonUrl % {'daemon': self.switches['daemon']},
 				(daemonPath % {'table': 'Plugins', 'key': '', 'output': 'xml'})
 			)
-		else :
+		elif 'url' in self.switches :
 			url = self.switches['url']
 			
 		return url
 
+	def read_daemon_data (self) :
+		if not (self.daemon_url() is None) :
+			blob = self.get_from_url(self.daemon_url())
+		elif len(sys.argv) > 1 :
+			blob = ''.join(fileinput.input())
+		else :
+			print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
+			blob = ''.join(fileinput.input())
+	
+		return blob
+
 	def get_username (self) :
+		"""LockssPluginDetails.get_username(): get the Username to use when HTTP Authentication is required from switches or user console.
+
+		If HTTP Authentication is required to retrieve a resource, get a username to send through the HTTP request.
+		If the username is provided on the command line, use the command line switch.
+		If the username is not provided on the command line, display a prompt to stderr and get input from stdin
+		
+		@uses sys.stdout
+		@uses sys.stderr
+		
+		@return str a username for HTTP Authentication
+		"""
+
 		if 'user' in self.switches :
 			user = self.switches['user']
 		else :
@@ -114,24 +116,44 @@ class LockssPluginDetails :
 		return user
 
 	def get_passwd (self) :
+		"""LockssPluginDetails.get_passwd(): get the Password to use when HTTP Authentication is required from switches or user console.
+
+		If HTTP Authentication is required to retrieve a resource, get a password to send through the HTTP request.
+		If the password is provided on the command line, use the command line switch.
+		If the password is not provided on the command line, display a prompt to stderr and get input from stdin
+
+		@return str a password for HTTP Authentication
+		"""
+
 		if 'pass' in self.switches :
 			passwd = self.switches['pass']
 		else :
 			passwd = getpass(prompt="HTTP Password: ")
 		return passwd
 
-	def get_from_url (self, url, script) :
+	def get_from_url (self, url) :
+		"""LockssPluginDetails.get_from_url(): retrieve data from an resource using HTTP GET
+
+		Send an HTTP GET request to the resource located at a given URL, and return the body of the response
+		If HTTP Authentication is required, fall back on self.get_from_url_with_authentication()
+		If non-Authentication related HTTP errors are returned, raise an exception or display an error message
+		
+		@param str url The URL to send a GET request to
+
+		@return str the entire contents of the HTTP response body
+		"""
+
 		try :
 			html = urllib.request.urlopen(url).read()
 		except urllib.error.HTTPError as e :
 			if 401 == e.code :
-				html = self.get_from_url_with_authentication(url, script)
+				html = self.get_from_url_with_authentication(url)
 			else :
-				self.do_handle_error(e, script)
+				self.do_handle_error(e)
 
 		return html
 		
-	def get_from_url_with_authentication (self, url, script) :
+	def get_from_url_with_authentication (self, url) :
 		user = self.get_username()
 		passwd = self.get_passwd()
 			
@@ -144,11 +166,14 @@ class LockssPluginDetails :
 		try :
 			html = urllib.request.urlopen(url).read()
 		except urllib.error.HTTPError as e :
-			self.do_handle_error(e, script)
+			self.do_handle_error(e)
 
 		return html
 
-	def get_soup_jars (self) :
+	def get_soup_jars (self, blob = None) :
+		if not (blob is None) :
+			self.soup = BeautifulSoup(blob, 'html.parser')
+			
 		if len(self.soup.find_all('html')) :
 			pluginJars = self.get_html_scrape_jars()
 		elif len(self.soup.find_all('st:table')) :
@@ -256,13 +281,13 @@ class LockssPluginDetails :
 		
 		return pluginJars
 
-	def do_handle_error (self, e: Exception, script: str) :
+	def do_handle_error (self, e: Exception) :
 	
 		if ('error' in self.switches) and (self.switches['error'] == 'raise' ) :
 			raise
 		else :
 			exitcode = (e.code - 200) % 256			
-			do_output_http_error(e, script)
+			do_output_http_error(e, self.script)
 			sys.exit(exitcode)
 
 	def display_usage (self) :
@@ -292,7 +317,7 @@ class LockssPluginDetails :
 		
 		return (line, esc)
 		
-	def display (self, urls: list, script: str) :
+	def display (self, urls: list) :
 	
 		if len(urls)==1 :
 			exitcode=0
@@ -301,7 +326,7 @@ class LockssPluginDetails :
 		else :
 			criteria = dict([ (key, self.switches[key]) for key in self.switches if re.match('plugin(-[A-Za-z0-9]+)?', key, re.I) ])
 			
-			print("[%(script)s] No Plugins found matching criteria: " % {"script": script}, criteria, file=sys.stderr)
+			print("[%(script)s] No Plugins found matching criteria: " % {"script": self.script}, criteria, file=sys.stderr)
 			line = ""
 			exitcode=1
 		
@@ -371,24 +396,18 @@ if __name__ == '__main__':
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/tab-separated-values"}).parse()
 
-	deets = LockssPluginDetails(switches)	
+	deets = LockssPluginDetails(script, switches)	
 	if ('help' in switches) :
 		deets.display_usage()
-	
-	if (len(sys.argv) > 1) :
-		blob = ''.join(fileinput.input())
-	elif not (deets.daemon_url() is None) :
-		blob = deets.get_from_url(deets.daemon_url(), script)	
-	else :
-		print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
-		blob = ''.join(fileinput.input())
-	
-	deets.soup = BeautifulSoup(blob, 'html.parser')
+
+	pluginJars = {}
 	try :
-		pluginJars = deets.get_soup_jars()
+		blob=deets.read_daemon_data()
+		pluginJars = deets.get_soup_jars(blob)
+	except FileNotFoundError as e :
+		print("[%(script)s] %(message)s" % { "script": script, "message": str(e) }, file=sys.stderr)
 	except ValueError as e :
-		print("[%(script)s] %(message)s" % {"script": script, "message": str(e) }, file=sys.stderr)
-		pluginJars = {}
+		print("[%(script)s] %(message)s" % { "script": script, "message": str(e) }, file=sys.stderr)
 	
 	plug_matchers = {
 		'*': lambda name, row: True,
@@ -403,4 +422,4 @@ if __name__ == '__main__':
 	
 	urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
 	
-	deets.display(urls, script)
+	deets.display(urls)
