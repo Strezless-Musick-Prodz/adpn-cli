@@ -72,11 +72,20 @@ class LockssPluginDetails :
 
 	def __init__ (self, switches: dict = {}) :
 		self._switches = switches
+		self._soup = None
 	
 	@property
 	def switches (self) :
 		return self._switches
 
+	@property
+	def soup (self) :
+		return self._soup
+		
+	@soup.setter
+	def soup (self, soup) :
+		self._soup = soup
+		
 	def daemon_url (self) :
 		daemonUrl = 'http://%(daemon)s'
 		daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
@@ -139,16 +148,26 @@ class LockssPluginDetails :
 
 		return html
 
-	def get_xml_jars (self, soup) :
+	def get_soup_jars (self) :
+		if len(self.soup.find_all('html')) :
+			pluginJars = self.get_html_scrape_jars()
+		elif len(self.soup.find_all('st:table')) :
+			pluginJars = self.get_xml_jars()
+		else :
+			raise ValueError('No XML/HTML available to scrape for Plugins.')
+		
+		return pluginJars
+		
+	def get_xml_jars (self) :
 		cols = { }
 		pluginJars = { }
 
 		url = self.daemon_url()
 		
-		tablename = soup.find('st:name')
+		tablename = self.soup.find('st:name')
 		if "Plugins" == tablename.text :
 			col = 0
-			for tr in soup.find_all('st:row') :
+			for tr in self.soup.find_all('st:row') :
 				for td in tr.find_all('st:cell') :
 					th = td.find('st:columnname').text
 					table = ''
@@ -190,8 +209,8 @@ class LockssPluginDetails :
 		
 		return pluginJars
 
-	def get_html_scrape_jars (self, soup) :
-		forms = soup.find_all('form')
+	def get_html_scrape_jars (self) :
+		forms = self.soup.find_all('form')
 
 		url = self.daemon_url()
 		
@@ -364,13 +383,11 @@ if __name__ == '__main__':
 		print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
 		blob = ''.join(fileinput.input())
 	
-	soup = BeautifulSoup(blob, 'html.parser')
-	if len(soup.find_all('html')) :
-		pluginJars = deets.get_html_scrape_jars(soup)
-	elif len(soup.find_all('st:table')) :
-		pluginJars = deets.get_xml_jars(soup)	
-	else :
-		print("[%(script)s] No XML/HTML available to scrape." % {"script": script}, file=sys.stderr)
+	deets.soup = BeautifulSoup(blob, 'html.parser')
+	try :
+		pluginJars = deets.get_soup_jars()
+	except ValueError as e :
+		print("[%(script)s] %(message)s" % {"script": script, "message": str(e) }, file=sys.stderr)
 		pluginJars = {}
 	
 	plug_matchers = {
