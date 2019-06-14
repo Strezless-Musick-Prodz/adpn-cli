@@ -32,19 +32,104 @@
 # @version 2019.0610
 
 import sys, fileinput, re, json, os.path
-import urllib.request, urllib.parse
+import urllib.request, urllib.parse, html
 from bs4 import BeautifulSoup
 from getpass import getpass
 from functools import reduce
 
-reSwitch = '--([0-9_A-z][^=]*)\s*=(.*)\s*$'
+from myLockssScripts import myPyCommandLine
 
-def KeyValuePair (switch) :
-	ref=re.match(reSwitch, switch)
-	return (ref[1], ref[2])
+class LockssPluginDetails :
+	"""lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
 
-def LockssPropertySheet (html) :
-	stew = BeautifulSoup(html, 'html.parser')
+	Usage: lockss-plugin-url.py [<XML>] [--help]
+		[--daemon=<HOST>|--url=<URL>] [--user=<NAME>] [--pass=<PASSWORD>]
+		[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<FQCN>]
+
+	Retrieves the URL for one given LOCKSS Publisher Plugin, based on the Plugin's
+	human-readable title, or a list of all of the avaliable LOCKSS Publisher Plugins, with
+	human-readable title and JAR URL. The result will be printed out to stdout. 
+
+		--help					display these usage notes
+		--daemon=<HOST>			get plugin info from LOCKSS Daemon at host <HOST>
+		--url=<URL>				get plugin info from Publisher Plugins page located at <URL>
+		--user=<NAME>			use <NAME> for HTTP Auth when retrieving plugin details
+		--password=<PASSWORD> 	use <PASSWORD> for HTTP Auth when retrieving plugin details
+		--plugin=<NAME>			display URL for the plugin whose human-readable name exactly matches <NAME>
+		--plugin-regex=<PATTERN> 	display URL for the plugin name matching <PATTERN>
+		--plugin-keywords=<WORDS> 	display URL for the plugin name containing keywords <WORDS>
+		--plugin-id=<FQCN>		display URL for the plugin whose ID is <FQCN>
+
+	If no Daemon URL is provided using --daemon or --url then the script will attempt to
+	read an XML or HTML Plugin listing from a local file. If no file name is provided, then
+	the script will try to read the HTML or XML listing from stdin.
+
+	If no HTTP username or password is provided on the command line, but the daemon requires
+	HTTP Authentication credentials, the script will prompt the user for the missing username
+	or password on stderr.
+
+	@version 2019.0610"""
+
+	def __init__ (self, switches: dict = {}) :
+		pass
+		
+	def display_usage (self) :
+		print(self.__doc__)
+		sys.exit(0)
+
+	def template_list (self, count: int, switches: dict) -> tuple:
+		open = ""
+		close = ""
+		
+		if switches['output']=='text/html' and count > 0 :
+			open = "<ol>";
+			close = "</ol>"
+		
+		return (open, close)
+		
+	def template (self, link: tuple, count: int, switches: dict) -> tuple:
+		esc = lambda text, place: text
+		if switches['output']=='text/tab-separated-values' :
+			if len(urls)==1 :
+				line="%(url)s"
+			else :
+				line="%(name)s\t%(url)s"
+		elif switches['output']=='text/html' :
+			esc = lambda text, place: html.escape(text)
+			line='<li><a href="%(url)s">%(name)s</a></li>'
+		
+		return (line, esc)
+		
+	def display (self, urls: list, switches: dict, script: str) :
+	
+		if len(urls)==1 :
+			exitcode=0
+		elif len(urls) > 1 :
+			exitcode=2
+		else :
+			criteria = dict([ (key, switches[key]) for key in switches if re.match('plugin(-[A-Za-z0-9]+)?', key, re.I) ])
+			
+			print("[%(script)s] No Plugins found matching criteria: " % {"script": script}, criteria, file=sys.stderr)
+			line = ""
+			exitcode=1
+		
+		(open, close) = self.template_list(len(urls), switches)
+		
+		if len(open) > 0 :
+			print(open)
+			
+		for pair in urls :
+			(line, esc) = self.template(pair, len(urls), switches)
+			print(line % {"name": esc(pair[0], "name"), "url": esc(pair[1], "url")})
+			
+		if len(close) > 0 :
+			print(close)
+			
+		sys.exit(exitcode)
+	
+
+def LockssPropertySheet (blob) :
+	stew = BeautifulSoup(blob, 'html.parser')
 	
 	cols = { }
 	if len(stew.find_all('html')) > 0 :
@@ -246,6 +331,10 @@ if __name__ == '__main__':
 	
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/tab-separated-values"}).parse()
 
+	deets = LockssPluginDetails()	
+	if ('help' in switches) :
+		deets.display_usage()
+	
 	if ('daemon' in switches and not 'url' in switches) :
 		switches['url'] = urllib.parse.urljoin(
 			daemonUrl % {'daemon': switches['daemon']},
@@ -253,50 +342,33 @@ if __name__ == '__main__':
 		)
 
 	if (len(sys.argv) > 1) :
-		html = ''.join(fileinput.input(files=sys.argv[1:2]))
+		blob = ''.join(fileinput.input())
 	elif ('url' in switches) :
-		html = get_from_url(switches['url'], switches, script)	
+		blob = get_from_url(switches['url'], switches, script)	
 	else :
-		html = ''.join(fileinput.input())
+		print("[%(script)s] Reading Plugins XML/HTML list from stdin" % {"script": script}, file=sys.stderr)
+		blob = ''.join(fileinput.input())
 	
-	soup = BeautifulSoup(html, 'html.parser')
+	soup = BeautifulSoup(blob, 'html.parser')
 	if len(soup.find_all('html')) :
 		pluginJars = get_html_scrape_jars(soup)
 	elif len(soup.find_all('st:table')) :
 		pluginJars = get_xml_jars(soup, switches)	
 	else :
-		print("[" + script + "] No XML/HTML available to scrape.", file=sys.stderr)
-		sys.exit(1)
+		print("[%(script)s] No XML/HTML available to scrape." % {"script": script}, file=sys.stderr)
+		pluginJars = {}
 	
-	exitcode=2
-	urls = {}
-
-	plug_match=lambda name, row: True
-
-	if 'plugin' in switches :
-		plug_match=lambda name, row: (name.upper()==switches['plugin'].upper())
-	elif 'plugin-regex' in switches :
-		plug_match=lambda name, row: re.search(switches['plugin-regex'], name, re.I)
-	elif 'plugin-keywords' in switches :
-		plug_match=lambda name, row: logical_product(map(make_keyword_match(name), switches['plugin-keywords'].split()))
-	elif 'plugin-id' in switches :
-		plug_match=lambda name, row: (row['Id']==switches['plugin-id'])
+	plug_matchers = {
+		'*': lambda name, row: True,
+		'plugin': lambda name, row: (name.upper()==switches['plugin'].upper()),
+		'plugin-regex': lambda name, row: re.search(switches['plugin-regex'], name, re.I),
+		'plugin-keywords': lambda name, row: logical_product(map(make_keyword_match(name), switches['plugin-keywords'].split())),
+		'plugin-id': lambda name, row: (row['Id']==switches['plugin-id']),
+	}
+	criteria = [ key for key in switches if re.match('plugin(-[A-Za-z0-9])?', key, re.I) ] + [ '*' ]
+	
+	plug_match = plug_matchers[criteria[0]]
 	
 	urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
-		
-	if len(urls) > 1 :
-		
-		exitcode=2
-		for pair in urls :
-			print(pair[0] + "\t" + pair[1])
-
-	elif len(urls) == 1 :
 	
-		exitcode=0
-		print(urls[0][1])
-		
-	else :
-		
-		exitcode=1
-		
-	sys.exit(exitcode)
+	deets.display(urls, switches, script)
