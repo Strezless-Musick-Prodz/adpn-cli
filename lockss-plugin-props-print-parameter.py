@@ -14,17 +14,11 @@
 # @version 2019.0612
 
 import fileinput, re, sys, json
-
-reSwitch = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
-
-def KeyValuePair (switch) :
-	ref=re.match(reSwitch, switch)
-	return (ref[1], ref[3])
+from myLockssScripts import myPyCommandLine
 
 if __name__ == '__main__' :
 
-	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
-	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/plain"}).parse()
 
 	if len(sys.argv) > 1 :
 		input = fileinput.input(files=sys.argv[1:2])
@@ -52,7 +46,7 @@ if __name__ == '__main__' :
 				key=fields[0]
 				value=fields[1]
 
-			if ('output' in switches) and ('application/json' == switches['output']) :
+			if 'application/json' == switches['output'] :
 				table[key] = value
 			else :
 				print(key.upper() + ":\t" + value)

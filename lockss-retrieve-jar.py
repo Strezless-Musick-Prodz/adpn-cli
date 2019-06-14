@@ -21,21 +21,16 @@ import subprocess
 
 import urllib.request
 
-reSwitch = '--([0-9_A-z][^=]*)\s*=(.*)\s*$'
-
-def KeyValuePair (switch) :
-	ref=re.match(reSwitch, switch)
-	return (ref[1], ref[2])
+from myLockssScripts import myPyCommandLine
 
 if __name__ == '__main__':
 	script = sys.argv[0]
 	script = os.path.basename(script)
 	
-	defaults = {"proxy": "", "port": 8080, "tunnel": "", "tunnel-port": 22}
-	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
-	switches = {**defaults, **switches}
-
-	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+		"proxy": "", "port": 8080,
+		"tunnel": "", "tunnel-port": 22
+	}).parse()
 
 	if len(switches['proxy']) > 0 :
 		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))

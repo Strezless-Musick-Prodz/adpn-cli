@@ -244,8 +244,7 @@ if __name__ == '__main__':
 	daemonUrl = 'http://%(daemon)s'
 	daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
 	
-	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
-	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/tab-separated-values"}).parse()
 
 	if ('daemon' in switches and not 'url' in switches) :
 		switches['url'] = urllib.parse.urljoin(

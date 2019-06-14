@@ -44,11 +44,7 @@ import sys, os.path, fileinput, re
 import socks, socket
 import urllib.request
 
-reSwitch = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
-
-def KeyValuePair (switch) :
-	ref=re.match(reSwitch, switch)
-	return (ref[1], ref[3])
+from myLockssScripts import myPyCommandLine
 
 if __name__ == '__main__' :
 
@@ -59,11 +55,7 @@ if __name__ == '__main__' :
 	script = sys.argv[0]
 	script = os.path.basename(script)
 
-	defaults = {"proxy": "", "port": -1}
-	switches = dict([ KeyValuePair(arg) for arg in sys.argv if re.match(reSwitch, arg) ])
-	switches = {**defaults, **switches}
-	
-	sys.argv = [ arg for arg in sys.argv if not re.match(reSwitch, arg) ]
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"proxy": "", "port": -1}).parse()
 
 	######################################################################################
 	## PROXY: if --proxy/--port are provided, connect to SOCKS5 proxy and monkeypatch ####
