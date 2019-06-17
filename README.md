@@ -1,15 +1,114 @@
 Utility scripts for extracting and reporting information about ADPNet (LOCKSS) Publisher
 Plugins.
 
-	lockss-ingest-test: bash script to coordinate tests  when staging content into ADPNet
+	adpn-ingest-test: bash script to coordinate tests  when staging content into ADPNet
 	
-	Usage: ./lockss-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
-		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--plugin=<NAME>|--plugin-regex=<PATTERN>]
-		[--au_title=<TITLE>] [--local=<PATH>] [--<KEY>=<FIELD> ...]
-		
+	Usage: ./adpn-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
+		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--tunnel=<TUNNELHOST>]
+		[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<ID>]
+		[--au_title=<TITLE>] [--local=<PATH>|--remote] [--<KEY>=<FIELD> ...]
+
 Development started in May 2019 by Charles Johnson, Collections Archivist,
 Alabama Department of Archives and History (<charlesw.johnson@archives.alabama.gov>).
 
 All the original code in here is hereby released into the public domain. Any code copied
 or derived from other public sources is noted in comments, and is governed by the
 licensing terms preferred by the authors of the original code. (CJ, 2019/05/23)
+
+On the publisher's side, to get data needed for the content to ingest:
+----------------------------------------------------------------------
+0. 	Create a adpn-ingest-test.defaults.conf file containing the following parameters,
+	in plain text, one per line. Place in the same subdir as the adpn-ingest-test script.
+	
+		--daemon=<HOST:PORT>
+		--user=<USERNAME>
+	
+	If you need to connect to the LOCKSS props server through a SOCKS5 proxy, include:
+	
+		--proxy=<HOST>
+		--port=<PORT>
+		
+	If you need to use SSH tunneling to connect to the SOCKS5 proxy, use:
+	
+		--proxy=localhost
+		--port=<PORT>
+		--tunnel=<SSH HOST>
+		
+	If there is a default plugin that you will use for most of your ingests, add:
+	
+		--plugin-id=<ID>
+		
+	If the plugin has one or more parameters which stay the same across different ingests,
+	add something like:
+	
+		--<PARAMETER>=<VALUE>
+		
+	For example:
+	
+		--base_url=http://archives.alabama.gov/Lockss/
+		
+1. 	Run the script, providing specific parameters on the command line (or enter them at
+	the console):
+	
+		./lockss-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name"
+
+	If you are using a different plugin from the one specified in your conf file:
+	
+		./lockss-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name" --plugin="Plugin Name"
+		
+2. 	If there are required parameters for the plugin that aren't specified in your conf file
+	you will be prompted for them at the console. After you've filled in any/all required
+	parameters, you'll get a report something like this:
+	
+		INGEST INFORMATION AND PARAMETERS:
+		----------------------------------
+		INGEST TITLE:   WPA Folder 01
+		FILE SIZE :     2.1G (2,243,154,758 bytes, 689 files)
+		PLUGIN JAR:     http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar
+		PLUGIN ID:      gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin
+		PLUGIN NAME:    Alabama Department of Archives and History Directory Plugin
+		PLUGIN VERSION: 1
+		BASE URL:       base_url="http://archives.alabama.gov/Lockss/"
+		SUBDIRECTORY:   subdirectory="WPA-Folder-01"
+
+		JSON PACKET:    {"Ingest Title": "WPA Folder 01", "File Size ": "2.1G (2,243,154,758 bytes, 689 files)", "Plugin JAR": "http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar", "Plugin ID": "gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin", "Plugin Name": "Alabama Department of Archives and History Directory Plugin", "Plugin Version": "1", "Start URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "Manifest URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "Base URL": "base_url=\"http://archives.alabama.gov/Lockss/\"", "Subdirectory": "subdirectory=\"WPA-Folder-01\"", "au_name": "Alabama Department of Archives and History Directory Plugin, Base URL http://archives.alabama.gov/Lockss/, Subdirectory WPA-Folder-01", "au_start_url": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "au_manifest": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "parameters": [["base_url", "http://archives.alabama.gov/Lockss/"], ["subdirectory", "WPA-Folder-01"]]}
+
+		URL RETRIEVAL TESTS:
+		--------------------
+		200      OK      au_start_url    http://archives.alabama.gov/Lockss/WPA-Folder-01/       "%s%s/", base_url, subdirectory
+		200      OK      au_manifest     http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html      "%s%s/manifestpage.html", base_url, subdirectory
+
+3.	Copy and paste the report into an e-mail and send it to the LOCKSS network administrator.
+	
+On the LOCKSS network administrator's side, to run tests prior to ingesting:
+----------------------------------------------------------------------------
+
+0. 	Create a adpn-ingest-test.defaults.conf file containing the usual parameters,
+	in plain text, one per line. Place in the same subdir as the adpn-ingest-test script.
+	
+1. 	Run the script, providing specific parameters by pasting in a JSON packet from your
+	user's e-mail.
+	
+		./adpn-ingest-test - --remote=1
+
+	Paste in the "JSON PACKET" line from the e-mail and press Ctrl-D at the end.
+	
+2. 	You should get a report back which looks something like this:
+
+		INGEST INFORMATION AND PARAMETERS:
+		----------------------------------
+		INGEST TITLE:   WPA Folder 01
+		PLUGIN JAR:     http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar
+		PLUGIN ID:      gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin
+		PLUGIN NAME:    Alabama Department of Archives and History Directory Plugin
+		PLUGIN VERSION: 1
+		BASE URL:       base_url="http://archives.alabama.gov/Lockss/"
+		SUBDIRECTORY:   subdirectory="WPA-Folder-01"
+
+		JSON PACKET:    {"Ingest Title": "WPA Folder 01", "Plugin JAR": "http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar", "Plugin ID": "gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin", "Plugin Name": "Alabama Department of Archives and History Directory Plugin", "Plugin Version": "1", "Start URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "Manifest URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "Base URL": "base_url=\"http://archives.alabama.gov/Lockss/\"", "Subdirectory": "subdirectory=\"WPA-Folder-01\"", "au_name": "Alabama Department of Archives and History Directory Plugin, Base URL http://archives.alabama.gov/Lockss/, Subdirectory WPA-Folder-01", "au_start_url": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "au_manifest": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "parameters": [["base_url", "http://archives.alabama.gov/Lockss/"], ["subdirectory", "WPA-Folder-01"]]}
+
+		URL RETRIEVAL TESTS:
+		--------------------
+		200      OK      au_start_url    http://archives.alabama.gov/Lockss/WPA-Folder-01/       "%s%s/", base_url, subdirectory
+		200      OK      au_manifest     http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html      "%s%s/manifestpage.html", base_url, subdirectory
+
