@@ -6,7 +6,7 @@
 # @version 2019.0610
 
 import sys, fileinput, re, json, os.path
-import urllib.request, urllib.parse, html
+import urllib.request, urllib.parse, socket, html
 from bs4 import BeautifulSoup
 from getpass import getpass
 from functools import reduce
@@ -91,55 +91,89 @@ or password on stderr.
 		return blob
 
 	def get_username (self) :
-		"""LockssPluginDetails.get_username(): get the Username to use when HTTP Authentication is required from switches or user console.
-
-		If HTTP Authentication is required to retrieve a resource, get a username to send through the HTTP request.
-		If the username is provided on the command line, use the command line switch.
-		If the username is not provided on the command line, display a prompt to stderr and get input from stdin
+		"""Return a Username for scripted HTTP Authentication
 		
+		Returns the Username to be used in an HTTP Authentication handshake for the HTTP
+		GET request sent by {@see LockssPluginDetails.get_from_url_with_authentication}
+		This uses a value taken from the command line or default switches if available.
+		If nothing is available from switches, it prints a prompt to stderr and reads the
+		username from stdin.
+		
+		@return str a username for HTTP Authentication (e.g.: "User.Name")
+		"""
+		return self.get_auth_parameter("user", "HTTP Username", input)
+
+	def get_passwd (self) :
+		"""Return a Password for scripted HTTP Authentication
+
+		Returns the Password to be used in an HTTP Authentication handshake for the HTTP
+		GET request sent by {@see LockssPluginDetails.get_from_url_with_authentication}
+		This uses a value taken from the command line or default switches if available.
+		If nothing is available from switches, it prints a prompt to stderr and reads the
+		password from stdin.
+
+		@return str a password for HTTP Authentication (e.g.: "ChangeThisPassword")
+		"""
+		return self.get_auth_parameter("pass", "HTTP Password", getpass)
+
+	def get_realm (self) :
+		"""Return a Realm for scripted HTTP Authentication
+
+		Returns the Realm to be used in an HTTP Authentication handshake for the HTTP
+		GET request sent by {@see LockssPluginDetails.get_from_url_with_authentication}
+		This uses a value taken from the command line or default switches if available.
+		If nothing is available from switches, it prints a prompt to stderr and reads the
+		password from stdin.
+
+		@return str a realm for HTTP Authentication (e.g.: "LOCKSS Admin")
+		"""
+		return self.get_auth_parameter("realm", "HTTP Authentication Realm", input)		
+	
+	def get_auth_parameter (self, key: str, title: str, inputFunction: "function") -> str :
+		"""Return a parameter for scripted HTTP Authentication
+		
+		Returns a parameter required for the HTTP Authentication handshake (e.g. username,
+		password, or realm) on a scripted HTTP 	GET request sent by
+		{@see LockssPluginDetails.get_from_url_with_authentication}. This uses a value
+		taken from the command line or default switches if available. If nothing is
+		available from switches, it redirects stdout to stderr, prints a prompt to the
+		user console, and uses the provided console input function to read input from the
+		user.
+
 		@uses sys.stdout
 		@uses sys.stderr
 		
-		@return str a username for HTTP Authentication
+		@param str key the name of the switch to check for a value (e.g.: "user", "pass", "realm")
+		@param str title The human-readable title. Used as a console input prompt if the
+			value was not provided on command line or in default switches.
+		@param function inputFunction The console input function used to read a value from
+			the user console, if necessary.
+			(E.g.: input for parameters that can be	displayed in cleartext,
+			getpass for parameters that should not be.)
+		@return str The parameter value retrieved from switches or from the user console.
 		"""
-
-		if 'user' in self.switches :
-			user = self.switches['user']
+		if key in self.switches :
+			param = self.switches[key]
 		else :
 			old_stdout = sys.stdout
 			try :
 				sys.stdout = sys.stderr
-				user = input("HTTP Username: ")
+				param = inputFunction("%(title)s: " % {"title": title})
 			finally :
 				sys.stdout = old_stdout
-				
-		return user
-
-	def get_passwd (self) :
-		"""LockssPluginDetails.get_passwd(): get the Password to use when HTTP Authentication is required from switches or user console.
-
-		If HTTP Authentication is required to retrieve a resource, get a password to send through the HTTP request.
-		If the password is provided on the command line, use the command line switch.
-		If the password is not provided on the command line, display a prompt to stderr and get input from stdin
-
-		@return str a password for HTTP Authentication
-		"""
-
-		if 'pass' in self.switches :
-			passwd = self.switches['pass']
-		else :
-			passwd = getpass(prompt="HTTP Password: ")
-		return passwd
-
+		
+		return param
+		
 	def get_from_url (self, url) :
-		"""LockssPluginDetails.get_from_url(): retrieve data from an resource using HTTP GET
+		"""Retrieve data from a resource using HTTP GET
 
 		Send an HTTP GET request to the resource located at a given URL, and return the body of the response
 		If HTTP Authentication is required, fall back on self.get_from_url_with_authentication()
 		If non-Authentication related HTTP errors are returned, raise an exception or display an error message
 		
+		@uses urllib.request.urlopen
+		
 		@param str url The URL to send a GET request to
-
 		@return str the entire contents of the HTTP response body
 		"""
 
@@ -149,16 +183,27 @@ or password on stderr.
 			if 401 == e.code :
 				html = self.get_from_url_with_authentication(url)
 			else :
-				self.do_handle_error(e)
+				raise
 
 		return html
 		
 	def get_from_url_with_authentication (self, url) :
+		"""Retrieve data from a resource using HTTP GET with HTTP Basic Authentication
+		
+		Send an HTTP GET request to the resource located at a given URL using HTTP Basic Authentication
+		Return the body of the response. If the return is a network error or an HTTP
+		client or server error code (400-599, etc.), then use LockssPluginDetails.do_handle_error
+		to raise an exception or print out an error code.
+		
+		@param str url The URL to send a GET request to. Authentication credentials and realm are kept in user switches.
+		@return str the entire contents of the HTTP response body
+		"""
 		user = self.get_username()
 		passwd = self.get_passwd()
-			
+		auth_realm = self.get_realm()
+		
 		auth_handler = urllib.request.HTTPBasicAuthHandler()
-		auth_handler.add_password(realm="LOCKSS Admin", uri=url, user=user, passwd=passwd)
+		auth_handler.add_password(realm=auth_realm, uri=url, user=user, passwd=passwd)
 		opener = urllib.request.build_opener(auth_handler)
 		
 		urllib.request.install_opener(opener)
@@ -166,11 +211,21 @@ or password on stderr.
 		try :
 			html = urllib.request.urlopen(url).read()
 		except urllib.error.HTTPError as e :
-			self.do_handle_error(e)
-
+			raise
+			
 		return html
 
-	def get_soup_jars (self, blob = None) :
+	def get_soup_jars (self, blob = None) -> dict :
+		"""Parse LOCKSS Daemon Plugin listing page into a dictionary from names to Plugin Details
+
+		Parses XML or HTML contained in blob, presumably returned by the LOCKSS Daemon's
+		query API, and returns a dictionary mapping the human-readable name of the Plugin
+		to a row of Plugin Details including the URL of the JAR package, a unique ID code,
+		etc. etc.
+
+		@param str blob
+		@return dict
+		"""
 		if not (blob is None) :
 			self.soup = BeautifulSoup(blob, 'html.parser')
 			
@@ -281,15 +336,6 @@ or password on stderr.
 		
 		return pluginJars
 
-	def do_handle_error (self, e: Exception) :
-	
-		if ('error' in self.switches) and (self.switches['error'] == 'raise' ) :
-			raise
-		else :
-			exitcode = (e.code - 200) % 256			
-			self.do_output_http_error(e)
-			sys.exit(exitcode)
-
 	def display_usage (self) :
 		print(self.__doc__)
 		sys.exit(0)
@@ -307,10 +353,10 @@ or password on stderr.
 	def template (self, link: tuple, count: int) -> tuple:
 		esc = lambda text, place: text
 		if self.switches['output']=='text/tab-separated-values' :
-			if len(urls)==1 :
-				line="%(url)s"
-			else :
+			if count > 1 :
 				line="%(name)s\t%(url)s"
+			else :
+				line="%(url)s"
 		elif self.switches['output']=='text/html' :
 			esc = lambda text, place: html.escape(text)
 			line='<li><a href="%(url)s">%(name)s</a></li>'
@@ -344,12 +390,51 @@ or password on stderr.
 			
 		sys.exit(exitcode)
 	
+	def display_error (self, text, exitcode) :
+		print("[%(script)s] %(message)s" % { "script": self.script, "message": text }, file=sys.stderr)
+		if exitcode >= 0 :
+			sys.exit(exitcode)
+			
 	def do_output_http_error (self, e: urllib.error.HTTPError) :
+		mesg = "HTTP Error: %(code)d %(reason)s"
 		if 401 == e.code :
 			mesg = "Authentication error: %(reason)s"
-		else :
-			mesg = "HTTP Error: %(code)d %(reason)s"
-		print(("[%(script)s] " + mesg) % {"script": self.script, "code": e.code, "reason": e.reason}, file=sys.stderr)
+		exitcode = (e.code - 200) % 256
+		self.display_error(mesg % {"code": e.code, "reason": e.reason}, exitcode)
+
+	def execute (self) :
+		pluginJars = {}
+		try :
+			blob=self.read_daemon_data()
+			pluginJars = self.get_soup_jars(blob)
+		except FileNotFoundError as e :
+			self.display_error(str(e), -1)
+		except ValueError as e :
+			self.display_error(str(e), -1)
+		except urllib.error.HTTPError as e:
+			self.do_output_http_error(e)
+		except urllib.error.URLError as e:
+			message = str(e.reason)
+			exitcode = 255
+			if isinstance(e.reason, socket.gaierror) :
+				message = ("Socket Error %d: %s" % e.reason.args)
+				exitcode = e.reason.args[0]
+			self.display_error(message, exitcode)
+		
+		plug_matchers = {
+			'*': lambda name, row: True,
+			'plugin': lambda name, row: (name.upper()==switches['plugin'].upper()),
+			'plugin-regex': lambda name, row: re.search(switches['plugin-regex'], name, re.I),
+			'plugin-keywords': lambda name, row: logical_product(map(make_keyword_match(name), switches['plugin-keywords'].split())),
+			'plugin-id': lambda name, row: (row['Id']==switches['plugin-id']),
+		}
+		criteria = [ key for key in switches if re.match('plugin(-[A-Za-z0-9])?', key, re.I) ] + [ '*' ]
+	
+		plug_match = plug_matchers[criteria[0]]
+	
+		urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
+	
+		self.display(urls)
 
 def LockssPropertySheet (blob) :
 	stew = BeautifulSoup(blob, 'html.parser')
@@ -391,35 +476,16 @@ def make_keyword_match (text) :
 	
 if __name__ == '__main__':
 	
-	script = sys.argv[0]
-	script = os.path.basename(script)
+	scriptname = sys.argv[0]
+	scriptname = os.path.basename(scriptname)
 
-	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={"output": "text/tab-separated-values"}).parse()
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+		"output": "text/tab-separated-values",
+		"realm": "LOCKSS Admin"
+	}).parse()
 
-	deets = LockssPluginDetails(script, switches)	
+	script = LockssPluginDetails(scriptname, switches)	
 	if ('help' in switches) :
-		deets.display_usage()
-
-	pluginJars = {}
-	try :
-		blob=deets.read_daemon_data()
-		pluginJars = deets.get_soup_jars(blob)
-	except FileNotFoundError as e :
-		print("[%(script)s] %(message)s" % { "script": script, "message": str(e) }, file=sys.stderr)
-	except ValueError as e :
-		print("[%(script)s] %(message)s" % { "script": script, "message": str(e) }, file=sys.stderr)
-	
-	plug_matchers = {
-		'*': lambda name, row: True,
-		'plugin': lambda name, row: (name.upper()==switches['plugin'].upper()),
-		'plugin-regex': lambda name, row: re.search(switches['plugin-regex'], name, re.I),
-		'plugin-keywords': lambda name, row: logical_product(map(make_keyword_match(name), switches['plugin-keywords'].split())),
-		'plugin-id': lambda name, row: (row['Id']==switches['plugin-id']),
-	}
-	criteria = [ key for key in switches if re.match('plugin(-[A-Za-z0-9])?', key, re.I) ] + [ '*' ]
-	
-	plug_match = plug_matchers[criteria[0]]
-	
-	urls = [ (pluginName, pluginJars[pluginName]['URL'] ) for pluginName in pluginJars.keys() if plug_match(pluginName, pluginJars[pluginName]) ]
-	
-	deets.display(urls)
+		script.display_usage()
+	else :
+		script.execute()
