@@ -50,11 +50,11 @@ On the publisher's side, to get data needed for the content to ingest:
 1. 	Run the script, providing specific parameters on the command line (or enter them at
 	the console):
 	
-		./lockss-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name"
+		./adpn-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name"
 
 	If you are using a different plugin from the one specified in your conf file:
 	
-		./lockss-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name" --plugin="Plugin Name"
+		./adpn-ingest-test --local="w:\File\Location" --au_title="Archival Unit Name" --plugin="Plugin Name"
 		
 2. 	If there are required parameters for the plugin that aren't specified in your conf file
 	you will be prompted for them at the console. After you've filled in any/all required
