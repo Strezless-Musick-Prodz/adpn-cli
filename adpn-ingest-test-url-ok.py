@@ -98,7 +98,7 @@ if __name__ == '__main__' :
 			page = urllib.request.urlopen(url).read()
 		except urllib.request.HTTPError as e :
 			code = e.code
-			errmesg = e.reason
+			errmesg = re.sub("\s+", " ", e.reason)
 		except urllib.request.URLError as e :
 			if isinstance(e.reason, str) :
 				code = 601
