@@ -63,12 +63,20 @@ OLDXML="${XMLDIR}/titlesdb.${PEER}.0.xml"
 NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
 
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
-	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}"
+	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || exit $?
 fi
 
-${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}"
+${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || exit $?
 
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
+if [[ -z "${_PARAM[before]}" ]] ; then
+	if [[ "${EXITCODE}" -eq 0 ]] ; then
+		echo "No differences found on ${PEER}"
+		EXITCODE=1
+	elif [[ "${EXITCODE}" -eq 1 ]] ; then
+		EXITCODE=0
+	fi
+fi
 
 ##########################################################################################
 ### CLEANUP: remove temporary output file. ###############################################

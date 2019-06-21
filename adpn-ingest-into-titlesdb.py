@@ -116,15 +116,14 @@ USE adpn;
 		au_name = json.dumps(self.au_name(self.data['Ingest Title']))
 		self.cur.execute("SELECT au_id FROM au_titlelist WHERE au_name=%(au_name)s" % {"au_name": au_name})
 		au_ids = [ row[0] for row in self.cur.fetchall() ]
-		peer_id = 'ALL'
 		
 		if len(au_ids) == 0 :
 			self.switches['insert_title'] = True
 			self.cur.execute("SELECT (MAX(au_id) + 1) AS au_id FROM au_titlelist")
 			au_ids = [ row[0] for row in self.cur.fetchall() ]
 
-			if not ('peer_id' in self.switches) or (len(self.switches['peer_id']) == 0) :
-				self.switches['peer_id'] = self.switches['local_peer']
+			if not ('to' in self.switches) or (len(self.switches['to']) == 0) :
+				self.switches['to'] = self.switches['to']
 			
 		for id in au_ids :
 			au_id = "%d" % (int(id))
@@ -146,14 +145,14 @@ USE adpn;
 			
 		au_titlelist_values = {
 		"au_id": int(self.switches['au_id']),
-		"au_pub_id": self.switches['au_pub_id'],
+		"au_pub_id": self.switches['from'],
 		"au_type": "journal",
 		"au_title": self.data['Ingest Title'],
 		"au_plugin": self.data['Plugin ID'],
 		"au_approved_for_removal": "n",
 		"au_content_size": 0,
 		"au_disk_cost": 0,
-		"peer_id": self.switches['peer_id']
+		"peer_id": self.switches['to']
 		}
 		au_titlelist_values['au_journal_title'] = au_titlelist_values['au_title']
 		au_titlelist_values['au_name'] = self.au_name(self.data['Ingest Title'])
@@ -164,7 +163,7 @@ USE adpn;
 		
 		if self.switches['insert_title'] :
 			self.initial_ingest(au_titlelist_values)
-		self.publish_ingest(self.switches['peer_id'], au_titlelist_values)
+		self.publish_ingest(self.switches['to'], au_titlelist_values)
 		
 		self.db.commit()
 		self.db.close()
@@ -195,10 +194,10 @@ if __name__ == '__main__' :
 		defaultArgv = sys.argv[0:0] + []
 	
 	(defaultArgv, defaultSwitches) = myPyCommandLine(defaultArgv).parse()
-	defaultSwitches = {**{"local_peer": "ADAH", "insert_title": False}, **defaultSwitches}
+	defaultSwitches = {**{"execute": "", "insert_title": False}, **defaultSwitches}
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
-
+	
 	jsonInput = "".join(fileinput.input())
 	script = ADPNIngestSQL(scriptname, switches, jsonInput)
 
