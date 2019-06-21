@@ -1,0 +1,79 @@
+#!/bin/bash
+
+SCRIPTDIR=`dirname $0`
+SCRIPT=`basename $0`
+PATH=${SCRIPTDIR}:${PATH}
+CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="wget --output-document=-" )
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=`mktemp`
+
+until [[ -z "$1" ]] ; do
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+
+	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
+		KEY="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[3]}"
+		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+			VALUE="$KEY"
+		fi
+		_PARAM[$KEY]="${VALUE}"
+		
+	elif [[ ! -z "${SWITCH}" ]] ; then
+		_ARGV+=("${SWITCH}")
+		
+	fi
+	
+done
+
+##########################################################################################
+### SCRIPT: Download XML from props server, then diff against old. #######################
+##########################################################################################
+
+PROPS="${_PARAM[props-server]}"
+XMLDIR="${_PARAM[xmldir]}"
+WGET="${_PARAM[wget]}" # curl, wget, or similar; should print to stdout
+
+if [[ -z "${_ARGV[1]}" ]] ; then
+	PEER=ALL
+else
+	PEER="${_ARGV[1]}"
+fi
+
+OLDXML="${XMLDIR}/titlesdb.${PEER}.0.xml"
+NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
+
+if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
+	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}"
+fi
+
+${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}"
+
+diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+rm "${CMDLINETXT}"
+
+exit ${EXITCODE}
