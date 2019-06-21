@@ -80,7 +80,7 @@ Usage:
 SCRIPTDIR=`dirname $0`
 SCRIPT=`basename $0`
 PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/adpn-ingest-test.defaults.conf"
+CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 
 PLUGINTXT=`mktemp`
 
