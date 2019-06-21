@@ -47,7 +47,18 @@ CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 ##########################################################################################
 
 declare -a _ARGV ; _ARGV=("$0")
-declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="wget --output-document=-" )
+declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
+
+_PARAM[wget]=`which curl`
+if [[ ! -z "${_PARAM[wget]}" ]] ; then
+	_PARAM[wget]="${_PARAM[wget]} --fail --silent"
+else
+	_PARAM[wget]=`which wget`
+	if [[ ! -z "${_PARAM[wget]}" ]] ; then
+		_PARAM[wget]="${_PARAM[wget]} --quiet --output-document=-"
+	fi
+fi
+echo "${_PARAM[wget]}"
 
 shopt -s lastpipe
 
