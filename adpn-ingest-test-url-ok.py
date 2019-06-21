@@ -121,8 +121,11 @@ if __name__ == '__main__' :
 		## OUTPUT: Print out TSV lines, [code, response, property, url, ...] #############
 		##################################################################################
 		
-		if code == 0 :
-			exitcode = (code - 200) # return an error code from first failure, if any
+		if exitcode == 0 :
+			if code < 300 :
+				exitcode = 0
+			else :
+				exitcode = (code - 200) % 256 # return an error code from first failure, if any
 			
 		if 200 == code :
 			print("200", "\t", "OK", "\t", prop, "\t", url, "\t", rest)

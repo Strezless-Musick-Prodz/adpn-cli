@@ -196,23 +196,24 @@ fi
 ### lockss-plugin-url.py: Retrieve URL of the Plugin JAR package. ########################
 ##########################################################################################
 
+NONUNIQUE_URL=0
 if [[ -z "${JAR}" ]] ; then
 	JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
+	NONUNIQUE_URL="$?"
 fi
 
-if [ -z "${JAR}" ] ; then
+if [[ -z "${JAR}" ]] ; then
 
 	echo "[${SCRIPT}] No Publisher Plugin matches ${SUBARGV_LOCKSSPLUGINURL[@]}." 1>&2
 
-elif [ "$?" -eq 2 ] ; then
+elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 
 	echo ""
 	echo "MULTIPLE MATCHING PLUGINS:"
 	echo "=========================="
 	echo "${JAR}"
 	
-elif [ ! -z "${JAR}" ] ; then
-
+else
 
 	if [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
 
@@ -237,7 +238,7 @@ elif [ ! -z "${JAR}" ] ; then
 	######################################################################################
 
 	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values --jar="${JAR}" "${SUBARGV_ADPNPLUGININFO[@]}" >> ${PLUGINTXT}
-	LOCKSSRETRIEVEJAR=$?
+	LOCKSSRETRIEVEJAR="$?"
 
 	echo ""
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
