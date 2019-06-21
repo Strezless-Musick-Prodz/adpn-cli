@@ -79,7 +79,7 @@ for CMD in "${!DEPENDENCIES[@]}" ; do
 done
 
 if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
-	exit 1
+	exit 255
 fi
 
 ##########################################################################################
@@ -204,10 +204,12 @@ fi
 
 if [[ -z "${JAR}" ]] ; then
 
+	EXITCODE=2
 	echo "[${SCRIPT}] No Publisher Plugin matches ${SUBARGV_LOCKSSPLUGINURL[@]}." 1>&2
 
 elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 
+	EXITCODE=2
 	echo ""
 	echo "MULTIPLE MATCHING PLUGINS:"
 	echo "=========================="
@@ -215,6 +217,7 @@ elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 	
 else
 
+	EXITCODE=0
 	if [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
 
 		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
@@ -317,7 +320,8 @@ fi
 ##########################################################################################
 
 if [ ! -z "${ERROR_ON}" ] ; then
-
+	EXITCODE=1
+	
 	echo ""
 	echo "INGEST TEST ERRORS:"
 	echo "-------------------"
@@ -332,3 +336,5 @@ fi
 
 rm ${PLUGINTXT}
 rm ${CMDLINETXT}
+
+exit ${EXITCODE}
