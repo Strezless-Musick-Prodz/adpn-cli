@@ -1,4 +1,41 @@
 #!/bin/bash
+#
+# adpn-titlesdb-diff: Take a before/after diff of titlesdb XML listing for given peer node
+# from the ADPNet configuration server, to confirm that an AU has been correctly added to
+# the ingest list, or correctly published to the network.
+#
+# If taking a "before" snapshot, returns 0 provided the HTTP GET comes off successfully
+# and provides identical results one after the other.
+#
+# If taking an "after" snapshot, returns 0 provided the HTTP GET comes off successfully
+# and *differs* from the "before" snapshot.
+#
+# Default values for commonly-reused configuration switches can be specified in plaintext
+# file named `adpn-titlesdb-diff.defaults.conf`, with one switch per line, in the same
+# directory as the script.
+#
+# @version 2019.0621
+
+__DOC__="""
+Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]
+
+  --help              	Display these usage notes
+  --props-server=<URL> 	URL for ADPNet config/props server
+                      	  e.g. http://configuration.adpn.org/titlelist/
+  --xmldir=<DIR>      	file system path for before/after snapshots
+                      	  default: user home dir (${HOME})
+  --wget=<CMD>        	command for HTTP GET request; should print to stdout
+                      	  e.g. 'curl', 'wget -O -', 'curl --silent', etc.
+  --before            	save a 'Before' snapshot
+  --after            	save an 'After' snapshot and diff against 'Before'
+  <PEER>|ALL           	code for node to check (e.g.: ADAH, AUB, UAT, etc.)
+                      	  or ALL for titles published to all nodes on the network
+
+Exit codes:
+0 = success (successful retrieval and expected result)
+1 = diff failure (no difference detected between 'Before' and 'After' snapshots)
+2-255 = HTTP request failure (usually a curl or wget error code)
+"""
 
 SCRIPTDIR=`dirname $0`
 SCRIPT=`basename $0`
@@ -49,6 +86,11 @@ done
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	exit 0
+fi
+
 PROPS="${_PARAM[props-server]}"
 XMLDIR="${_PARAM[xmldir]}"
 WGET="${_PARAM[wget]}" # curl, wget, or similar; should print to stdout
@@ -71,7 +113,7 @@ ${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || exit $?
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
-		echo "No differences found on ${PEER}"
+		echo "[${SCRIPT}] No difference found on ${PEER} @" `date`
 		EXITCODE=1
 	elif [[ "${EXITCODE}" -eq 1 ]] ; then
 		EXITCODE=0
