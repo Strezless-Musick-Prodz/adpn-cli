@@ -276,6 +276,8 @@ else
 		
 	else
 	
+		EXITCODE=2		
+	
 		echo ""
 		echo "REQUIRED PARAMETERS:"
 		echo "--------------------"
@@ -308,6 +310,7 @@ else
 			done 3<"${PARAMS_IN}"
 			
 			xargs -a "${PARAMS_SWITCHES}" --delimiter='\n' "${_ARGV[0]}"
+			EXITCODE="$?"
 			
 			rm "${PARAMS_IN}"
 			rm "${PARAMS_SWITCHES}"
