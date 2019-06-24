@@ -114,11 +114,17 @@ fi
 OLDXML="${XMLDIR}/titlesdb.${PEER}.0.xml"
 NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
 
+EXITCODE=0
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
-	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || exit $?
+	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || EXITCODE=$?
 fi
 
-${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || exit $?
+${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || EXITCODE=$?
+
+if [[ "${EXITCODE}" -gt 0 ]] ; then
+	echo "[${SCRIPT}] HTTP GET (${WGET}) failed, exit code: ${EXITCODE}" 1>&2
+	exit "${EXITCODE}"
+fi
 
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then

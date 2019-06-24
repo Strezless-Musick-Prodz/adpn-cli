@@ -19,10 +19,38 @@ from myLockssScripts import myPyCommandLine
 
 class ADPNIngestSQL :
 	"""
-	Usage: ./adpn-ingest-sql.py [-|<JSONFILE>]
+Usage: ./adpn-ingest-into-titlesdb.py [OPTION]... [-|<JSONFILE>]
+
+To get information:
+
+  --help        	      	display these usage notes
+  --list-peers            	list available peer node codes
+
+To ingest AU metadata into titlesdb or publish to the network:
+
+  --from=<PEER>           	mark the AU as provided by the node with code <PEER>
+  --to=<PEER>|ALL         	publish this AU to the node with code <PEER> or to ALL nodes
+  --dry-run               	print but do not issue the SQL queries for updating titlesdb
+  
+Required MySQL connection parameters:
+
+  --mysql-host=<HOST>     	connect to MySQL host with name <HOST> (often 'localhost')
+  --mysql-db=<DB>         	use the MySQL database named <DB>
+  --mysql-user=<USER>    	connect using MySQL username <USER>
+  --mysql-password=<PASS> 	connect using MySQL password <PASS>
+  
+JSON data for the AU to be ingested can be provided from a plain text file
+or piped in to stdin.
+
+MySQL parameters will probably be the same every time, so you may want to list them in the
+adpn-ingest-into-titlesdb.defaults.conf plaintext file.
+
+Returns exit code 0 on success.
+1=A required parameter was omitted
+2=There was a problem getting the key-value pairs from JSON input
 	"""
 	
-	def __init__ (self, scriptname, switches, jsonText) :
+	def __init__ (self, scriptname, switches, jsonText="") :
 		self.scriptname = scriptname
 		self._switches = switches
 		self._jsonText = jsonText
@@ -30,14 +58,7 @@ class ADPNIngestSQL :
 		self._db = None
 		self._cur = None
 		
-		ref=re.match("^([A-Za-z0-9]+\s*)+:\s*([{].*[}])\s*$", jsonText)
-		if (ref) :
-			jsonText = ref[2]
-			
-		try :
-			self._data = json.loads(jsonText)
-		except json.decoder.JSONDecodeError as e :
-			self._data = None
+		self.accept_json(jsonText)
 		
 	@property
 	def data (self) :
@@ -67,6 +88,41 @@ class ADPNIngestSQL :
 	def cur (self, cur) :
 		self._cur = cur
 
+	def wants_json (self) -> bool :
+		noJson = False
+		for switch in ['help', 'list-peers'] :
+			if switch in self.switches :
+				noJson = (noJson or (len(self.switches[switch])>0))
+		return (not noJson)
+
+	def accept_json (self, jsonLines) :
+		self._data = None
+		
+		jsonData = []
+		for jsonText in jsonLines :
+	
+			ref=re.match("^([A-Za-z0-9]+\s*)+:\s*([{].*[}])\s*$", jsonText)
+			if (ref) :
+				jsonText = ref[2]
+			
+			try :
+				data = json.loads(jsonText)
+				jsonData = jsonData + [ data ]
+			except json.decoder.JSONDecodeError as e :
+				data = None
+		
+		self._data = {key: value for d in jsonData for key, value in d.items()}
+
+	def wants_dry_run (self) -> bool :
+		isDryRun = False
+		if 'dry-run' in self.switches :
+			isDryRun = (
+				len(self.switches['dry-run']) > 0
+				and self.switches['dry-run'] != 'n'
+				and self.switches['dry-run'] != 'no'
+			)
+		return isDryRun
+		
 	def au_name (self, text: str) -> str :
 		return re.sub(r"[^A-Za-z0-9]", "", text)
 	
@@ -75,7 +131,7 @@ class ADPNIngestSQL :
 INSERT INTO au_titlelist (au_id, au_pub_id, au_name, au_journal_title, au_type, au_title, au_plugin, au_approved_for_removal, au_content_size, au_disk_cost) VALUES (%(au_id)s, %(au_pub_id)s, %(au_name)s, %(au_journal_title)s, %(au_type)s, %(au_title)s, %(au_plugin)s, %(au_approved_for_removal)s, %(au_content_size)s, %(au_disk_cost)s);
 		""" % key_values
 		
-		if len(self.switches['execute']) > 0 :
+		if not self.wants_dry_run() :
 			self.cur.execute(sql)
 		print(sql)
 
@@ -91,7 +147,7 @@ INSERT INTO au_titlelist (au_id, au_pub_id, au_name, au_journal_title, au_type, 
 INSERT INTO au_titlelist_params (au_id, au_param, au_param_key, au_param_value, peer_au_limit, is_definitional) VALUES (%(au_id)s, %(au_param)s, %(au_param_key)s, %(au_param_value)s, %(peer_au_limit)s, %(is_definitional)s);
 		""" % au_titlelist_params_values
 		
-		if len(self.switches['execute']) > 0 :
+		if not self.wants_dry_run() :
 			self.cur.execute(sql)
 		print(sql)
 
@@ -100,9 +156,15 @@ INSERT INTO au_titlelist_params (au_id, au_param, au_param_key, au_param_value, 
 INSERT INTO adpn_peer_titles (peer_id, au_id) VALUES (%(peer_id)s, %(au_id)s);
 		""" % key_values
 		
-		if len(self.switches['execute']) > 0 :
-			self.cur.execute(sql)
-		print(sql)
+		try :
+			if not self.wants_dry_run() :
+				self.cur.execute(sql)
+			print(sql)
+		except MySQLdb._exceptions.IntegrityError as e :
+			if e.args[0] == 1062 : # duplicate entry for key
+				pass
+			else :
+				raise
 
 	def initial_ingest (self, au_titlelist_values) :
 		print("""
@@ -142,6 +204,19 @@ USE adpn;
 		
 		return au_id
 		
+	def get_peers(self, active = "y") :
+		criteria = []
+		if len(active) > 0 :
+			criteria=criteria+[ "active=%(active)s" % {"active": json.dumps(active)} ]
+		
+		whereClause = ""
+		if len(criteria) > 0 :
+			whereClause = "WHERE (" + (") AND (".join(criteria)) + ")"
+			
+		self.cur.execute("SELECT peer_id, host_name, daemon_version, config_server, peer_location, active, last_updated FROM `adpn_peers` %(whereClause)s" % {"whereClause": whereClause})
+
+		return [ row for row in self.cur.fetchall() ]
+		
 	def display (self) :
 	
 		self.db = MySQLdb.connect(
@@ -179,7 +254,23 @@ USE adpn;
 		
 		self.db.commit()
 		self.db.close()
-				
+	
+	def display_peers (self) :
+		self.db = MySQLdb.connect(
+			host=self.switches['mysql-host'],
+			user=self.switches['mysql-user'],
+			passwd=self.switches['mysql-password'],
+			db=self.switches['mysql-db']
+		)
+		self.cur = self.db.cursor()
+		
+		peers = self.get_peers()
+		for peer in peers :
+			line = (peer[0], 'ACTIVE' if (peer[5]=='y') else 'INACTIVE', str(peer[2]), peer[6].isoformat(' '))
+			print("\t".join(line))
+			
+		self.db.close()
+
 	def display_usage (self) :
 		print(self.__doc__)
 		self.exit()
@@ -206,15 +297,19 @@ if __name__ == '__main__' :
 		defaultArgv = sys.argv[0:0] + []
 	
 	(defaultArgv, defaultSwitches) = myPyCommandLine(defaultArgv).parse()
-	defaultSwitches = {**{"execute": "", "insert_title": False}, **defaultSwitches}
+	defaultSwitches = {**{"dry-run": "", "help": "", "list-peers": "", "insert_title": False}, **defaultSwitches}
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
 	
-	jsonInput = "".join(fileinput.input())
-	script = ADPNIngestSQL(scriptname, switches, jsonInput)
-
+	script = ADPNIngestSQL(scriptname, switches)
+	script.accept_json(fileinput.input() if script.wants_json() else [])
+	
 	exitcode = 0
-	if script.data is None :
+	if len(switches['help']) > 0 :
+		script.display_usage()
+	elif len(switches['list-peers']) :
+		script.display_peers()
+	elif script.data is None :
 		exitcode = 2
 		script.display_error("JSON encoding error. Could not extract key-value pairs from provided data.")
 	else :
