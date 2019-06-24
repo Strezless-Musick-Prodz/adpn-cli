@@ -9,7 +9,8 @@ Main tools:
 * adpn-ingest-into-titlesdb.py: Python script to add a staged AU to the titlesdb MySQL database
 * adpn-titlesdb-diff: bash script to test before/after state of the titlesdb XML listing
 	
-=== adpn-ingest-test ===
+adpn-ingest-test
+================
 	
 	Usage: ./adpn-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
 		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--tunnel=<TUNNELHOST>]
