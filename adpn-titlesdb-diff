@@ -14,7 +14,7 @@
 # file named `adpn-titlesdb-diff.defaults.conf`, with one switch per line, in the same
 # directory as the script.
 #
-# @version 2019.0621
+# @version 2019.0624
 
 __DOC__="""
 Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]
@@ -58,7 +58,6 @@ else
 		_PARAM[wget]="${_PARAM[wget]} --quiet --output-document=-"
 	fi
 fi
-echo "${_PARAM[wget]}"
 
 shopt -s lastpipe
 

@@ -1,4 +1,16 @@
 #!/usr/bin/python3
+#
+# adpn-ingest-into-titlesdb.py: accepts a JSON data packet provided by adpn-ingest-test
+# and imports the data from it into ADPNet titlesdb MySQL database for a local test crawl
+# or for publication to the LOCKSS network. 
+#
+# Prints out SQL code for injection of the title to stdout, in case you want to capture it
+# for a (re)usable MySQL script.
+#
+# Exits with code 0 on success, or non-zero exit code on failure, to allow for pipelining
+# with other ADPN Ingest tools.
+#
+# @version 2019.0624
 
 import sys, os, fileinput, json, re
 import MySQLdb
