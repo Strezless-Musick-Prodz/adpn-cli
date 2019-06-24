@@ -1,7 +1,15 @@
 Utility scripts for extracting and reporting information about ADPNet (LOCKSS) Publisher
-Plugins.
+Plugins, transmitting information about Archival Units (AU) staged for ingest into the
+network, testing the availability of the AU content, and automating the process of
+inserting the AU into the network titles list.
 
-	adpn-ingest-test: bash script to coordinate tests  when staging content into ADPNet
+Main tools:
+
+* adpn-ingest-test: bash script to coordinate tests when staging content into ADPNet
+* adpn-ingest-into-titlesdb.py: Python script to add a staged AU to the titlesdb MySQL database
+* adpn-titlesdb-diff: bash script to test before/after state of the titlesdb XML listing
+	
+=== adpn-ingest-test ===
 	
 	Usage: ./adpn-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
 		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--tunnel=<TUNNELHOST>]
