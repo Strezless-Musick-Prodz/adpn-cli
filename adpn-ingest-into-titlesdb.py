@@ -16,6 +16,7 @@ import sys, os, fileinput, json, re
 import MySQLdb
 
 from myLockssScripts import myPyCommandLine
+from myLockssScripts import myPyJSON
 
 class ADPNIngestSQL :
 	"""
@@ -98,18 +99,13 @@ Returns exit code 0 on success.
 	def accept_json (self, jsonLines) :
 		self._data = None
 		
-		jsonData = []
-		for jsonText in jsonLines :
-	
-			ref=re.match("^([A-Za-z0-9]+\s*)+:\s*([{].*[}])\s*$", jsonText)
-			if (ref) :
-				jsonText = ref[2]
-			
-			try :
-				data = json.loads(jsonText)
-				jsonData = jsonData + [ data ]
-			except json.decoder.JSONDecodeError as e :
-				data = None
+		jsonInput = myPyJSON()
+		jsonInput.accept(jsonLines)
+
+		try :
+			jsonData = jsonInput.data
+		except json.decoder.JSONDecodeError as e :
+			jsonData = []
 		
 		self._data = {key: value for d in jsonData for key, value in d.items()}
 

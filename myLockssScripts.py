@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 
 import sys, re
+import json
 
+import fileinput
 
 class myPyCommandLine :
 
@@ -48,6 +50,44 @@ class myPyCommandLine :
 		
 		return (argv, switches)
 		
+class myPyJSON :
+	
+	def __init__ (self) :
+		self._jsonPattern = "^(([A-Za-z0-9]+\s*)+:\s*)?([{].*[}])\s*$"
+		self._jsonText = [ ]
+		
+	@property
+	def pattern (self) :
+		return self._jsonPattern
+	
+	@property
+	def json (self) :
+		bag = [ ]		
+		for line in self._jsonText :
+			ref = re.match(self.pattern, line)
+			if ref :
+				bag.append(ref[3])
+		return bag
+	
+	@property
+	def data (self) :
+		return [ json.loads(marble) for marble in self.json ]
+	
+	@property
+	def allData (self) :
+		hashtable = { }
+		for table in self.data :
+			hashtable = {**hashtable, **table}
+		return hashtable
+		
+	def accept (self, jsonSource) :
+		if isinstance(jsonSource, str) :
+			src = jsonSource.split("\n")
+		else :
+			src = jsonSource		
+		
+		jsonMatches = [ re.match(self.pattern, line) for line in src ]
+		self._jsonText = [ ref[3] for ref in jsonMatches if ref ]
 	
 if __name__ == '__main__':
 
@@ -83,3 +123,49 @@ if __name__ == '__main__':
 
 	print("")
 	
+	print("Good JSON...")
+	
+	table1 = {"Ingest Title": "Alabama Department of Archives and History WPA Folder 01", "File Size ": "2.1G (2,243,154,758 bytes, 689 files)", "Plugin JAR": "http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar", "Plugin ID": "gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin", "Plugin Name": "Alabama Department of Archives and History Directory Plugin", "Plugin Version": "1", "Start URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "Manifest URL": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "Base URL": "base_url=\"http://archives.alabama.gov/Lockss/\"", "Subdirectory": "subdirectory=\"WPA-Folder-01\"", "au_name": "Alabama Department of Archives and History Directory Plugin, Base URL http://archives.alabama.gov/Lockss/, Subdirectory WPA-Folder-01"}
+	table2 = {"au_start_url": "http://archives.alabama.gov/Lockss/WPA-Folder-01/", "au_manifest": "http://archives.alabama.gov/Lockss/WPA-Folder-01/manifestpage.html", "parameters": [["base_url", "http://archives.alabama.gov/Lockss/"], ["subdirectory", "WPA-Folder-01"]]}
+
+	inp = "USELESS LINE: FooBar" + "\n" + "JSON PACKET: " + json.dumps(table1) + "\n" + json.dumps(table2) + "\n\n"
+
+	jsonInput = myPyJSON()
+	jsonInput.accept(inp)
+	print("")
+	
+	print("")
+	print("JSON TEXT >>>")
+	print(jsonInput.json)
+	print("")
+	print("JSON DATA >>>")
+	print(jsonInput.data)
+	print("")
+	print("AGGREGATED JSON DATA >>>")
+	print(jsonInput.allData)
+	print("")
+	
+	print("Bad JSON...")
+
+	inp = "JSON PACKET: {oooOOooo what's this?}" + "\n" + "NON-JSON LINE: Hmmm"
+
+	jsonInput = myPyJSON()
+	jsonInput.accept(inp)
+	print("")
+	
+	print("")
+	print("JSON TEXT >>>")
+	print(jsonInput.json)
+	print("")
+	print("JSON DATA >>>")
+	try :
+		print(jsonInput.data)
+	except json.decoder.JSONDecodeError as e :
+		print("myPyJSON.data -- excepted expected, OK !")
+	print("")
+	print("AGGREGATED JSON DATA >>>")
+	try :
+		print(jsonInput.allData)
+	except json.decoder.JSONDecodeError as e :
+		print("myPyJSON.data -- excepted expected, OK !")
+	print("")
