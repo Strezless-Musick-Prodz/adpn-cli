@@ -1,29 +1,49 @@
 #!/usr/bin/python3
+#
+# myLockssScripts: utility classes for use across various ADPNet/LOCKSS automation scripts
+# Regularizing the use of key-value pair switches, JSON input, etc.
+#
+# @version 2019.0624
 
-import sys, re
+import sys
+import re
 import json
-
 import fileinput
 
 class myPyCommandLine :
-
+	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.
+	"""
+	
 	def __init__ (self, argv: list = [], defaults: dict = {}) :
+		"""Initialize with a list of command-line arguments, and optionally a dictionary of default values for expected configuration switches."""
 		self._argv = argv
 		self._switches = {}
 		self._defaults = defaults
 		self._switchPattern = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
 
 	@property 
-	def pattern (self) :
+	def pattern (self) -> str :
+		"""Provides a regex that matches a command-line switch and parse out switch names and values."""
 		return self._switchPattern
 
-	def argv (self) :
+	@property
+	def argv (self) -> list :
+		"""List of files and objects from the command line, without --switches.
+		"""
 		return self._argv
 	
-	def switches (self) :
+	@property
+	def switches (self) -> dict :
+		"""Dictionary of configuration switches provided on command-line or in defaults.
+		"""
 		return self._switches
 		
-	def KeyValuePair (self, switch) :
+	def KeyValuePair (self, switch) -> tuple :
+		"""Parses a string command-line switch into a (key, value) pair.
+
+		Switches may be a parameter name and value (e.g. '--output=html' -> ('output', 'html')
+		or they may be a simple setting name (e.g. '--turned-on' -> ('turned-on', 'turned-on')
+		"""
 		ref=re.match(self.pattern, switch)
 	
 		key = ref[1]
@@ -35,10 +55,12 @@ class myPyCommandLine :
 		return (key, value)
 
 	def parse (self, argv: list = [], defaults: dict = {}) -> tuple :
+		"""Separate out a list of command-line arguments into switches and files/objects.
+		"""
 		if len(argv) > 0 :
 			the_argv = argv
 		else :
-			the_argv = self.argv()
+			the_argv = self.argv
 		
 		switches = dict([ self.KeyValuePair(arg) for arg in the_argv if re.match(self.pattern, arg) ])
 		switches = {**self._defaults, **defaults, **switches}
@@ -51,36 +73,43 @@ class myPyCommandLine :
 		return (argv, switches)
 		
 class myPyJSON :
+	"""Extract JSON hash tables from plain-text input, for example copy-pasted or piped into stdin.
+	"""
 	
 	def __init__ (self) :
+		"""Initialize the JSON extractor pattern."""
 		self._jsonPattern = "^(([A-Za-z0-9]+\s*)+:\s*)?([{].*[}])\s*$"
 		self._jsonText = [ ]
 		
 	@property
 	def pattern (self) :
+		"""Regex that matches and parses out the JSON representation from a line of text."""
 		return self._jsonPattern
 	
 	@property
-	def json (self) :
-		bag = [ ]		
-		for line in self._jsonText :
-			ref = re.match(self.pattern, line)
-			if ref :
-				bag.append(ref[3])
-		return bag
+	def json (self) -> list :
+		"""List of all the JSON representations taken from the accepted input."""
+		return self._jsonText
 	
 	@property
-	def data (self) :
+	def data (self) -> "list of dict" :
+		"""A list of all the hash tables parsed from the JSON representations."""
 		return [ json.loads(marble) for marble in self.json ]
 	
 	@property
 	def allData (self) :
+		"""A unified hash table that merges together all the tables parsed from the JSON representations."""
 		hashtable = { }
 		for table in self.data :
 			hashtable = {**hashtable, **table}
 		return hashtable
 		
 	def accept (self, jsonSource) :
+		"""Accept the plain-text input containing one or more JSON hash tables within the text.
+		
+		jsonSource can be a string, or an iterable object that spits out lines of text
+		(for example, flieinput.input()).
+		"""
 		if isinstance(jsonSource, str) :
 			src = jsonSource.split("\n")
 		else :
@@ -109,12 +138,12 @@ if __name__ == '__main__':
 	
 	print("")
 	
-	print(">>>", "cmd = myPyCommandLine(sys.argv) ; cmd.parse(defaults=defaults) ; args = cmd.argv() ; sw = cmd.switches()")
+	print(">>>", "cmd = myPyCommandLine(sys.argv) ; cmd.parse(defaults=defaults) ; args = cmd.argv ; sw = cmd.switches")
 
 	cmd = myPyCommandLine(sys.argv)
 	cmd.parse(defaults=defaults)
-	args = cmd.argv()
-	sw = cmd.switches()
+	args = cmd.argv
+	sw = cmd.switches
 	
 	print("ARGS:    ", "\t", args)
 	print("SWITCHES:", "\t", sw)

@@ -156,6 +156,7 @@ until [[ -z "$1" ]] ; do
 done
 
 SWITCHFILES+=(${CMDLINETXT})
+ADPN_INGEST_TEST_DISPLAY=ingest
 
 cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 
@@ -170,8 +171,8 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 			"jar")
 				JAR="${VALUE}"
 				;;
-			"help")
-				HELP=help
+			"help"|"plugin-details")
+				ADPN_INGEST_TEST_DISPLAY="${KEY}"
 				;;
 			"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
 				SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
@@ -197,7 +198,7 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 	
 done
 
-if [[ ! -z "${HELP}" ]] ; then
+if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "help" ]] ; then
 	echo "${__doc__}"
 	exit
 fi
@@ -206,16 +207,18 @@ fi
 ### USER INPUT: get missing parameters from the user console if not command line #########
 ##########################################################################################
 
-if [[ -z "${SUBARGV_AUNAME[au_title]}" ]] ; then
-	read -r -p "Ingest Name/Title: " AU_TITLE
-	_ARGV+=("--au_title=${AU_TITLE}")
-	SUBARGV_AUNAME[au_title]="${AU_TITLE}"
-fi
+if [[ "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
+	if [[ -z "${SUBARGV_AUNAME[au_title]}" ]] ; then
+		read -r -p "Ingest Name/Title: " AU_TITLE
+		_ARGV+=("--au_title=${AU_TITLE}")
+		SUBARGV_AUNAME[au_title]="${AU_TITLE}"
+	fi
 
-if [[ -z "${SUBARGV_STAGEDLOCAL[local]}" && -z "${SUBARGV_STAGEDLOCAL[remote]}" ]] ; then
-	read -r -p "Local file location: " LOCALPATH
-	_ARGV+=("--local=${LOCALPATH}")
-	SUBARGV_STAGEDLOCAL[local]="${LOCALPATH}"
+	if [[ -z "${SUBARGV_STAGEDLOCAL[local]}" && -z "${SUBARGV_STAGEDLOCAL[remote]}" ]] ; then
+		read -r -p "Local file location: " LOCALPATH
+		_ARGV+=("--local=${LOCALPATH}")
+		SUBARGV_STAGEDLOCAL[local]="${LOCALPATH}"
+	fi
 fi
 
 if [[
@@ -285,7 +288,7 @@ else
 
 	fi
 
-	if [[ ! -z "${SUBARGV_AUNAME[@]}" ]] ; then
+	if [[ ! -z "${SUBARGV_AUNAME[@]}" && "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
 		echo "Ingest Title	${SUBARGV_AUNAME[@]}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ]] ; then
@@ -300,7 +303,10 @@ else
 	LOCKSSRETRIEVEJAR="$?"
 
 	echo ""
-	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
+		echo "PLUGIN DETAILS:"
+		echo "---------------"
+	elif [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
 		echo "INGEST INFORMATION AND PARAMETERS:"
 		echo "----------------------------------"
 	else 
@@ -308,11 +314,15 @@ else
 		echo "-------------------"
 	fi
 
-	grep -P '^Ingest Title' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-	grep -P '^File Size' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-	grep -P '^Plugin (JAR|Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
+		cat ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+	else
+		grep -P '^Ingest Title' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		grep -P '^File Size' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		grep -P '^Plugin (JAR|Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		fi
 	fi
 	
 	######################################################################################
@@ -340,7 +350,11 @@ else
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
 		echo ""
-		read -n1 -p "Read from console (Y/N)? " PARAMS_YN ; echo ""
+		if [[ "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
+			read -n1 -p "Read from console (Y/N)? " PARAMS_YN ; echo ""
+		else
+			PARAMS_YN=N
+		fi
 		
 		if [[ "${PARAMS_YN}" == "Y" || "${PARAMS_YN}" == "y" ]] ; then
 			
