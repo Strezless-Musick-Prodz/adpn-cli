@@ -31,6 +31,11 @@ Usage:
     and perform a test of the accessibility of the start URL and/or manifest page for
     an HTTP GET.
 
+  adpn-ingest-test --plugin-keywords=<KEYWORDS> --plugin-details
+  
+    reports back details about the selected plugin, including required parameters,
+	without requiring you to specify a local or remote AU being staged for ingest.
+	
   Scripted:
   
   adpn-ingest-test --local=<PATH> [OPTION]...
@@ -326,7 +331,7 @@ else
 	fi
 	
 	######################################################################################
-	### adpn-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ####
+	### adpn-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ######
 	######################################################################################
 
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
