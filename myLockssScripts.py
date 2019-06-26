@@ -46,11 +46,11 @@ class myPyCommandLine :
 		"""
 		ref=re.match(self.pattern, switch)
 	
-		key = ref[1]
-		if ref[3] is None :
-			value = ref[1]
+		key = ref.group(1)
+		if ref.group(3) is None :
+			value = ref.group(1)
 		else :
-			value = ref[3]
+			value = ref.group(3)
 	
 		return (key, value)
 
@@ -116,7 +116,7 @@ class myPyJSON :
 			src = jsonSource		
 		
 		jsonMatches = [ re.match(self.pattern, line) for line in src ]
-		self._jsonText = [ ref[3] for ref in jsonMatches if ref ]
+		self._jsonText = [ ref.group(3) for ref in jsonMatches if ref ]
 	
 if __name__ == '__main__':
 
