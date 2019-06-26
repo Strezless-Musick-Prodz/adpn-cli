@@ -97,7 +97,7 @@ def unpack_ftp_elements(url) :
 		(user, passwd) = (credentials[0], credentials[1] if len(credentials) > 1 else None)
 	if len(bits.path) > 1 :
 		base_dir = bits.path
-		subdirectory = '/.'
+		subdirectory = '.'
 		
 	return (host, user, passwd, base_dir, subdirectory)
 	
