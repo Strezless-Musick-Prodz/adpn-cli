@@ -43,7 +43,14 @@ Usage:
     --local=<PATH>           	path to the files being put into the AU (e.g.: 'w:\\Path')
     --au_title=<TITLE>       	title for this AU in titledb (e.g.: 'ADAH Lovely Files')
     --<PARAM>=<VALUE>        	set plugin parameter <PARAM> to <VALUE>
-                             	(e.g.: subdirectory=Lovely-Files)
+                             	  (e.g.: subdirectory=Lovely-Files)
+
+  To retrieve file size and file count information from an FTP staging server:
+    --staged=<URL>           	FTP location for base directory or exact location of
+								  staged AU files (e.g.: ftp://user@server/Lockss/)
+    --subdirectory=<DIR>		optional, subdirectory within the FTP base directory that
+								  contains the staged AU files. If provided, it will also
+								  be passed along as a parameter to the publishing plugin.
 
   To select and configure a plugin for this ingest, use:
     --jar=<URL>               	URL directly to a plugin's JAR file on the props server
