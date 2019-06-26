@@ -102,7 +102,7 @@ def unpack_ftp_elements(url) :
 	return (host, user, passwd, base_dir, subdirectory)
 	
 (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
-	"host": None, "user": None, "subdirectory": None, "base_dir": None,
+	"host": None, "user": None, "subdirectory": None, "directory": None, "base_dir": None,
 	"output": "text/plain"
 }).parse()
 
@@ -116,6 +116,7 @@ passwd_prompt = "FTP Password (%(user)s@%(host)s): " % {"user": user, "host": ho
 host=switches.get('host') if switches.get('host') is not None else host
 user=switches.get('user') if switches.get('user') is not None else user
 base_dir=switches.get('base_dir') if switches.get('base_dir') is not None else base_dir
+subdirectory=switches.get('directory') if switches.get('directory') is not None else subdirectory
 subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else subdirectory
 
 passwd=passwd if passwd is not None else getpass(passwd_prompt)
