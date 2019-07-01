@@ -95,8 +95,10 @@ class FTPStaging :
 			for subfile in self.nlst() :
 				exclude_this = exclude(subfile) if exclude is not None else False
 				if not exclude_this :
-					(level, type) = (1, "downloaded")				
+					(level, type) = (1, "downloaded")
+
 					self.download(file=subfile, exclude=exclude, notification=notification)					
+						
 				else :
 					(level, type) = (2, "excluded")
 					
@@ -178,7 +180,7 @@ class ADPNStageContentScript :
 		self.passwd=self.switches.get('pass') if self.switches.get('pass') is not None else self.passwd
 		self.base_dir=switches.get('base_dir') if switches.get('base_dir') is not None else self.base_dir
 		self.subdirectory=switches.get('directory') if switches.get('directory') is not None else self.subdirectory
-		self.subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else self.subdirectory
+		self.subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else self.subdirectory	
 	
 	def unpack_ftp_elements(self, url) :
 		(host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
@@ -212,7 +214,7 @@ class ADPNStageContentScript :
 			})
 			
 			cmdline = [
-				"./adpn-make-manifest.py",
+				"adpn-make-manifest.py",
 				"--jar="+self.switches['jar'],
 				"--proxy="+self.switches['proxy'],
 				"--port="+self.switches['port'],
@@ -313,6 +315,8 @@ if __name__ == '__main__':
 
 	scriptname = os.path.basename(sys.argv[0])
 	scriptdir = os.path.dirname(sys.argv[0])
+	
+	os.environ["PATH"] = ":".join( [ scriptdir, os.environ["PATH"] ] )
 	
 	default_map = open("/".join([scriptdir, "adpnet.json"]), "r")
 	jsonText = "".join([line for line in default_map])
