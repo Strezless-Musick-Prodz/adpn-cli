@@ -12,6 +12,9 @@ import fileinput
 import ftplib
 import urllib.parse
 import math
+import subprocess
+import json
+from datetime import datetime
 from io import BytesIO
 from ftplib import FTP
 from getpass import getpass
@@ -19,9 +22,10 @@ from myLockssScripts import myPyCommandLine, myPyJSON
 
 class FTPStaging :
 
-	def __init__ (self, ftp) :
+	def __init__ (self, ftp, user) :
 		self.ftp = ftp
-		
+		self.user = user
+	
 	def size (self, file) :
 		size=None
 		try :
@@ -30,6 +34,12 @@ class FTPStaging :
 			pass
 		return size
 
+	def url_host (self) :
+		return ("%(user)s@%(host)s" if self.user else "%(host)s") % {"user": self.user, "host": self.ftp.host}
+
+	def url (self) :
+		return "ftp://%(host)s%(path)s" % {"host": self.url_host(), "path": self.ftp.pwd()}
+		
 	def pwd (self) :
 		return self.ftp.pwd()
 	
@@ -39,8 +49,18 @@ class FTPStaging :
 	def chdir (self, dir, remote=None, make=False) :
 		rdir = remote if remote is not None else dir
 		rlast = self.cwd(dir=rdir, make=make)
+
 		llast = os.getcwd()
-		os.chdir(dir)
+
+		try :
+			os.chdir(dir)
+		except FileNotFoundError as e :
+			if make :
+				os.mkdir(dir)
+				os.chdir(dir)
+			else :
+				raise
+
 		return (llast, rlast)
 		
 	def cwd (self, dir, make=False) :
@@ -60,10 +80,45 @@ class FTPStaging :
 	def nlst (self) :
 		return self.ftp.nlst()
 
+	def download_file (self, file = None) :
+		self.ftp.retrbinary("RETR %(file)s" % {"file": file}, open( file, 'wb' ).write)
+		
+	def download (self, file = None, exclude = None, notification = None) :
+		out = notification if notification is not None else lambda level, type, arg: (level, type, arg) # NOOP
+		
+		if '.' == file or self.size(file) is None :
+			
+			if '.' != file :
+				(lpwd, rpwd) = self.chdir(dir=file, make=True)
+				out(2, "chdir", (os.getcwd(), self.ftp.pwd()))
+
+			for subfile in self.nlst() :
+				exclude_this = exclude(subfile) if exclude is not None else False
+				if not exclude_this :
+					(level, type) = (1, "downloaded")				
+					self.download(file=subfile, exclude=exclude, notification=notification)					
+				else :
+					(level, type) = (2, "excluded")
+					
+				out(level, type, subfile)
+
+			if '.' != file :
+				self.chdir(dir=lpwd, remote=rpwd, make=False)
+				out(2, "chdir", (lpwd, rpwd))
+				
+		else :
+			self.download_file(file=file)
+			if self.size(file) == os.stat(file).st_size :
+				self.ftp.delete(file)
+				out(1, "rm", file)
+
 	def upload_file (self, blob = None, file = None) :
+		if isinstance(blob, str) :
+			blob = blob.encode("utf-8")
+			
 		stream=BytesIO(bytes(blob)) if blob is not None else open(file, 'rb')
 		self.ftp.storbinary("STOR %(filename)s" % {"filename": file}, stream)
-		stream.close()
+		stream.close()	
 	
 	def upload (self, blob = None, file = None, exclude = None, notification = None) :
 		out = notification if notification is not None else lambda level, type, arg: (level, type, arg) # NOOP
@@ -147,11 +202,63 @@ class ADPNStageContentScript :
 			self.base_dir = base_dir
 			self.subdirectory = subdirectory
 
+	def make_manifest_page (self) :
+		try :
+			jsonParams = json.dumps({
+				"base_url": self.switches['base_url'],
+				"subdirectory": self.subdirectory,
+				"institution": self.switches['institution'],
+				"au_title": self.switches['au_title']
+			})
+			
+			cmdline = [
+				"./adpn-make-manifest.py",
+				"--jar="+self.switches['jar'],
+				"--proxy="+self.switches['proxy'],
+				"--port="+self.switches['port'],
+				"--tunnel="+self.switches['tunnel'],
+				"--tunnel-port="+self.switches['tunnel-port'],
+				"--parameters="+jsonParams
+			]
+			
+			buf = subprocess.check_output(cmdline, encoding="utf-8")
+		except subprocess.CalledProcessError as e :
+			code = e.returncode
+			buf = e.output
+		finally :
+			return buf
+		
+	def mkBackupDir (self) :
+		backupPath=self.switches['backup']
+		
+		try :
+			os.mkdir(backupPath)
+		except FileExistsError as e :
+			pass
+		
+		datestamp=datetime.now().strftime('%Y%m%d%H%M%S')
+		backupPath="%(backup)s/%(date)s" % {"backup": backupPath, "date": datestamp}
+		
+		try :
+			os.mkdir(backupPath)
+		except FileExistsError as e :
+			pass
+
+		backupPath="%(backup)s/%(subdirectory)s" % {"backup": backupPath, "subdirectory": self.subdirectory}
+		try :
+			os.mkdir(backupPath)
+		except FileExistsError as e :
+			pass
+
+		return backupPath
+		
 	def output_status (self, level, type, arg) :
 		(prefix, message) = (type, arg)
 
 		if "uploaded" == type :
 			prefix = ">>>"
+		elif "downloaded" == type :
+			prefix = "<<<"
 		elif "excluded" == type :
 			prefix = "---"
 			message = ("excluded %(arg)s" % {"arg": arg})
@@ -173,29 +280,58 @@ class ADPNStageContentScript :
 		if self.subdirectory is None or len(self.subdirectory) == 0 :
 			self.subdirectory = input("Subdirectory: ")
 	
+		manifest_html=self.make_manifest_page()
+		
 		# Let's log in to the host
-		self.ftp = FTPStaging(FTP(self.host, user=self.user, passwd=self.passwd))
+		self.ftp = FTPStaging(FTP(self.host, user=self.user, passwd=self.passwd), user=self.user)
 
 		# Let's CWD over to the repository
 		self.ftp.cwd(self.base_dir)
 
+		backupDir = self.mkBackupDir()
+		
+		(local_pwd, remote_pwd) = self.ftp.chdir(dir=backupDir, remote=self.subdirectory, make=True)
+		self.ftp.download(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
+
+		self.ftp.chdir(dir=local_pwd, remote=remote_pwd)
 		(local_pwd, remote_pwd) = self.ftp.chdir(dir=self.switches['local'], remote=self.subdirectory, make=True)
 
 		self.output_status(2, "chdir", (os.getcwd(), self.ftp.pwd()))
+		
+		# upload the generated manifest page
+		self.ftp.upload(blob=manifest_html, file='manifestpage.html')	
+		self.output_status(1, "uploaded", 'manifestpage.html')
+
+		# upload the present directory recursively
 		self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
-		self.output_status(0, "ok", os.getcwd())
+		
+		self.output_status(0, "ok", (os.getcwd(), self.ftp.url()))
 
 		self.ftp.quit()
 
 if __name__ == '__main__':
 
 	scriptname = os.path.basename(sys.argv[0])
-	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
-		"host": None, "user": None, "pass": None,
-		"subdirectory": None, "directory": None,
-		"base_dir": None, "output": "text/plain", "local": None,
-		"verbose": 1, "quiet": False
-	}).parse()
+	scriptdir = os.path.dirname(sys.argv[0])
+	
+	default_map = open("/".join([scriptdir, "adpnet.json"]), "r")
+	jsonText = "".join([line for line in default_map])
+	default_map.close()
+	
+	try :
+		hardcoded_defaults = {
+			"host": None, "user": None, "pass": None,
+			"subdirectory": None, "directory": None,
+			"base_dir": None, "output": "text/plain",
+			"local": None, "backup": "./backup",
+			"verbose": 1, "quiet": False,
+			"base_url": None, "au_title": None, "institution": None
+		}
+		defaults = {**hardcoded_defaults, **json.loads(jsonText)}
+	except json.decoder.JSONDecodeError as e :
+		defaults = hardcoded_defaults
+
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaults).parse()
 
 	script = ADPNStageContentScript(scriptname, sys.argv, switches)
 	script.execute()
