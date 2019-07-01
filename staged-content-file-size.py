@@ -131,7 +131,7 @@ Exit code is 0 in case of successful output.
 	def display_output (self, bytes, files) :
 		output = {
 		"text/plain": "TOTAL: %(hu)s (%(bb)s bytes; %(files)s files)",
-		"text/tab-separated-values": "\t".join(["%(hu)s", "%(bytes)s", "%(files)d"])
+		"text/tab-separated-values": "\t".join(["%(hu)s", "%(bb)s", "%(files)s"])
 		}
 
 		print(

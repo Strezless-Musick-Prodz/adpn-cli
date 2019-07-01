@@ -155,7 +155,7 @@ if [[ -r "${JARFILE}" && -s "${JARFILE}" ]] ; then
 		fi
 		
 	done
-	EXITCODE=$?
+	#EXITCODE=$?
 	
 	if [ ! -z "${CLEANUP}" ] ; then
 		${CLEANUP}
