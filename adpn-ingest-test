@@ -43,7 +43,14 @@ Usage:
     --local=<PATH>           	path to the files being put into the AU (e.g.: 'w:\\Path')
     --au_title=<TITLE>       	title for this AU in titledb (e.g.: 'ADAH Lovely Files')
     --<PARAM>=<VALUE>        	set plugin parameter <PARAM> to <VALUE>
-                             	(e.g.: subdirectory=Lovely-Files)
+                             	  (e.g.: subdirectory=Lovely-Files)
+
+  To retrieve file size and file count information from an FTP staging server:
+    --staged=<URL>           	FTP location for base directory or exact location of
+								  staged AU files (e.g.: ftp://user@server/Lockss/)
+    --subdirectory=<DIR>		optional, subdirectory within the FTP base directory that
+								  contains the staged AU files. If provided, it will also
+								  be passed along as a parameter to the publishing plugin.
 
   To select and configure a plugin for this ingest, use:
     --jar=<URL>               	URL directly to a plugin's JAR file on the props server
@@ -146,7 +153,7 @@ fi
 CMDLINETXT=`mktemp`
 
 if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
-	./adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
+	adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
 	shift
 	
 	cat "${CMDLINETXT}" | while IFS="" read -r SWITCH ; do
@@ -189,8 +196,12 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 			"au_title")
 				SUBARGV_AUNAME[$KEY]="${VALUE}"
 				;;
-			"local"|"remote"|"ftp")
+			"local"|"remote"|"staged")
 				SUBARGV_STAGEDLOCAL[$KEY]="${VALUE}"
+				;;
+			"subdirectory"|"directory")
+				SUBARGV_STAGEDLOCAL[$KEY]="--${KEY}=${VALUE}"
+				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
 				;;
 			*)
 				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
@@ -282,7 +293,17 @@ elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 else
 
 	EXITCODE=0
-	if [ ! -z "${SUBARGV_STAGEDLOCAL[ftp]}" ] ; then
+	if [ ! -z "${SUBARGV_STAGEDLOCAL[staged]}" ] ; then
+		
+		STAGED_CONTENT_FILE_SIZE=$(
+			staged-content-file-size.py \
+			--output=text/tab-separated-values \
+			"${SUBARGV_STAGEDLOCAL[staged]}" \
+			"${SUBARGV_STAGEDLOCAL[subdirectory]}"
+		)
+		DU_HUMANREADABLE=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f1)
+		DU_BYTES=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f2)
+		FIND_FILECOUNT=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f3)
 		
 	elif [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
 
@@ -299,7 +320,7 @@ else
 		echo "Ingest Title	${SUBARGV_AUNAME[@]}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ]] ; then
-		printf "File Size\t%s (%d bytes, %d files)" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}" >> ${PLUGINTXT}
+		printf "File Size \t%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}" >> ${PLUGINTXT}
 	fi
 
 	######################################################################################

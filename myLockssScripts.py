@@ -9,7 +9,40 @@ import sys
 import re
 import json
 import fileinput
+import subprocess
+from subprocess import PIPE
 
+class myPyPipeline :
+	def __init__ (self, pipeline) :
+		self.pipeline = pipeline
+	
+	def process (self, cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, encoding="utf-8") :
+		if callable(cmd) :
+			res=cmd(stdin=stdin, stdout=stdout, stderr=stderr, encoding=encoding)
+		else :
+			res=subprocess.Popen(cmd, stdin=stdin, stdout=stdout, stderr=stderr, encoding=encoding)
+		return res
+		
+	def siphon (self, encoding="utf-8") :
+		processes = []
+		_stdin = sys.stdin
+		for cmd in self.pipeline :
+			proc = self.process(cmd=cmd, stdin=_stdin, stdout=PIPE, encoding=encoding)
+			_stdin = proc.stdout
+			processes.append(proc)
+		
+		_lastproc = None
+		for proc in processes :
+			if _lastproc is not None :
+				_lastproc.stdout.close()
+			_lastproc = proc
+		
+		(buf, errbuf) = _lastproc.communicate()
+		_lastproc.stdout.close()
+		
+		return (buf, errbuf, [proc.returncode for proc in processes])
+
+	
 class myPyCommandLine :
 	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.
 	"""
@@ -71,7 +104,11 @@ class myPyCommandLine :
 		self._switches = switches
 		
 		return (argv, switches)
+	
+	def compose (self, keyvalues: list) -> list :		
+		return self.argv + [ "--%(k)s=%(v)s" % {"k": key, "v": value} for key, value in keyvalues if not value is None ]
 		
+
 class myPyJSON :
 	"""Extract JSON hash tables from plain-text input, for example copy-pasted or piped into stdin.
 	"""
