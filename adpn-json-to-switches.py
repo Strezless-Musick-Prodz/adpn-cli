@@ -66,7 +66,7 @@ Written to stdout, one switch per line. For example:
 			elif ('Plugin Name' in table) :
 				print('--plugin=%(name)s' % {"name": table['Plugin Name']})
 
-			if ('File Size ' in table) :
+			if ('File Size' in table or 'File Size ' in table) :
 				print('--remote=1')
 				
 			if ('parameters' in table) :

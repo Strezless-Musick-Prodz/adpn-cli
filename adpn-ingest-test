@@ -189,7 +189,7 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 			"au_title")
 				SUBARGV_AUNAME[$KEY]="${VALUE}"
 				;;
-			"local"|"remote")
+			"local"|"remote"|"ftp")
 				SUBARGV_STAGEDLOCAL[$KEY]="${VALUE}"
 				;;
 			*)
@@ -282,7 +282,9 @@ elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 else
 
 	EXITCODE=0
-	if [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
+	if [ ! -z "${SUBARGV_STAGEDLOCAL[ftp]}" ] ; then
+		
+	elif [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
 
 		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
 		DU_BYTES=$(printf "%'d" "${DU_BYTES}")
@@ -297,7 +299,7 @@ else
 		echo "Ingest Title	${SUBARGV_AUNAME[@]}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ]] ; then
-		echo "File Size 	${DU_HUMANREADABLE} (${DU_BYTES} bytes, ${FIND_FILECOUNT} files)" >> ${PLUGINTXT}
+		printf "File Size\t%s (%d bytes, %d files)" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}" >> ${PLUGINTXT}
 	fi
 
 	######################################################################################
