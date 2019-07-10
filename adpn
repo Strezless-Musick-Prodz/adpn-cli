@@ -32,7 +32,9 @@ Exit codes:
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
 
+
 declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
 declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
 
 shopt -s lastpipe
@@ -45,6 +47,7 @@ fi
 CMDLINETXT=`mktemp`
 
 until [[ -z "$1" ]] ; do
+	_CMDLINE+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
@@ -100,6 +103,28 @@ case "${CMD}" in
 			EXITCODE=0
 		else 
 			echo "[${SCRIPT} ${CMD}] '${HELPCMD}' help notes not yet implemented." 1>&2
+			EXITCODE=255
+		fi
+		;;
+	"test")
+		TESTDIR="${SCRIPTDIR}/json/tests"
+		if [[ ! -z "${_CMDLINE[2]}" ]] ; then
+			TESTFILE=${TESTDIR}/${_CMDLINE[2]}.json
+			if [[ -r "${TESTFILE}" ]] ; then
+				"${_CMDLINE[0]}" "${_CMDLINE[@]:3}" ${TESTFILE}
+				EXITCODE="$?"
+			else
+				echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
+				echo "" 1>&2
+				echo "Available tests:" 1>&2
+				cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
+				EXITCODE=255
+			fi
+		else
+			echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
+			echo "" 1>&2
+			echo "Available tests:" 1>&2
+			cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
 			EXITCODE=255
 		fi
 		;;
