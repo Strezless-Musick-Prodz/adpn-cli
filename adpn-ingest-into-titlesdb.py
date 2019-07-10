@@ -298,8 +298,11 @@ if __name__ == '__main__' :
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
 	
 	script = ADPNIngestSQL(scriptname, switches)
-	script.accept_json(fileinput.input() if script.wants_json() else [])
-	
+	try :
+		script.accept_json(fileinput.input() if script.wants_json() else [])
+	except KeyboardInterrupt as e :
+		script.display_error("Data input aborted by user break.")
+		
 	exitcode = 0
 	if len(switches['help']) > 0 :
 		script.display_usage()
