@@ -107,6 +107,8 @@ class FTPStaging :
 			if '.' != file :
 				self.chdir(dir=lpwd, remote=rpwd, make=False)
 				out(2, "chdir", (lpwd, rpwd))
+				self.ftp.rmd(file)
+				out(1, "rm", file)
 				
 		else :
 			self.download_file(file=file)
