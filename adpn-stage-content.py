@@ -153,7 +153,66 @@ class FTPStaging :
 		self.ftp.quit()
 
 class ADPNStageContentScript :
+	"""
+Usage: adpn-stage-content.py [<OPTIONS>]... [<URL>]
 
+URL should be an FTP URL, in the form ftp://[<user>[:<pass>]@]<host>/<dir>
+The <user> and <pass> elements are optional; they can be provided as part
+of the URL, or using command-line switches, or interactively at input and
+password prompts.
+
+  --local=<PATH>   	   	the local directory containing the files to stage
+  --au_title=<TITLE>   	the human-readable title for the contents of this AU
+  --subdirectory=<SLUG>	the subdirectory on the staging server to hold AU files
+  --directory=<SLUG>   	identical to --subdirectory
+  --backup=<PATH>      	path to store current contents (if any) of staging location
+  
+Output and Diagnostics:
+
+  --output=<MIME>      	text/plain or application/json
+  --verbose=<LEVEL>   	level (0-2) of diagnostic output during FTP upload/download
+  --quiet             	identical to --verbose=0
+  
+Common configuration parameters:
+
+  --base_url=<URL>     	WWW: the URL for web access to the staging area
+  --host=<NAME>        	FTP: host name of the server with the staging area
+  --user=<NAME>        	FTP: username for logging in to the staging server
+  --pass=<PASSWD>      	FTP: password for logging in to the staging server
+  --base_dir=<PATH>   	FTP: path to the staging area on the FTP server
+  --institution=<NAME>  Manifest: human-readable nmae of the institution
+
+To generate a manifest file, the script needs to use information from the
+LOCKSS Publisher Plugin. Plugins are hosted on the LOCKSS props
+server/admin node.
+
+If you need to connect to the LOCKSS props server through a SOCKS5 proxy, use:
+
+  --proxy=<HOST>      	the name of your proxy (use "localhost" for SSH tunnel)
+  --port=<NUMBER>      	the port number for your proxy
+  
+If you need to use SSH tunneling to connect to the SOCKS5 proxy, use:
+
+  --tunnel=<HOST>     	the name of the host to open an SSH tunnel to
+  --tunnel-port=<PORT> 	the port for SSH connections to the tunnel (default: 22)
+
+Default values for these parameters can be set in the JSON configuration file
+adpnet.json, located in the same directory as the script. To set a default
+value, add a key-value pair to the hash table with a key based on the name of
+the switch. (For example, to set the default value for the --institution switch
+to "Alabama Department of Archives and History", add the following pair to the
+hash table:
+
+	{
+		...
+		"institution": "Alabama Department of Archives and History",
+		...
+	}
+	
+The default values in adpnet.json are overridden if values are provided on the
+command line with explicit switches.
+	"""
+	
 	def __init__ (self, scriptname, argv, switches, parameters) :
 		self.scriptname = scriptname
 		self.argv = argv
@@ -183,6 +242,10 @@ class ADPNStageContentScript :
 		self.subdirectory=switches.get('directory') if switches.get('directory') is not None else self.subdirectory
 		self.subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else self.subdirectory	
 	
+	def switched (self, key) :
+		got = not not self.switches.get(key, None)
+		return got
+		
 	def unpack_ftp_elements(self, url) :
 		(host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
 	
@@ -273,10 +336,17 @@ class ADPNStageContentScript :
 			
 		if prefix is not None and level <= self.verbose :
 			print(prefix, message)
+	
+	def display_usage (self) :
+		print(self.__doc__)
+		self.exitcode = 0
 		
 	def execute (self) :
+
 		passwd_prompt = "FTP Password (%(user)s@%(host)s): " % {"user": self.user, "host": self.host}
 
+		if self.user is None :
+			self.user = input("User: ")
 		if self.passwd is None :
 			self.passwd = getpass(passwd_prompt)
 		if self.base_dir is None or len(self.base_dir) == 0:
@@ -320,10 +390,13 @@ if __name__ == '__main__':
 	
 	os.environ["PATH"] = ":".join( [ scriptdir, os.environ["PATH"] ] )
 	
-	default_map = open("/".join([scriptdir, "adpnet.json"]), "r")
-	jsonText = "".join([line for line in default_map])
-	default_map.close()
-	
+	try :
+		default_map = open("/".join([scriptdir, "adpnet.json"]), "r")
+		jsonText = "".join([line for line in default_map])
+		default_map.close()
+	except FileNotFoundError as e :
+		jsonText = "{}"
+		
 	try :
 		hardcoded_defaults = {
 			"host": None, "user": None, "pass": None,
@@ -346,4 +419,11 @@ if __name__ == '__main__':
 		"au_title": switches['au_title']
 	}
 	script = ADPNStageContentScript(scriptname, sys.argv, switches, parameters)
-	script.execute()
+	if script.switched('help') :
+		script.display_usage()
+	elif script.switched('details') :
+		print("Defaults:", defaults)
+		print("")
+		print("Settings:", switches)
+	else :
+		script.execute()
