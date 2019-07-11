@@ -132,6 +132,7 @@ for CMD in "${!DEPENDENCIES[@]}" ; do
 done
 
 if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
+	rm "${PLUGINTXT}"
 	exit 255
 fi
 
@@ -212,6 +213,8 @@ done
 
 if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "help" ]] ; then
 	echo "${__doc__}"
+	rm "${PLUGINTXT}"
+	rm "${CMDLINETXT}"
 	exit
 fi
 
