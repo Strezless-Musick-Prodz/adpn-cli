@@ -191,15 +191,22 @@ USE adpn;
 			self.switches['insert_title'] = True
 			self.cur.execute("SELECT (MAX(au_id) + 1) AS au_id FROM au_titlelist")
 			au_ids = [ row[0] for row in self.cur.fetchall() ]
-
-			if not ('to' in self.switches) or (len(self.switches['to']) == 0) :
-				self.switches['to'] = self.switches['to']
 			
 		for id in au_ids :
 			au_id = "%d" % (int(id))
 		
 		return au_id
-		
+	
+	def get_peer(self, direction: str) -> str :
+		switch = direction
+		field = (direction + " peer").title()
+		peer = ""
+		if switch in self.switches :
+			peer = self.switches[switch]
+		elif field in self.data :
+			peer = self.data[field]
+		return peer
+	
 	def get_peers(self, active = "y") :
 		criteria = []
 		if len(active) > 0 :
@@ -228,14 +235,14 @@ USE adpn;
 			
 		au_titlelist_values = {
 		"au_id": int(self.switches['au_id']),
-		"au_pub_id": self.switches['from'],
+		"au_pub_id": self.get_peer('from'),
 		"au_type": "journal",
 		"au_title": self.data['Ingest Title'],
 		"au_plugin": self.data['Plugin ID'],
 		"au_approved_for_removal": "n",
 		"au_content_size": 0,
 		"au_disk_cost": 0,
-		"peer_id": self.switches['to']
+		"peer_id": self.get_peer('to')
 		}
 		au_titlelist_values['au_journal_title'] = au_titlelist_values['au_title']
 		au_titlelist_values['au_name'] = self.au_name(self.data['Ingest Title'])
@@ -246,7 +253,7 @@ USE adpn;
 		
 		if self.switches['insert_title'] :
 			self.initial_ingest(au_titlelist_values)
-		self.publish_ingest(self.switches['to'], au_titlelist_values)
+		self.publish_ingest(self.get_peer('to'), au_titlelist_values)
 		
 		self.db.commit()
 		self.db.close()
@@ -298,8 +305,11 @@ if __name__ == '__main__' :
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
 	
 	script = ADPNIngestSQL(scriptname, switches)
-	script.accept_json(fileinput.input() if script.wants_json() else [])
-	
+	try :
+		script.accept_json(fileinput.input() if script.wants_json() else [])
+	except KeyboardInterrupt as e :
+		script.display_error("Data input aborted by user break.")
+		
 	exitcode = 0
 	if len(switches['help']) > 0 :
 		script.display_usage()

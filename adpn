@@ -1,0 +1,214 @@
+#!/bin/bash
+#
+# adpn: master script for scripted ADPNet operations.
+#
+# @version 2019.0710
+
+SCRIPTDIR=`dirname $0`
+SCRIPT=`basename $0`
+PATH=${SCRIPTDIR}:${PATH}
+CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  preserve  	ADPNet Member: prepare an AU for preservation and notify config manager
+  ingest    	Config Manager: accept an AU from Member, test, and insert into titlesdb
+  publish   	Config Manager: publish an accepted Member's AU to the entire network
+  help      	Display usage notes for the ${SCRIPT} script or for a given command
+  
+Exit codes:
+0 = success (successful retrieval and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=`mktemp`
+
+until [[ -z "$1" ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+
+	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
+		KEY="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[3]}"
+		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+			VALUE="$KEY"
+		fi
+		_PARAM[$KEY]="${VALUE}"
+		
+	elif [[ ! -z "${SWITCH}" ]] ; then
+		_ARGV+=("${SWITCH}")
+		
+	fi
+	
+done
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT} version ${VERSION}"
+	EXITCODE=0
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	EXITCODE=0
+fi
+
+CMD="${_ARGV[1]}"
+
+case "${CMD}" in
+	"")
+		echo "[${SCRIPT}] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} ingest', etc.)" 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+	"help")
+		HELPCMD="${_ARGV[2]}"
+		if [[ -z "${HELPCMD}" ]] ; then
+			echo "${__DOC__}"
+			EXITCODE=0
+		else 
+			echo "[${SCRIPT} ${CMD}] '${HELPCMD}' help notes not yet implemented." 1>&2
+			EXITCODE=255
+		fi
+		;;
+	"test")
+		TESTDIR="${SCRIPTDIR}/json/tests"
+		if [[ ! -z "${_CMDLINE[2]}" ]] ; then
+			TESTFILE=${TESTDIR}/${_CMDLINE[2]}.json
+			if [[ -r "${TESTFILE}" ]] ; then
+				"${_CMDLINE[0]}" "${_CMDLINE[@]:3}" ${TESTFILE}
+				EXITCODE="$?"
+			else
+				echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
+				echo "" 1>&2
+				echo "Available tests:" 1>&2
+				cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
+				EXITCODE=255
+			fi
+		else
+			echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
+			echo "" 1>&2
+			echo "Available tests:" 1>&2
+			cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
+			EXITCODE=255
+		fi
+		;;
+	"preserve")
+		echo "[${SCRIPT}] '${CMD}' command not yet implemented." 1>&2
+		EXITCODE=255
+		;;
+	"ingest"|"publish")
+		
+		AIT_OUTPUT="$(mktemp)"
+		AIT_INPUT="${_ARGV[2]}"
+		if [[ -z "${AIT_INPUT}" ]] ; then
+			AIT_INPUT="-"
+		fi
+		
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 > "${AIT_OUTPUT}"
+		AIT_ERRCODE="$?"
+
+		cat "${AIT_OUTPUT}" ; echo
+		JSON_PACKET=$(grep "^JSON PACKET:" "${AIT_OUTPUT}" | cut --fields=2-)
+		
+		rm "${AIT_OUTPUT}"
+		
+		if [[ "${AIT_ERRCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
+			EXITCODE="${AIT_ERRCODE}"
+		else
+
+			INGEST_FROM="${_PARAM[from]}"
+			if [[ -z "${INGEST_FROM}" ]] ; then
+				INGEST_FROM=$(echo "${JSON_PACKET}" | adpn-json.py --key="From Peer")
+				if [[ -z "${INGEST_FROM}" ]] ; then
+					read -p "From (ALL|<PEER>): " INGEST_FROM
+				fi
+			fi
+
+			INGEST_TO="${_PARAM[to]}"
+			if [[ "publish" == "${CMD}" ]] ; then
+				INGEST_TO="ALL"
+			fi
+			if [[ -z "${INGEST_TO}" ]] ; then
+				INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
+				if [[ -z "${INGEST_TO}" ]] ; then
+					read -p "To (ALL|<PEER>): " INGEST_TO
+				fi
+			fi
+			
+			INGEST_DRY_RUN=""
+			if [[ ! -z "${_PARAM[dry-run]}" ]] ; then
+				INGEST_DRY_RUN="--dry-run"
+			fi
+			
+			adpn-titlesdb-diff --before "${INGEST_TO}"
+
+			AIIT_OUTPUT="${_PARAM[sqldump]}"
+			if [[ -z "${AIIT_OUTPUT}" ]] ; then
+				AIIT_OUTPUT="/dev/null"
+			fi
+			
+			echo "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py ${INGEST_DRY_RUN} --from="${INGEST_FROM}" --to="${INGEST_TO}" > "${AIIT_OUTPUT}" ; AIIT_ERRCODE="$?"
+			
+			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
+				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
+				EXITCODE="${AIIT_ERRCODE}"
+			else			
+				adpn-titlesdb-diff --after "${INGEST_TO}" ; ATD_ERRCODE="$?"
+				if [[ "${ATD_ERRCODE}" -gt 0 ]] ; then
+					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
+					EXITCODE="${ATD_ERRCODE}"
+				fi
+			fi
+		fi
+		;;
+	*)
+		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+rm "${CMDLINETXT}"
+
+exit ${EXITCODE}

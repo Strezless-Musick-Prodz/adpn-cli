@@ -3,7 +3,7 @@
 # adpn-json-to-switches.py: utility script, converts data from a JSON hash table provided
 # on stdin to switches used by adpn-ingest-test and related scripts.
 #
-# @version 2019.0624
+# @version 2019.0711
 
 import sys
 import os.path
@@ -68,13 +68,21 @@ Written to stdout, one switch per line. For example:
 			elif ('Plugin Name' in table) :
 				print('--plugin=%(name)s' % {"name": table['Plugin Name']})
 
-			if ('File Size ' in table) :
-				print('--remote=1')
-			elif ('local' in table) :
+			if ('File Size' in table or 'File Size ' in table) :
+				strSize = table.get('File Size','') + table.get('File Size ','')
+				print('--file-size=%(size)s' % {"size": strSize})
+			
+			if ('local' in table) :
 				print('--local=%(dir)s' % {"dir": table['local']})
 
 			if ('staged' in table) :
 				print('--staged=%(ftp)s' % {"ftp": table['staged']})
+			
+			if ('From Peer' in table) :
+				print('--peer-from=%(peer)s' % {"peer": table.get('From Peer')})
+				
+			if ('To Peer' in table) :
+				print('--peer-to=%(peer)s' % {"peer": table.get('To Peer')})
 				
 			if ('parameters' in table) :
 				if len(table) > 0 :

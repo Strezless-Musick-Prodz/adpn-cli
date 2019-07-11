@@ -97,8 +97,7 @@ CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 PLUGINTXT=`mktemp`
 
 declare -a _ARGV ; _ARGV=($0)
-declare -A SUBARGV_AUNAME ; SUBARGV_AUNAME=()
-declare -A SUBARGV_STAGEDLOCAL ; SUBARGV_STAGEDLOCAL=()
+declare -A _PARAM ; _PARAM=()
 declare -A SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
 declare -A SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
 declare -A SUBARGV_LOCKSSRETRIEVEJAR ; SUBARGV_LOCKSSRETRIEVEJAR=()
@@ -133,6 +132,7 @@ for CMD in "${!DEPENDENCIES[@]}" ; do
 done
 
 if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
+	rm "${PLUGINTXT}"
 	exit 255
 fi
 
@@ -193,14 +193,11 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 				SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
 				SUBARGV_TESTURLOK[$KEY]="--${KEY}=${VALUE}"
 				;;
-			"au_title")
-				SUBARGV_AUNAME[$KEY]="${VALUE}"
-				;;
-			"local"|"remote"|"staged")
-				SUBARGV_STAGEDLOCAL[$KEY]="${VALUE}"
+			"au_title"|"local"|"remote"|"staged"|"file-size"|"peer"|"peer-from"|"peer-to")
+				_PARAM[$KEY]="${VALUE}"
 				;;
 			"subdirectory"|"directory")
-				SUBARGV_STAGEDLOCAL[$KEY]="--${KEY}=${VALUE}"
+				_PARAM[$KEY]="--${KEY}=${VALUE}"
 				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
 				;;
 			*)
@@ -216,6 +213,8 @@ done
 
 if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "help" ]] ; then
 	echo "${__doc__}"
+	rm "${PLUGINTXT}"
+	rm "${CMDLINETXT}"
 	exit
 fi
 
@@ -224,16 +223,16 @@ fi
 ##########################################################################################
 
 if [[ "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
-	if [[ -z "${SUBARGV_AUNAME[au_title]}" ]] ; then
+	if [[ -z "${_PARAM[au_title]}" ]] ; then
 		read -r -p "Ingest Name/Title: " AU_TITLE
 		_ARGV+=("--au_title=${AU_TITLE}")
-		SUBARGV_AUNAME[au_title]="${AU_TITLE}"
+		_PARAM[au_title]="${AU_TITLE}"
 	fi
 
-	if [[ -z "${SUBARGV_STAGEDLOCAL[local]}" && -z "${SUBARGV_STAGEDLOCAL[remote]}" ]] ; then
+	if [[ -z "${_PARAM[local]}" && -z "${_PARAM[remote]}" ]] ; then
 		read -r -p "Local file location: " LOCALPATH
 		_ARGV+=("--local=${LOCALPATH}")
-		SUBARGV_STAGEDLOCAL[local]="${LOCALPATH}"
+		_PARAM[local]="${LOCALPATH}"
 	fi
 fi
 
@@ -293,41 +292,75 @@ elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 else
 
 	EXITCODE=0
-	if [ ! -z "${SUBARGV_STAGEDLOCAL[staged]}" ] ; then
+	
+	FILESIZE_STR=""
+	if [ ! -z "${_PARAM[remote]}" ] ; then
+		
+		if [ ! -z "${_PARAM[peer]}" ] ; then
+			printf '%s--peer-to=%s\n' "" "${_PARAM[peer]}" >> "${CMDLINETXT}"
+			_PARAM[peer-to]="${_PARAM[peer]}"
+		fi
+
+		if [ ! -z "${_PARAM[file-size]}" ] ; then
+			FILESIZE_STR="${_PARAM[file-size]}"
+		fi
+		
+	elif [ ! -z "${_PARAM[staged]}" ] ; then
+
+		if [ ! -z "${_PARAM[peer]}" ] ; then
+			printf '%s--peer-from=%s\n' "" "${_PARAM[peer]}" >> "${CMDLINETXT}"
+			_PARAM[peer-from]="${_PARAM[peer]}"
+		fi
 		
 		STAGED_CONTENT_FILE_SIZE=$(
 			staged-content-file-size.py \
 			--output=text/tab-separated-values \
-			"${SUBARGV_STAGEDLOCAL[staged]}" \
-			"${SUBARGV_STAGEDLOCAL[subdirectory]}"
+			"${_PARAM[staged]}" \
+			"${_PARAM[subdirectory]}"
 		)
 		DU_HUMANREADABLE=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f1)
 		DU_BYTES=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f2)
 		FIND_FILECOUNT=$(echo "${STAGED_CONTENT_FILE_SIZE}" | cut -f3)
 		
-	elif [ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ] ; then
+	elif [ ! -z "${_PARAM[local]}" ] ; then
 
-		DU_BYTES=`du --human-readable --apparent-size --bytes "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
+		if [ ! -z "${_PARAM[peer]}" ] ; then
+			printf '%s--peer-from=%s\n' "" "${_PARAM[peer]}" >> "${CMDLINETXT}"
+			_PARAM[peer-from]="${_PARAM[peer]}"
+		fi
+
+		DU_BYTES=`du --human-readable --apparent-size --bytes "${_PARAM[local]}" | cut -f1`
 		DU_BYTES=$(printf "%'d" "${DU_BYTES}")
 
-		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${SUBARGV_STAGEDLOCAL[local]}" | cut -f1`
+		DU_HUMANREADABLE=`du --human-readable --apparent-size --human-readable --max-depth=0 "${_PARAM[local]}" | cut -f1`
 
-		FIND_FILECOUNT=$(find "${SUBARGV_STAGEDLOCAL[local]}" | wc -l)
+		FIND_FILECOUNT=$(find "${_PARAM[local]}" | wc -l)
 
 	fi
 
-	if [[ ! -z "${SUBARGV_AUNAME[@]}" && "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
-		echo "Ingest Title	${SUBARGV_AUNAME[@]}" >> ${PLUGINTXT}
+	if [[ ! -z "${DU_HUMANREADABLE}" ]] ; then
+		FILESIZE_STR=$(printf "File Size \t%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}")
 	fi
-	if [[ ! -z "${SUBARGV_STAGEDLOCAL[local]}" ]] ; then
-		printf "File Size \t%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}" >> ${PLUGINTXT}
+	
+	if [[ ! -z "${_PARAM[au_title]}" && "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
+		printf "Ingest Title\t%s\n" "${_PARAM[au_title]}" >> ${PLUGINTXT}
 	fi
-
+	if [[ ! -z "${FILESIZE_STR}" ]] ; then
+		printf "File Size \t%s\n" "${FILESIZE_STR}" >> ${PLUGINTXT}
+	fi
+	if [[ ! -z "${_PARAM[peer-from]}" ]] ; then
+		printf "From Peer\t%s\n" "${_PARAM[peer-from]}" >> ${PLUGINTXT}
+	fi
+	if [[ ! -z "${_PARAM[peer-to]}" ]] ; then
+		printf "To Peer\t%s\n" "${_PARAM[peer-to]}" >> ${PLUGINTXT}
+	fi
+	
 	######################################################################################
 	### lockss-plugin-url.py | adpn-plugin-info: Retrieve & analyze Plugin JAR. ##########
 	######################################################################################
 
 	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values --jar="${JAR}" "${SUBARGV_ADPNPLUGININFO[@]}" >> ${PLUGINTXT}
+	
 	LOCKSSRETRIEVEJAR="$?"
 
 	echo ""
