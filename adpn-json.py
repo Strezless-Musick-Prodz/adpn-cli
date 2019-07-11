@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 #
-# adpn-json-to-switches.py: utility script, converts data from a JSON hash table provided
-# on stdin to switches used by adpn-ingest-test and related scripts.
+# adpn-json-to-switches.py: utility script, pulls data elements from a JSON hash table
+# provided on stdin and outputs the value (a printed str or a serialized str equivalent)
+# from a given key-value pair, so that bash scripts can capture values from JSON packets.
 #
-# @version 2019.0624
+# @version 2019.0711
 
 import sys
 import os.path
@@ -14,7 +15,7 @@ from myLockssScripts import myPyCommandLine, myPyJSON
 
 class ADPNJSONToSwitches :
 	"""
-Usage: <INPUT> | adpn-json-to-switches.py -
+Usage: VALUE=$( <INPUT> | adpn-json.py - --key=<KEY> )
 
 Input: a copy-pasted block of text, including one or more JSON hash tables,
 possibly prefixed by a label like "JSON PACKET: " before the beginning of
@@ -22,14 +23,14 @@ the {...} hash table structure. (The label will be ignored.) If there are
 multiple lines with JSON hash tables in them, the divers hash tables will
 be merged together into one big hash table.
 
-Output: a series of command-line switches, in --<KEY>=<VALUE> format.
-Written to stdout, one switch per line. For example:
+Output: the str value or typecasted str serialization of the value paired
+with the provided key in the hash table. If there is no such key in the
+hash table, nothing is printed out.
 
-	--au_title=WPA Folder 01
- 	--jar=http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar
- 	--plugin-id=gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin
- 	--remote=1
- 	--subdirectory=WPA-Folder-01
+Exit code:
+0= successful output of the value associated with the key requested
+1= failed to output a value because the key requested does not exist
+2= failed to output a value because the JSON could not be decoded
 	"""
 	
 	def __init__ (self, scriptname, argv, switches) :
@@ -75,7 +76,7 @@ Written to stdout, one switch per line. For example:
 				% {"script": self.scriptname, "json": jsonInput},
 				file=sys.stderr
 			)
-			self.exitcode = 1
+			self.exitcode = 2
 	
 if __name__ == '__main__' :
 
