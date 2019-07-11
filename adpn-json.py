@@ -32,15 +32,20 @@ Written to stdout, one switch per line. For example:
  	--subdirectory=WPA-Folder-01
 	"""
 	
-	def __init__ (self, scriptname, switches) :
+	def __init__ (self, scriptname, argv, switches) :
 		self.exitcode = 0
 		self.scriptname = scriptname
+		self._argv = argv
 		self._switches = switches
 		
 	@property
 	def switches (self) :
 		return self._switches
-	
+
+	@property
+	def argv (self) :
+		return self._argv
+
 	def switched (self, name, default = None) :
 		result = default
 		if name in self.switches :
@@ -55,32 +60,13 @@ Written to stdout, one switch per line. For example:
 			jsonInput = myPyJSON()
 			jsonInput.accept(fileinput.input())
 			table = jsonInput.allData
-	
-			if ('Ingest Title' in table) :
-				print('--au_title=%(name)s' % {"name": table['Ingest Title']})
 
-			if ('Plugin JAR' in table) :
-				print('--jar=%(url)s' % {"url": table['Plugin JAR']})
-			if ('Plugin ID' in table) :
-				print('--plugin-id=%(id)s' % {"id": table['Plugin ID']})
-			elif ('Plugin Name' in table) :
-				print('--plugin=%(name)s' % {"name": table['Plugin Name']})
-
-			if ('File Size' in table or 'File Size ' in table) :
-				strSize = table.get('File Size','') + table.get('File Size ','')
-				print('--file-size=%(size)s' % {"size": strSize})
+			try :
+				print(table[self.switches.get('key', '')], end="")
+				self.exitcode = 0
+			except KeyError as e :
+				self.exitcode = 1
 			
-			if ('From Peer' in table) :
-				print('--peer-from=%(peer)s' % {"peer": table.get('From Peer')})
-				
-			if ('To Peer' in table) :
-				print('--peer-to=%(peer)s' % {"peer": table.get('To Peer')})
-				
-			if ('parameters' in table) :
-				if len(table) > 0 :
-					for param, value in table['parameters'] :
-						print('--%(KEY)s=%(VALUE)s' % {"KEY": param, "VALUE": value})
-					
 		except json.decoder.JSONDecodeError as e :
 	
 			print(
@@ -99,7 +85,7 @@ if __name__ == '__main__' :
 	(sys.argv, switches) = myPyCommandLine(sys.argv).parse()
 	
 	exitcode = 0
-	script = ADPNJSONToSwitches(scriptname, switches)
+	script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
 	if script.switched('help') :
 		script.display_usage()
 	else :

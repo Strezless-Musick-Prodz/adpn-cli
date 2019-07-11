@@ -149,7 +149,7 @@ if [[ -r "${JARFILE}" && -s "${JARFILE}" ]] ; then
 			
 		elif [[ "${LINE}" == 2 ]] ; then
 			#MANIFEST_LINE should be the relative path in the jarfile pointing to the XML
-			unzip -q -c "${JARFILE}" $MANIFEST_LINE | "${SCRIPTDIR}/lockss-plugin-props.py" - $CMDLINE
+			unzip -q -c "${JARFILE}" $MANIFEST_LINE | "${SCRIPTDIR}/lockss-plugin-props.py" - "$@"
 			EXITCODE=$?
 			exit ${EXITCODE} # while
 		fi

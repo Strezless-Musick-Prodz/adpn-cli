@@ -263,7 +263,7 @@ class LockssPluginProps :
 				try :
 					jj.append(json.loads(j))
 				except json.JSONDecodeError :
-					refs = re.match( r'^--([A-Za-z_0-9.]+)(=(.*))?$', j )
+					refs = re.match( r'^--([A-Za-z_0-9.\-]+)(=(.*))?$', j )
 					if refs :
 						if refs.group(3) :
 							hash[ refs.group(1) ] = refs.group(3)

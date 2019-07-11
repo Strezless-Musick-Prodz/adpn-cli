@@ -128,11 +128,11 @@ case "${CMD}" in
 			EXITCODE=255
 		fi
 		;;
-	"preserve"|"publish")
+	"preserve")
 		echo "[${SCRIPT}] '${CMD}' command not yet implemented." 1>&2
 		EXITCODE=255
 		;;
-	"ingest")
+	"ingest"|"publish")
 		
 		AIT_OUTPUT="$(mktemp)"
 		AIT_INPUT="${_ARGV[2]}"
@@ -155,12 +155,21 @@ case "${CMD}" in
 
 			INGEST_FROM="${_PARAM[from]}"
 			if [[ -z "${INGEST_FROM}" ]] ; then
-				read -p "From (ALL|<PEER>): " INGEST_FROM
+				INGEST_FROM=$(echo "${JSON_PACKET}" | adpn-json.py --key="From Peer")
+				if [[ -z "${INGEST_FROM}" ]] ; then
+					read -p "From (ALL|<PEER>): " INGEST_FROM
+				fi
 			fi
 
 			INGEST_TO="${_PARAM[to]}"
+			if [[ "publish" == "${CMD}" ]] ; then
+				INGEST_TO="ALL"
+			fi
 			if [[ -z "${INGEST_TO}" ]] ; then
-				read -p "To (ALL|<PEER>): " INGEST_TO
+				INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
+				if [[ -z "${INGEST_TO}" ]] ; then
+					read -p "To (ALL|<PEER>): " INGEST_TO
+				fi
 			fi
 			
 			INGEST_DRY_RUN=""
