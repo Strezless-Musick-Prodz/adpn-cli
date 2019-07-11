@@ -61,6 +61,8 @@ Written to stdout, one switch per line. For example:
 
 			if ('Plugin JAR' in table) :
 				print('--jar=%(url)s' % {"url": table['Plugin JAR']})
+			if ('jar' in table) :
+				print('--jar=%(url)s' % {"url": table['jar']})
 			if ('Plugin ID' in table) :
 				print('--plugin-id=%(id)s' % {"id": table['Plugin ID']})
 			elif ('Plugin Name' in table) :
@@ -68,6 +70,11 @@ Written to stdout, one switch per line. For example:
 
 			if ('File Size ' in table) :
 				print('--remote=1')
+			elif ('local' in table) :
+				print('--local=%(dir)s' % {"dir": table['local']})
+
+			if ('staged' in table) :
+				print('--staged=%(ftp)s' % {"ftp": table['staged']})
 				
 			if ('parameters' in table) :
 				if len(table) > 0 :

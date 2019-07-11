@@ -154,11 +154,12 @@ class FTPStaging :
 
 class ADPNStageContentScript :
 
-	def __init__ (self, scriptname, argv, switches) :
+	def __init__ (self, scriptname, argv, switches, parameters) :
 		self.scriptname = scriptname
 		self.argv = argv
 		self.switches = switches
-
+		self.parameters = parameters
+		
 		self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
 		if self.switches.get('quiet') :
 			self.verbose=0
@@ -206,12 +207,7 @@ class ADPNStageContentScript :
 
 	def make_manifest_page (self) :
 		try :
-			jsonParams = json.dumps({
-				"base_url": self.switches['base_url'],
-				"subdirectory": self.subdirectory,
-				"institution": self.switches['institution'],
-				"au_title": self.switches['au_title']
-			})
+			jsonParams = json.dumps(self.parameters)
 			
 			cmdline = [
 				"adpn-make-manifest.py",
@@ -268,7 +264,13 @@ class ADPNStageContentScript :
 			prefix = "..."
 			path = "./%(dir)s" % {"dir": arg[1]} if arg[1].find("/")<0 else arg[1]
 			message = "cd %(path)s" % {"path": path}
+		elif "ok" == type :
+			prefix = "JSON PACKET:\t"
+			message["status"] = type
 		
+		if self.switches['output'] == 'application/json' :
+			message = json.dumps(message)
+			
 		if prefix is not None and level <= self.verbose :
 			print(prefix, message)
 		
@@ -307,7 +309,7 @@ class ADPNStageContentScript :
 		# upload the present directory recursively
 		self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
 		
-		self.output_status(0, "ok", (os.getcwd(), self.ftp.url()))
+		self.output_status(0, "ok", {"local": os.getcwd(), "staged": self.ftp.url(), "jar": self.switches['jar'], "au_title": self.switches['au_title'], "parameters": [ [ key, parameters[key] ] for key in parameters ] })
 
 		self.ftp.quit()
 
@@ -337,5 +339,11 @@ if __name__ == '__main__':
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaults).parse()
 
-	script = ADPNStageContentScript(scriptname, sys.argv, switches)
+	parameters = {
+		"base_url": switches['base_url'],
+		"subdirectory": switches['subdirectory'],
+		"institution": switches['institution'],
+		"au_title": switches['au_title']
+	}
+	script = ADPNStageContentScript(scriptname, sys.argv, switches, parameters)
 	script.execute()

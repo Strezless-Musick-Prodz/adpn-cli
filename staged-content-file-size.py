@@ -197,6 +197,14 @@ Exit code is 0 in case of successful output.
 		base_dir=base_dir if base_dir is not None and len(base_dir) > 0 else input("Base dir: ")
 		subdirectory=subdirectory if subdirectory is not None else input("Subdirectory: ")
 
+		parentdir = os.path.dirname(base_dir)
+		lastdir = os.path.basename(base_dir)
+		if len(lastdir) == 0 :
+			lastdir = os.path.basename(os.parentdir)
+		
+		if (lastdir == subdirectory) :
+			base_dir = parentdir
+
 		return (host, user, passwd, base_dir, subdirectory)
 		
 	def unpack_ftp_elements(self, url) :
