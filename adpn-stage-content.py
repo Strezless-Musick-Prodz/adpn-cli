@@ -333,11 +333,14 @@ command line with explicit switches.
 			prefix = "JSON PACKET:\t"
 			message["status"] = type
 		
+		out=sys.stdout
 		if self.switches['output'] == 'application/json' :
 			message = json.dumps(message)
-			
+			if level > 0 :
+				out=sys.stderr
+				
 		if prefix is not None and level <= self.verbose :
-			print(prefix, message)
+			print(prefix, message, file=out)
 	
 	def display_usage (self) :
 		print(self.__doc__)
