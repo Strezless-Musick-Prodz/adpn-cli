@@ -153,7 +153,12 @@ fi
 CMDLINETXT=`mktemp`
 
 if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
-	adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
+	adpn-json-to-switches.py $1 >> "${CMDLINETXT}" ; AJTS_ERRCODE="$?"
+	if [[ "${AJTS_ERRCODE}" -eq 255 ]] ; then
+		echo "[${SCRIPT}] Aborted by user keyboard break (Ctrl-C)." 1>&2
+		rm "${PLUGINTXT}" "${CMDLINETXT}"
+		exit 255
+	fi
 	shift
 	
 	cat "${CMDLINETXT}" | while IFS="" read -r SWITCH ; do

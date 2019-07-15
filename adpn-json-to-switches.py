@@ -88,13 +88,21 @@ Written to stdout, one switch per line. For example:
 				if len(table) > 0 :
 					for param, value in table['parameters'] :
 						print('--%(KEY)s=%(VALUE)s' % {"KEY": param, "VALUE": value})
-					
+		except KeyboardInterrupt as e :
+
+			print(
+				("[%(script)s] JSON input aborted by user keyboard break (Ctrl-C); no data decoded.")
+				% {"script": self.scriptname},
+				file=sys.stderr
+			)
+			self.exitcode = 255
+		
 		except json.decoder.JSONDecodeError as e :
 	
 			print(
 				("[%(script)s] JSON encoding error. Could not extract key-value pairs from "
 				+ "the provided data:\n\n%(json)s")
-				% {"script": self.scriptname, "json": jsonInput},
+				% {"script": self.scriptname, "json": "\n".join(jsonInput.text)},
 				file=sys.stderr
 			)
 			self.exitcode = 1
