@@ -96,6 +96,7 @@ case "${CMD}" in
 		echo "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
+		
 	"help")
 # @method adpn help
 # Displays usage notes for the adpn script or a given adpn script command
@@ -120,6 +121,7 @@ case "${CMD}" in
 			EXITCODE=255
 		fi
 		;;
+		
 	"test")
 # @method adpn test 
 #
@@ -156,7 +158,20 @@ case "${CMD}" in
 			EXITCODE=255
 		fi
 		;;
+		
 	"property")
+# @method adpn property
+# Display property values from the configuration file (adpnet.json)
+#
+# Usage: adpn property [get <KEY>]
+#
+# Example: adpn property get "peer"
+#
+# Output: prints the value associated with <KEY> in the JSON hash table
+# 
+# 
+# @version 2019.0715
+
 		SUBCMD="${_ARGV[2]}"
 		case "${SUBCMD}" in
 			"")
@@ -172,7 +187,24 @@ case "${CMD}" in
 				;;
 		esac
 		;;
+		
 	"stage")
+# @method adpn stage
+# ADPNet Member: Stage AU files on the local workstation to the staging server.
+#
+# Usage: adpn stage [<LOCALPATH>] [<STAGING>] [<OPTIONS>]...
+#
+#   --subdirectory=<SLUG> 	destination subdirectory on staging server
+#   --au_title=<TITLE>    	human-readable title of this AU
+# 
+# LOCALPATH is a directory on the local workstation containing the files for the
+# Archival Unit (AU) to preserve. E.g.: "w:\WPA\Folder 01"
+#
+# STAGING is an URL specifying the FTP server and the path to the staging area to
+# stage the AU files. E.g.: "ftp://charlesw.johnson@archives.alabama.gov/Lockss/"
+#
+# @version 2019.0715
+
 		ASC_OUTPUT="$(mktemp)"
 
 		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json --verbose=1 \
@@ -185,17 +217,24 @@ case "${CMD}" in
 		
 		EXITCODE="${ASC_ERRCODE}"
 		;;
+		
 	"preserve")
 # @method adpn preserve
-# ADPNet Member: Stage output on the local workstation to the staging area,
+# ADPNet Member: Stage AU files on the local workstation to the staging area,
 # test connection to staging server, collect data, and verify plugin parameters;
 # then generate JSON and notify network admin that content is ready to ingest.
 #
 # Usage: adpn preserve [<LOCALPATH>] [<STAGING>] [<OPTIONS>]...
 #
-# --subdirectory=<SLUG>     destination subdirectory on staging server
-# --au_title=<TITLE>    	human-readable title of this AU
-# --from=<PEER>         	code for origin node (AUB, ADAH, etc.)
+#   --subdirectory=<SLUG> 	destination subdirectory on staging server
+#   --au_title=<TITLE>    	human-readable title of this AU
+#   --from=<PEER>         	code for origin node (AUB, ADAH, etc.)
+#
+# LOCALPATH is a directory on the local workstation containing the files for the
+# Archival Unit (AU) to preserve. E.g.: "w:\WPA\Folder 01"
+#
+# STAGING is an URL specifying the FTP server and the path to the staging area to
+# stage the AU files. E.g.: "ftp://charlesw.johnson@archives.alabama.gov/Lockss/"
 #
 # Output: a report containing AU data, file size information, plugin parameters
 # and a JSON packet for use by adpn ingest and adpn publish by Config Manager.
@@ -233,6 +272,7 @@ case "${CMD}" in
 			rm "${AIT_OUTPUT}"
 		fi
 		;;
+		
 	"ingest"|"publish")
 # @method adpn ingest
 # Config Manager: accept JSON data specifying a new AU for ingest,
@@ -327,6 +367,7 @@ case "${CMD}" in
 			fi
 		fi
 		;;
+		
 	*)
 		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
 		echo "${__HELP__}" 1>&2
