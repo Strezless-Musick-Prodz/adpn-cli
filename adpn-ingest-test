@@ -429,8 +429,8 @@ else
 			
 			declare -a PLUGIN_LINE
 			
-			PARAMS_IN=`mktemp`
-			PARAMS_SWITCHES=`mktemp`
+			PARAMS_IN=$(mktemp)
+			PARAMS_SWITCHES=$(mktemp)
 			
 			for idx in ${!_ARGV[@]} ; do
 				if (( "${idx}" > 0 )) ; then
@@ -449,8 +449,7 @@ else
 			xargs -a "${PARAMS_SWITCHES}" --delimiter='\n' "${_ARGV[0]}"
 			EXITCODE="$?"
 			
-			rm "${PARAMS_IN}"
-			rm "${PARAMS_SWITCHES}"
+			rm "${PARAMS_IN}" "${PARAMS_SWITCHES}"
 		fi
 	fi
 fi
