@@ -89,12 +89,13 @@ Usage:
 ### CONFIGURATION: Set up some constants #################################################
 ##########################################################################################
 
-SCRIPTDIR=`dirname $0`
-SCRIPT=`basename $0`
+SCRIPTPATH=$(which $0)
+SCRIPTDIR=$(dirname ${SCRIPTPATH})
+SCRIPT=$(basename ${SCRIPTPATH})
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 
-PLUGINTXT=`mktemp`
+PLUGINTXT=$(mktemp)
 
 declare -a _ARGV ; _ARGV=($0)
 declare -A _PARAM ; _PARAM=()
@@ -150,7 +151,7 @@ if [[ -r "${CONFFILE}" ]] ; then
 	SWITCHFILES+=(${CONFFILE})
 fi
 
-CMDLINETXT=`mktemp`
+CMDLINETXT=$(mktemp)
 
 if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
 	adpn-json-to-switches.py $1 >> "${CMDLINETXT}" ; AJTS_ERRCODE="$?"
