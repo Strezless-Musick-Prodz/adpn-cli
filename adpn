@@ -129,8 +129,29 @@ case "${CMD}" in
 		fi
 		;;
 	"preserve")
-		echo "[${SCRIPT}] '${CMD}' command not yet implemented." 1>&2
-		EXITCODE=255
+		ASC_OUTPUT="$(mktemp)"
+
+		echo "[${SCRIPT} ${CMD}] Staging content..."
+		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json --verbose=0 \
+			--subdirectory="${_PARAM[subdirectory]}" \
+			--au_title="${_PARAM[au_title]}" \
+			"${_ARGV[3]}" > "${ASC_OUTPUT}" ; ASC_ERRCODE="$?"
+		JSON_PACKET=$(grep "^JSON PACKET:" "${ASC_OUTPUT}")
+		rm "${ASC_OUTPUT}"
+		
+		if [[ "${ASC_ERRCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn-stage-content.py failed." 1>&2
+			EXITCODE="${ASC_ERRCODE}"
+		else 
+			AIT_OUTPUT="$(mktemp)"
+			echo "${JSON_PACKET}" | adpn-ingest-test - > "${AIT_OUTPUT}" ; AIT_ERRCODE="$?"
+			cat "${AIT_OUTPUT}"
+			if [[ "${AIT_ERRCODE}" -gt 0 ]] ; then
+				echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
+				EXITCODE="${AIT_ERRCODE}"
+			fi
+			rm "${AIT_OUTPUT}"
+		fi
 		;;
 	"ingest"|"publish")
 		

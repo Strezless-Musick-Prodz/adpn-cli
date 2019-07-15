@@ -339,14 +339,14 @@ else
 	fi
 
 	if [[ ! -z "${DU_HUMANREADABLE}" ]] ; then
-		FILESIZE_STR=$(printf "File Size \t%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}")
+		FILESIZE_STR=$(printf "%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}")
 	fi
 	
 	if [[ ! -z "${_PARAM[au_title]}" && "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
 		printf "Ingest Title\t%s\n" "${_PARAM[au_title]}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${FILESIZE_STR}" ]] ; then
-		printf "File Size \t%s\n" "${FILESIZE_STR}" >> ${PLUGINTXT}
+		printf "File Size\t%s\n" "${FILESIZE_STR}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${_PARAM[peer-from]}" ]] ; then
 		printf "From Peer\t%s\n" "${_PARAM[peer-from]}" >> ${PLUGINTXT}
