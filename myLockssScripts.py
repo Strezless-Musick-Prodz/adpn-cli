@@ -134,13 +134,17 @@ class myPyJSON :
 		return [ json.loads(marble) for marble in self.json ]
 	
 	@property
+	def text (self) :
+		return self._jsonText
+		
+	@property
 	def allData (self) :
 		"""A unified hash table that merges together all the tables parsed from the JSON representations."""
 		hashtable = { }
 		for table in self.data :
 			hashtable = {**hashtable, **table}
 		return hashtable
-		
+	
 	def accept (self, jsonSource) :
 		"""Accept the plain-text input containing one or more JSON hash tables within the text.
 		
@@ -155,6 +159,9 @@ class myPyJSON :
 		jsonMatches = [ re.match(self.pattern, line) for line in src ]
 		self._jsonText = [ ref.group(3) for ref in jsonMatches if ref ]
 	
+		if len(self._jsonText) == 0 :
+			self._jsonText = [ "".join(src) ]
+			
 if __name__ == '__main__':
 
 	defaults = {"foo": "bar"}

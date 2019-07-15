@@ -59,9 +59,9 @@ Exit code:
 	def execute (self) :
 		try :
 			jsonInput = myPyJSON()
-			jsonInput.accept(fileinput.input())
+			jsonInput.accept([ line for line in fileinput.input() ])
 			table = jsonInput.allData
-
+			
 			try :
 				print(table[self.switches.get('key', '')], end="")
 				self.exitcode = 0
@@ -73,7 +73,7 @@ Exit code:
 			print(
 				("[%(script)s] JSON encoding error. Could not extract key-value pairs from "
 				+ "the provided data:\n\n%(json)s")
-				% {"script": self.scriptname, "json": jsonInput},
+				% {"script": self.scriptname, "json": "\n".join(jsonInput.text)},
 				file=sys.stderr
 			)
 			self.exitcode = 2

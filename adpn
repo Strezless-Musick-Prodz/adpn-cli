@@ -8,6 +8,7 @@ SCRIPTDIR=`dirname $0`
 SCRIPT=`basename $0`
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
+PROPSFILE="${SCRIPTDIR}/adpnet.json"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
@@ -32,10 +33,9 @@ Exit codes:
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
 
-
 declare -a _ARGV ; _ARGV=("$0")
 declare -a _CMDLINE ; _CMDLINE=("$0")
-declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
+declare -A _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
 
 shopt -s lastpipe
 
@@ -55,7 +55,6 @@ done
 SWITCHFILES+=(${CMDLINETXT})
 
 cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
-
 	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
 		KEY="${BASH_REMATCH[1]}"
 		VALUE="${BASH_REMATCH[3]}"
@@ -128,19 +127,45 @@ case "${CMD}" in
 			EXITCODE=255
 		fi
 		;;
-	"preserve")
+	"property")
+		SUBCMD="${_ARGV[2]}"
+		case "${SUBCMD}" in
+			"")
+				cat "${PROPSFILE}" | adpn-json.py
+				;;
+			"get")
+				cat "${PROPSFILE}" | adpn-json.py --key="${_ARGV[3]}"
+				EXITCODE=$?
+				;;
+			"*")
+				echo "[${SCRIPT} ${CMD}] '${SUBCMD}' command not understood." 1>&2
+				EXITCODE=255
+				;;
+		esac
+		;;
+	"stage")
 		ASC_OUTPUT="$(mktemp)"
 
-		echo "[${SCRIPT} ${CMD}] Staging content..."
-		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json --verbose=0 \
+		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json --verbose=1 \
 			--subdirectory="${_PARAM[subdirectory]}" \
 			--au_title="${_PARAM[au_title]}" \
 			"${_ARGV[3]}" > "${ASC_OUTPUT}" ; ASC_ERRCODE="$?"
 		JSON_PACKET=$(grep "^JSON PACKET:" "${ASC_OUTPUT}")
+		printf "%s" "${JSON_PACKET}"
 		rm "${ASC_OUTPUT}"
 		
+		EXITCODE="${ASC_ERRCODE}"
+		;;
+	"preserve")
+		echo "[${SCRIPT} ${CMD}] Staging content..."
+
+		JSON_PACKET=$(
+			${SCRIPT} stage "${_ARGV[2]}" "${_ARGV[3]}" \
+			--au_title="${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}"
+		) ; ASC_ERRCODE="$?"
+		
 		if [[ "${ASC_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn-stage-content.py failed." 1>&2
+			echo "[${SCRIPT} ${CMD}] adpn stage failed." 1>&2
 			EXITCODE="${ASC_ERRCODE}"
 		else 
 			AIT_OUTPUT="$(mktemp)"
