@@ -4,7 +4,7 @@
 # provided on stdin and outputs the value (a printed str or a serialized str equivalent)
 # from a given key-value pair, so that bash scripts can capture values from JSON packets.
 #
-# @version 2019.0711
+# @version 2019.0715
 
 import sys
 import os.path
