@@ -62,9 +62,14 @@ Exit code:
 			jsonInput.accept([ line for line in fileinput.input() ])
 			table = jsonInput.allData
 			
+			keys = [ self.switches.get('key') ] if self.switches.get('key') is not None else table.keys()
 			try :
-				print(table[self.switches.get('key', '')], end="")
-				self.exitcode = 0
+				for key in keys :
+					if len(keys) > 1 :
+						print("%(key)s\t%(value)s" % {"key": key, "value": table[key]})
+					else :
+						print(table[key], end="")
+					self.exitcode = 0
 			except KeyError as e :
 				self.exitcode = 1
 			
