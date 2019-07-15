@@ -220,12 +220,14 @@ command line with explicit switches.
 		self.argv = argv
 		self.switches = switches
 		self.parameters = parameters
+		self.exitcode = 0
 		
 		self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
 		if self.switches.get('quiet') :
 			self.verbose=0
 
 		# start out with defaults
+		self.ftp = None
 		self.host = "localhost"
 		self.user = None
 		self.passwd = None
@@ -350,44 +352,56 @@ command line with explicit switches.
 
 		passwd_prompt = "FTP Password (%(user)s@%(host)s): " % {"user": self.user, "host": self.host}
 
-		if self.user is None :
-			self.user = input("User: ")
-		if self.passwd is None :
-			self.passwd = getpass(passwd_prompt)
-		if self.base_dir is None or len(self.base_dir) == 0:
-			self.base_dir = input("Base dir: ")
-		if self.subdirectory is None or len(self.subdirectory) == 0 :
-			self.subdirectory = input("Subdirectory: ")
+		try :
+			if self.user is None :
+				self.user = input("User: ")
+			if self.passwd is None :
+				self.passwd = getpass(passwd_prompt)
+			if self.base_dir is None or len(self.base_dir) == 0:
+				self.base_dir = input("Base dir: ")
+			if self.subdirectory is None or len(self.subdirectory) == 0 :
+				self.subdirectory = input("Subdirectory: ")
 	
-		manifest_html=self.make_manifest_page()
+			manifest_html=self.make_manifest_page()
 		
-		# Let's log in to the host
-		self.ftp = FTPStaging(FTP(self.host, user=self.user, passwd=self.passwd), user=self.user)
+			# Let's log in to the host
+			self.ftp = FTPStaging(FTP(self.host, user=self.user, passwd=self.passwd), user=self.user)
 
-		# Let's CWD over to the repository
-		self.ftp.cwd(self.base_dir)
+			# Let's CWD over to the repository
+			self.ftp.cwd(self.base_dir)
 
-		backupDir = self.mkBackupDir()
+			backupDir = self.mkBackupDir()
 		
-		(local_pwd, remote_pwd) = self.ftp.chdir(dir=backupDir, remote=self.subdirectory, make=True)
-		self.ftp.download(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
+			(local_pwd, remote_pwd) = self.ftp.chdir(dir=backupDir, remote=self.subdirectory, make=True)
+			self.ftp.download(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
 
-		self.ftp.chdir(dir=local_pwd, remote=remote_pwd)
-		(local_pwd, remote_pwd) = self.ftp.chdir(dir=self.switches['local'], remote=self.subdirectory, make=True)
+			self.ftp.chdir(dir=local_pwd, remote=remote_pwd)
+			(local_pwd, remote_pwd) = self.ftp.chdir(dir=self.switches['local'], remote=self.subdirectory, make=True)
 
-		self.output_status(2, "chdir", (os.getcwd(), self.ftp.pwd()))
+			self.output_status(2, "chdir", (os.getcwd(), self.ftp.pwd()))
 		
-		# upload the generated manifest page
-		self.ftp.upload(blob=manifest_html, file='manifestpage.html')	
-		self.output_status(1, "uploaded", 'manifestpage.html')
+			# upload the generated manifest page
+			self.ftp.upload(blob=manifest_html, file='manifestpage.html')	
+			self.output_status(1, "uploaded", 'manifestpage.html')
 
-		# upload the present directory recursively
-		self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
+			# upload the present directory recursively
+			self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
 		
-		self.output_status(0, "ok", {"local": os.getcwd(), "staged": self.ftp.url(), "jar": self.switches['jar'], "au_title": self.switches['au_title'], "parameters": [ [ key, parameters[key] ] for key in parameters ] })
+			self.output_status(0, "ok", {"local": os.getcwd(), "staged": self.ftp.url(), "jar": self.switches['jar'], "au_title": self.switches['au_title'], "parameters": [ [ key, parameters[key] ] for key in parameters ] })
+		
+		except KeyboardInterrupt as e :
+			self.exitcode = 255
+			print("[%(scriptname)s] Keyboard Interrupt." % {"scriptname": self.scriptname}, file=sys.stderr)
+		
+		if self.ftp is not None :
+			try :
+				self.ftp.quit()
+			except ftplib.error_perm as e :
+				pass
 
-		self.ftp.quit()
-
+	def exit (self) :
+		sys.exit(self.exitcode)
+		
 if __name__ == '__main__':
 
 	scriptname = os.path.basename(sys.argv[0])
@@ -432,3 +446,6 @@ if __name__ == '__main__':
 		print("Settings:", switches)
 	else :
 		script.execute()
+
+	script.exit()
+	

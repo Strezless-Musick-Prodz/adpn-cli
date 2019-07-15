@@ -90,7 +90,7 @@ fi
 CLEANUP=""
 if [ "-" == "${JARFILE}" ] ; then
 
-	JARFILE=`mktemp --suffix=.jar`
+	JARFILE=$(mktemp --suffix=.jar)
 	if [ -w "${JARFILE}" ] ; then
 	
 		cat - > "${JARFILE}"
@@ -144,6 +144,7 @@ if [[ -r "${JARFILE}" && -s "${JARFILE}" ]] ; then
 			#MANIFEST_LINE should be Lockss-Plugin="true"
 			if [[ "${MANIFEST_LINE}" != "true" ]] ; then
 				echo "[${SCRIPT}] error: Could not read ${MANIFEST} from ${JARFILE}"
+
 				exit ${EXITCODE} # while
 			fi
 			
@@ -151,26 +152,21 @@ if [[ -r "${JARFILE}" && -s "${JARFILE}" ]] ; then
 			#MANIFEST_LINE should be the relative path in the jarfile pointing to the XML
 			unzip -q -c "${JARFILE}" $MANIFEST_LINE | "${SCRIPTDIR}/lockss-plugin-props.py" - "$@"
 			EXITCODE=$?
+
 			exit ${EXITCODE} # while
 		fi
 		
 	done
-	#EXITCODE=$?
-	
-	if [ ! -z "${CLEANUP}" ] ; then
-		${CLEANUP}
-	fi
-	
-	exit ${EXITCODE}
 	
 else
-	if [ ! -z "${CLEANUP}" ] ; then
-		${CLEANUP}
-	fi
 	
 	echo "[${SCRIPT}] error: Could not open JAR file '${JARFILE}'" 1>&2
 
 	EXITCODE=1
+fi
+
+if [ ! -z "${CLEANUP}" ] ; then
+	${CLEANUP}
 fi
 
 exit ${EXITCODE}
