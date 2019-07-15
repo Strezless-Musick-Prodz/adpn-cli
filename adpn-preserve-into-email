@@ -1,0 +1,96 @@
+#!/bin/bash
+
+SCRIPTNAME="$(basename $0)"
+SCRIPTDIR="$(dirname $0)"
+PATH=${SCRIPTDIR}:${PATH}
+CONFFILE="${SCRIPTDIR}/adpnet.json"
+
+# @Orwellophile https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
+rawurlencode() {
+  local string="${1}"
+  local strlen=${#string}
+  local encoded=""
+  local pos c o
+
+  for (( pos=0 ; pos<strlen ; pos++ )); do
+     c=${string:$pos:1}
+     case "$c" in
+        [-_.~a-zA-Z0-9] ) o="${c}" ;;
+        * )               printf -v o '%%%02x' "'$c"
+     esac
+     encoded+="${o}"
+  done
+  echo "${encoded}"    # You can either set a return variable (FASTER) 
+  REPLY="${encoded}"   #+or echo the result (EASIER)... or both... :p
+}
+
+##########################################################################################
+### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
+##########################################################################################
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+declare -a _ARGV ; _ARGV=()
+declare -A _PARAM ; _PARAM=()
+
+CMDLINETXT=$(mktemp)
+
+until [[ -z "$1" ]] ; do
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+
+	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
+		KEY="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[3]}"
+		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+			VALUE="${KEY}"
+		fi
+
+		_PARAM[$KEY]="${VALUE}"
+		
+	elif [[ ! -z "${SWITCH}" ]] ; then
+		_ARGV+=("${SWITCH}")
+	fi
+	
+done
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: Get admin e-mail address, subject, and body from config, cmd line or stdin ### ##########################################################################################
+
+ADMIN_EMAIL=$( rawurlencode "$(cat ${CONFFILE} | adpn-json.py --key=admin-email)" )
+SUBJECT_TEXT=$( rawurlencode "${_PARAM[subject]}" )
+if [[ -z "${SUBJECT_TEXT}" ]] ; then
+	SUBJECT_TEXT=$( rawurlencode "ADPNet Ingest" )
+fi
+BODY_TEXT=$( rawurlencode "$( cat "${_ARGV[@]}" )" )
+
+##########################################################################################
+### SCRIPT: Look to see if Outlook.exe is available. #####################################
+##########################################################################################
+
+OUTLOOK=$( which OUTLOOK.EXE 2> /dev/null )
+if [[ -z "${OUTLOOK}" ]] ; then
+	CYGPATH=$( which cygpath 2> /dev/null )
+	if [[ ! -z "${CYGPATH}" ]] ; then
+		OUTLOOK="$(cygpath "${PROGRAMFILES}\Microsoft Office\root\Office16\OUTLOOK.EXE")"
+		if [[ -z "${OUTLOOK}" || ! -x "${OUTLOOK}" ]] ; then
+			OUTLOOK="$(cygpath "${PROGRAMFILES} (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE")"
+		fi
+	fi
+fi
+
+##########################################################################################
+### SCRIPT: If Outlook.exe is available, use it to spin up an e-mail. ####################
+##########################################################################################
+
+if [[ ! -z "${OUTLOOK}" && -x "${OUTLOOK}" ]] ; then
+	"${OUTLOOK}" /c ipm.note /m "mailto:${ADMIN_EMAIL}&subject=${SUBJECT_TEXT}&body=${BODY_TEXT}"
+fi
