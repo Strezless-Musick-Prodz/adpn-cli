@@ -90,7 +90,6 @@ if __name__ == '__main__' :
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv).parse()
 	
-	exitcode = 0
 	script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
 	if script.switched('help') :
 		script.display_usage()
