@@ -4,8 +4,9 @@
 #
 # @version 2019.0710
 
-SCRIPTDIR=`dirname $0`
-SCRIPT=`basename $0`
+SCRIPTPATH=$(which $0)
+SCRIPTDIR=$(dirname $SCRIPTPATH)
+SCRIPT=$(basename $SCRIPTPATH)
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 PROPSFILE="${SCRIPTDIR}/adpnet.json"
@@ -96,16 +97,44 @@ case "${CMD}" in
 		EXITCODE=255
 		;;
 	"help")
+# @method adpn help
+# Displays usage notes for the adpn script or a given adpn script command
+#
+# Usage: adpn help [<CMD>]
+#
+# CMD is an adpn script pipeline command, e.g. "preserve", "ingest", "publish"
+# If omitted, display usage notes for the adpn script as a whole.
+#
+# @version 2019.0715
 		HELPCMD="${_ARGV[2]}"
 		if [[ -z "${HELPCMD}" ]] ; then
 			echo "${__DOC__}"
 			EXITCODE=0
 		else 
-			echo "[${SCRIPT} ${CMD}] '${HELPCMD}' help notes not yet implemented." 1>&2
+			HELPNOTES=$( sed --quiet "/^[#] [@]method ${SCRIPT} ${HELPCMD}/,/^[#] @version/p" ${SCRIPTPATH} )
+			if [ -z "${HELPNOTES}" ] ; then
+				echo "[${SCRIPT} ${CMD}] '${HELPCMD}' help notes not yet implemented." 1>&2
+			else 
+				echo "${HELPNOTES}" | grep "^[#]" | grep -v "^[#] [@]" | sed "s/^[#] *//"
+			fi
 			EXITCODE=255
 		fi
 		;;
 	"test")
+# @method adpn test 
+#
+# Usage: adpn test [<TESTCODE>] [<CMD>] [<ARGS>]...
+#
+# TESTCODE is a code identifying the test data packet to use. For a list of available
+# tests, use:
+#
+# 	adpn test
+#
+# CMD is an adpn script pipeline command, e.g "preserve", "ingest", "publish"
+# ARGS are the arguments for that pipeline command.
+#
+# @version 2019.0715
+
 		TESTDIR="${SCRIPTDIR}/json/tests"
 		if [[ ! -z "${_CMDLINE[2]}" ]] ; then
 			TESTFILE=${TESTDIR}/${_CMDLINE[2]}.json
@@ -157,6 +186,24 @@ case "${CMD}" in
 		EXITCODE="${ASC_ERRCODE}"
 		;;
 	"preserve")
+# @method adpn preserve
+# ADPNet Member: Stage output on the local workstation to the staging area,
+# test connection to staging server, collect data, and verify plugin parameters;
+# then generate JSON and notify network admin that content is ready to ingest.
+#
+# Usage: adpn preserve [<LOCALPATH>] [<STAGING>] [<OPTIONS>]...
+#
+# --subdirectory=<SLUG>     destination subdirectory on staging server
+# --au_title=<TITLE>    	human-readable title of this AU
+# --from=<PEER>         	code for origin node (AUB, ADAH, etc.)
+#
+# Output: a report containing AU data, file size information, plugin parameters
+# and a JSON packet for use by adpn ingest and adpn publish by Config Manager.
+# Displayed to stdout; if adpn-preserve-into-email can find an e-mail client,
+# it is also filled in to an e-mail to the Config Manager.
+#
+# @version 2019.0715
+
 		echo "[${SCRIPT} ${CMD}] Staging content..."
 
 		JSON_PACKET=$(
@@ -187,7 +234,35 @@ case "${CMD}" in
 		fi
 		;;
 	"ingest"|"publish")
-		
+# @method adpn ingest
+# Config Manager: accept JSON data specifying a new AU for ingest,
+# test connection to the staging server and verify parameters; then
+# insert into local titlesdb and confirm insertion.
+#
+# Usage: adpn ingest [-|<JSONFILE>] [<OPTIONS>]...
+#
+# Options:
+#   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
+#   --to=ALL|<PEER>         node to publish to (AUB, ADAH...; ALL=entire network)	
+#   --dry-run           	output SQL script for titlesdb insert but do not execute
+#   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
+#
+# @version 2019.0715
+
+# @method adpn publish
+# Config Manager: accept JSON data specifying a new AU for ingest,
+# test connection to the staging server and verify parameters; then
+# insert into titlesdb for whole network and confirm insertion.
+#
+# Usage: adpn publish [-|<JSONFILE>] [<OPTIONS>]...
+#
+# Options:
+#   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
+#   --dry-run           	output SQL script for titlesdb insert but do not execute
+#   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
+#
+# @version 2019.0715
+
 		AIT_OUTPUT="$(mktemp)"
 		AIT_INPUT="${_ARGV[2]}"
 		if [[ -z "${AIT_INPUT}" ]] ; then
