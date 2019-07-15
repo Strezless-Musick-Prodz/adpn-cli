@@ -161,7 +161,7 @@ if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
 	done
 fi
 
-until [[ -z "$1" ]] ; do
+until [[ "$#" -lt 1 ]] ; do
 	_ARGV+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift

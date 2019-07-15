@@ -68,7 +68,7 @@ fi
 
 CMDLINETXT=`mktemp`
 
-until [[ -z "$1" ]] ; do
+until [[ "$#" -lt 1 ]] ; do
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
