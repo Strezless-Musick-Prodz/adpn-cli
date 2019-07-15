@@ -168,8 +168,14 @@ case "${CMD}" in
 			echo "[${SCRIPT} ${CMD}] adpn stage failed." 1>&2
 			EXITCODE="${ASC_ERRCODE}"
 		else 
+			[ ! -z "${_PARAM[from]}" ] && FROM="${_PARAM[from]}"  || FROM=$(${SCRIPT} property get "peer")
+			if [[ -z "${FROM}" ]] ; then
+				read -p "From (ALL|<PEER>): " FROM
+			fi
+
 			AIT_OUTPUT="$(mktemp)"
-			echo "${JSON_PACKET}" | adpn-ingest-test - > "${AIT_OUTPUT}" ; AIT_ERRCODE="$?"
+			echo "${JSON_PACKET}" | adpn-ingest-test - \
+				--local="${_ARGV[2]}" --peer-from="${FROM}" > "${AIT_OUTPUT}" ; AIT_ERRCODE="$?"
 			cat "${AIT_OUTPUT}"
 			if [[ "${AIT_ERRCODE}" -gt 0 ]] ; then
 				echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
