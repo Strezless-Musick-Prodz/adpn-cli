@@ -77,7 +77,7 @@ Usage:
     --<PARAM>=<VALUE>        	set plugin parameter <PARAM> to <VALUE>
                              	  (e.g.: subdirectory=Lovely-Files)
 
-  To select and configure a plugin for this ingest, use:
+  To select the plugin or plugins, use:
     --jar=<URL>               	URL directly to a plugin's JAR file on the props server
     --plugin=<NAME>           	use the plugin named <NAME>
     --plugin-id=<FQCN>        	use the plugin with uniqid <FQCN>
@@ -304,6 +304,7 @@ if __name__ == '__main__':
 
 	scriptname = os.path.basename(sys.argv[0])
 	scriptdir = os.path.dirname(sys.argv[0])
+	configjson = "/".join([scriptdir, "adpnet.json"])
 	
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
 	"jar": None,
@@ -311,8 +312,8 @@ if __name__ == '__main__':
 	"daemon": None, "user": None, "pass": None, 
 	"proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
 	"output": "text/plain", "parameters": "null"
-	}).parse()
-
+	}, configfile=configjson, settingsgroup=[ "plugin", "daemon" ]).parse()
+	
 #if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
 #	./adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
 #	shift
@@ -333,10 +334,10 @@ if __name__ == '__main__':
 script = ADPNPluginDetailsScript(scriptname, scriptdir, sys.argv, switches)
 if switches.get('help') :
 	script.display_usage()
-elif (script.has_plugin_criteria()) :
-	script.execute()
 else :
-	script.display_usage()
+	if not script.has_plugin_criteria() :
+		script.switches['plugin-regex'] = '.*'
+	script.execute()
 
 script.exit()
 

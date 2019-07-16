@@ -47,11 +47,38 @@ class myPyCommandLine :
 	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.
 	"""
 	
-	def __init__ (self, argv: list = [], defaults: dict = {}) :
+	def __init__ (self, argv: list = [], defaults: dict = {}, configfile: str = "", settingsgroup = "") :
 		"""Initialize with a list of command-line arguments, and optionally a dictionary of default values for expected configuration switches."""
 		self._argv = argv
 		self._switches = {}
-		self._defaults = defaults
+		
+		jsonText = "{}"
+		if len(configfile) > 0 :
+			try :
+				default_map = open(configfile, "r")
+				jsonText = "".join([line for line in default_map])
+				default_map.close()
+			except FileNotFoundError as e :
+				jsonText = "{}"
+				
+		try :
+			self._defaults = {**defaults, **json.loads(jsonText)}
+		except json.decoder.JSONDecodeError as e :
+			self._defaults = defaults
+		
+		if len(settingsgroup) > 0 :
+			overlay = { }
+
+			if not isinstance(settingsgroup, list) :
+				settingsgroup = [ settingsgroup ]
+
+			for key in self._defaults.keys() :
+				subkey = key.split("/", maxsplit=2)
+				if len(subkey) > 1 and settingsgroup.count(subkey[0]) > 0 :
+					overlay[subkey[1]] = self._defaults[key]
+			
+			self._defaults = {**self._defaults, **overlay}
+			
 		self._switchPattern = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
 
 	@property 

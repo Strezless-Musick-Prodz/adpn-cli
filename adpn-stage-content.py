@@ -290,8 +290,8 @@ command line with explicit switches.
 		except subprocess.CalledProcessError as e :
 			code = e.returncode
 			buf = e.output
-		finally :
-			return buf
+		
+		return buf
 		
 	def mkBackupDir (self) :
 		backupPath=self.switches['backup']
@@ -406,30 +406,18 @@ if __name__ == '__main__':
 
 	scriptname = os.path.basename(sys.argv[0])
 	scriptdir = os.path.dirname(sys.argv[0])
+	configjson = "/".join([scriptdir, "adpnet.json"])
 	
 	os.environ["PATH"] = ":".join( [ scriptdir, os.environ["PATH"] ] )
 	
-	try :
-		default_map = open("/".join([scriptdir, "adpnet.json"]), "r")
-		jsonText = "".join([line for line in default_map])
-		default_map.close()
-	except FileNotFoundError as e :
-		jsonText = "{}"
-		
-	try :
-		hardcoded_defaults = {
-			"host": None, "user": None, "pass": None,
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+			"ftp/host": None, "ftp/user": None, "ftp/pass": None,
 			"subdirectory": None, "directory": None,
 			"base_dir": None, "output": "text/plain",
 			"local": None, "backup": "./backup",
 			"verbose": 1, "quiet": False,
 			"base_url": None, "au_title": None, "institution": None
-		}
-		defaults = {**hardcoded_defaults, **json.loads(jsonText)}
-	except json.decoder.JSONDecodeError as e :
-		defaults = hardcoded_defaults
-
-	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaults).parse()
+	}, configfile=configjson, settingsgroup=["stage", "ftp"]).parse()
 
 	parameters = {
 		"base_url": switches['base_url'],
