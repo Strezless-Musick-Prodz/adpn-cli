@@ -1,8 +1,7 @@
 #!/usr/bin/python3
 #
-# adpn-ingest-test: Assemble information and run tests for a package of files staged for
-# ingest as a LOCKSS Archival Unit, given a local location, a LOCKSS Plugin and parameters
-# for the plugin.
+# adpn-plugin-details.py: List or detail LOCKSS Publisher Plugins from a LOCKSS daemon,
+# optionally providing details about required parameters.
 #
 # Switches can be provided on the command line, or interactively on the console at input
 # prompts. You can set default values for commonly-repeated switches (for example, if your
@@ -75,8 +74,6 @@ Usage:
 
   adpn-plugin-details.py [OPTION]...
 
-    --local=<PATH>           	path to the files being put into the AU (e.g.: 'w:\\Path')
-    --au_title=<TITLE>       	title for this AU in titledb (e.g.: 'ADAH Lovely Files')
     --<PARAM>=<VALUE>        	set plugin parameter <PARAM> to <VALUE>
                              	  (e.g.: subdirectory=Lovely-Files)
 
@@ -100,17 +97,6 @@ Usage:
   If you need to use SSH tunneling to connect to the SOCKS5 proxy, use:
     --tunnel=<HOST>          	the name of the host to open an SSH tunnel to
     --tunnel-port=<NUMBER>   	the port for SSH connections to the tunnel (default: 22)
-
-  Network Admin:
-    
-  <input> | adpn-ingest-test - --remote [OPTION]...
-  adpn-ingest-test <JSONFILE> --remote [OPTION]...
-  
-  JSON input provided from the local side can provide the au_title, plugin selection and
-  values for required plugin parameters. Parameters for connecting to the LOCKSS daemon
-  and to the props server are same as above. If you need to override a value provided by
-  the JSON input, you can do so with a command-line switch (e.g., a stupid title provided
-  in JSON can be overridden with --au_title='ADAH Better Title').
 	"""
 
 	def __init__ (self, scriptname, scriptdir, argv, switches) :
