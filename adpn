@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.0710
+# @version 2019.0716
 
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
@@ -78,25 +78,33 @@ rm "${CMDLINETXT}"
 ##########################################################################################
 
 EXITCODE=0
+CMD="${_ARGV[1]}"
+
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT} version ${VERSION}"
-	EXITCODE=0
+	if [[ -z "${CMD}" ]] ; then
+		CMD="version"
+	else
+		adpn version
+	fi
 fi
 
 if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	EXITCODE=0
+	CMD="help"
+	_ARGV=( "help" "${_ARGV[@]}" )
 fi
-
-CMD="${_ARGV[1]}"
 
 case "${CMD}" in
 	"")
 		echo "[${SCRIPT}] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} ingest', etc.)" 1>&2
 		echo "${__HELP__}" 1>&2
 		EXITCODE=255
+		;;
+	
+	"version")
+		VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+		echo "${SCRIPT} version ${VERSION}"
+		EXITCODE=0
 		;;
 		
 	"help")
@@ -372,7 +380,21 @@ case "${CMD}" in
 			fi
 		fi
 		;;
-		
+	
+	"plugins")
+# @method adpn plugins
+# List LOCKSS Publisher Plugins or display details for a selected Plugin.
+# 
+# Usage:
+#   adpn plugins
+#   adpn plugins list [<KEYWORDS>|/<REGEX>/|<GUID>|<JARURL>] [<OPTIONS>]...
+#   adpn plugins details [<KEYWORDS>|/<REGEX>/|<GUID>|<JARURL>] [<OPTIONS>]...
+#
+# @version 2019.0716
+
+		adpn-do-plugins "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		;;
+	
 	*)
 		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
 		echo "${__HELP__}" 1>&2

@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# adpn-do-plugins: script to handle adpn plugins commands
+#
+# @version 2019.0716
+
+SCRIPTPATH=$(which $0)
+SCRIPTDIR=$(dirname $SCRIPTPATH)
+SCRIPT=$(basename $SCRIPTPATH)
+PATH=${SCRIPTDIR}:${PATH}
+CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
+PROPSFILE="${SCRIPTDIR}/adpnet.json"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  list      	List the available Publisher Plugins
+  details   	Report details on Publisher Plugin and required parameters
+  
+Exit codes:
+0 = success (successful retrieval and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
+		KEY="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[3]}"
+		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+			VALUE="$KEY"
+		fi
+		_PARAM[$KEY]="${VALUE}"
+		
+	elif [[ ! -z "${SWITCH}" ]] ; then
+		_ARGV+=("${SWITCH}")
+		
+	fi
+	
+done
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+CMD="${_ARGV[1]}"
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"list")
+# @method adpn plugins list
+# Display a list of the available publisher plugins.
+# 
+# Usage: adpn plugins list [<WILDCARD>] [<OPTIONS>]...
+#
+# @version 2019.0716
+
+		declare -a APD_SWITCHES=()
+		if [[ "${#_ARGV[@]}" -gt 2 ]] ; then
+			if [[ "${_ARGV[2]:0:1}" == '/' ]] ; then
+				APD_SWITCHES+=(--plugin-regex="${_ARGV[2]:1:-1}")
+			elif [[ "${_ARGV[*]:2}" == "http:"* ]] ; then
+				APD_SWITCHES+=(--jar="${_ARGV[*]:2}")			
+			elif [[ "${_ARGV[*]:2}" == *"."* ]] ; then
+				APD_SWITCHES+=(--plugin-id="${_ARGV[*]:2}")			
+			else
+				APD_SWITCHES+=(--plugin-keywords="${_ARGV[*]:2}")
+			fi
+		fi
+
+		for KEY in "${!_PARAM[@]}" ; do
+			APD_SWITCHES+=("--${KEY}=${_PARAM[$KEY]}")
+		done
+		
+		adpn-plugin-details.py "${APD_SWITCHES[@]}"
+		EXITCODE="$?"
+		;;
+	
+	"details")
+# @method adpn plugins details
+# Display details of a single publisher plugin.
+#
+# Usage: adpn plugins details [<WILDCARD>] [<OPTIONS>]...
+#
+# @version 2019.0716
+
+		APD_OUTPUT=$(mktemp)
+		
+		declare -a APD_SWITCHES=()
+		if [[ "${#_ARGV[@]}" -gt 2 ]] ; then
+			if [[ "${_ARGV[2]:0:1}" == '/' ]] ; then
+				APD_SWITCHES+=(--plugin-regex="${_ARGV[2]:1:-1}")
+			elif [[ "${_ARGV[*]:2}" == "http:"* ]] ; then
+				APD_SWITCHES+=(--jar="${_ARGV[*]:2}")			
+			elif [[ "${_ARGV[*]:2}" == *"."* ]] ; then
+				APD_SWITCHES+=(--plugin-id="${_ARGV[*]:2}")			
+			else
+				APD_SWITCHES+=(--plugin-keywords="${_ARGV[*]:2}")
+			fi
+		fi
+		
+		for KEY in "${!_PARAM[@]}" ; do
+			APD_SWITCHES+=("--${KEY}=${_PARAM[$KEY]}")
+		done
+		
+		adpn-plugin-details.py "${APD_SWITCHES[@]}" > "${APD_OUTPUT}" ; APD_ERRCODE="$?"
+		
+		if [[ "${APD_ERRCODE}" -gt 0 ]] ; then
+		
+			echo "[${SCRIPT}] '${_CMDLINE[*]:2}' matches multiple plugins." 1>&2
+			cat "${APD_OUTPUT}" 1>&2
+			
+		elif [[ "${APD_ERRCODE}" -gt 0 ]] ; then
+
+			EXITCODE="${APD_ERRCODE}"
+			
+		else
+		
+			cat "${APD_OUTPUT}"
+			
+		fi
+		
+		rm "${APD_OUTPUT}"
+		EXITCODE="${APD_ERRCODE}"
+		;;
+	
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}
