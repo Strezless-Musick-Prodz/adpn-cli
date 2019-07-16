@@ -314,22 +314,9 @@ if __name__ == '__main__':
 	"output": "text/plain", "parameters": "null"
 	}, configfile=configjson, settingsgroup=[ "plugin", "daemon" ]).parse()
 	
-#if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
-#	./adpn-json-to-switches.py $1 >> "${CMDLINETXT}"
-#	shift
-#	
-#	cat "${CMDLINETXT}" | while IFS="" read -r SWITCH ; do
-#		_ARGV+=("${SWITCH}")
-#	done
-#fi
-
-#SWITCHFILES+=(${CMDLINETXT})
-
 #			*)
 #				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
 #				;;
-#		esac
-#		
 
 script = ADPNPluginDetailsScript(scriptname, scriptdir, sys.argv, switches)
 if switches.get('help') :
@@ -340,18 +327,3 @@ else :
 	script.execute()
 
 script.exit()
-
-##########################################################################################
-### ERRORS: List any errors reported by subsidiary scripts ###############################
-##########################################################################################
-
-#if [ ! -z "${ERROR_ON}" ] ; then
-#	EXITCODE=1
-#	
-#	echo ""
-#	echo "INGEST TEST ERRORS:"
-#	echo "-------------------"
-#	for mod in ${ERROR_ON} ; do
-#		echo "Failed: ${mod}"
-#	done
-#fi

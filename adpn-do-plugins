@@ -34,7 +34,7 @@ Exit codes:
 
 declare -a _ARGV ; _ARGV=("$0")
 declare -a _CMDLINE ; _CMDLINE=("$0")
-declare -A _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
+declare -A _PARAM=()
 
 shopt -s lastpipe
 
