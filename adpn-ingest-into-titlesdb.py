@@ -282,6 +282,8 @@ USE adpn;
 		print("[%(scr)s] %(msg)s" % {"scr": self.scriptname, "msg": message}, file=sys.stderr)
 		
 	def exit (self, exitcode: int = 0) :
+		"""Terminate the current process with a given Unix-style exit code (0=OK, 1-255=error code)
+		"""
 		sys.exit(exitcode)
 		
 if __name__ == '__main__' :
