@@ -1,11 +1,23 @@
 #!/bin/bash
+#
+# adpn-preserve-into-email: As part of the ingest process, accept some pipelined JSON
+# data from stdin, and then drop it into an e-mail to the network admin.
+#
+# Usage: <INPUT> | adpn-preserve-into-email --subject="<SUBJECT_LINE>" [--to="<EMAIL>"]
+#
+# - Attempts to find an OUTLOOK.EXE, and if found, uses command-line parameters to spawn
+#   a new e-mail with the specified e-mail address, subject line and body.
+#
+# @version 2019.0722
 
 SCRIPTNAME="$(basename $0)"
 SCRIPTDIR="$(dirname $0)"
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/adpnet.json"
 
-# @Orwellophile https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
+# rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
+# example: FOOBAR=$( rawurlencode "${DATA}" )
+# uses code from @Orwellophile at https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
 rawurlencode() {
   local string="${1}"
   local strlen=${#string}

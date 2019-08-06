@@ -31,10 +31,11 @@ To use the adpn suite of utility scripts, you need:
   * python3-socks (socks): `sudo apt install python3-socks`
   * mysqlclient (Python 3 MySQLdb): `sudo pip install mysqlclient`
   
-[bash]: https://www.gnu.org/software/bash/
+[GNU bash]: https://www.gnu.org/software/bash/
 [GNU/Linux]: https://en.wikipedia.org/wiki/Linux
 [Cygwin]: https://cygwin.com/
 [Terminal.app]: https://en.wikipedia.org/wiki/Terminal_(macOS)
+[Python 3]: https://www.python.org/
 
 adpn-ingest-test
 ================
