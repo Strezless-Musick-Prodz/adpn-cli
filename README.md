@@ -40,7 +40,7 @@ To use the adpn suite of utility scripts, you need:
 [unzip]: https://linux.die.net/man/1/unzip
 [curl]: https://linux.die.net/man/1/curl
 [pip]: https://pypi.org/project/pip/
-[python-bs4]: https://pypi.org/project/beautifulsoup4/
+[python3-bs4]: https://pypi.org/project/beautifulsoup4/
 [mysqlclient]: https://pypi.org/project/mysqlclient/
 
 adpn-ingest-test
