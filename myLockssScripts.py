@@ -13,6 +13,10 @@ import subprocess
 from subprocess import PIPE
 
 class myPyPipeline :
+	"""Given a sequence of shell processes, pipe output from one to input for the next, using POSIX pipes.
+	
+	@param iterable pipeline an iterable sequence of lists specifying shell commands with command-line parameters
+	"""
 	def __init__ (self, pipeline) :
 		self.pipeline = pipeline
 	
@@ -41,7 +45,6 @@ class myPyPipeline :
 		_lastproc.stdout.close()
 		
 		return (buf, errbuf, [proc.returncode for proc in processes])
-
 	
 class myPyCommandLine :
 	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.

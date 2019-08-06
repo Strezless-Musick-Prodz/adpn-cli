@@ -5,10 +5,44 @@ inserting the AU into the network titles list.
 
 Main tools:
 
-* adpn-ingest-test: bash script to coordinate tests when staging content into ADPNet
-* adpn-ingest-into-titlesdb.py: Python script to add a staged AU to the titlesdb MySQL database
-* adpn-titlesdb-diff: bash script to test before/after state of the titlesdb XML listing
-	
+* `adpn`: master script, command-line interface to common operations including stage, ingest, and publish
+* `adpn-ingest-test`: bash script to coordinate tests when staging content into ADPNet
+* `adpn-ingest-into-titlesdb.py`: Python script to add a staged AU to the titlesdb MySQL database
+* `adpn-titlesdb-diff`: bash script to test before/after state of the titlesdb XML listing
+
+Requirements and Dependencies
+=============================
+To use the adpn suite of utility scripts, you need:
+
+* A [GNU bash][] command-line and scripting environment. This usually means running either:
+  (1) [GNU/Linux][], (2) the [Cygwin][] command-line environment on Windows, or (3) the
+  [Terminal.app][] terminal emulator on Macs with OS X.
+
+* [Python 3][] scripting language
+
+### GNU command-line tools: ###
+  * [unzip](https://linux.die.net/man/1/unzip): `sudo apt install unzip`
+  * [curl]: `sudo apt install curl`
+  
+### Python 3 utilities and library modules: ###
+
+  * [pip][] (Python package installer): `sudo apt install python3-pip`
+  * [python3-bs4][] (BeautifulSoup): `sudo apt install python3-bs4`
+  * [python3-socks][] (socks): `sudo apt install python3-socks`
+  * [mysqlclient][] (Python 3 MySQLdb): `sudo pip install mysqlclient`
+  
+[GNU bash]: https://www.gnu.org/software/bash/
+[GNU/Linux]: https://en.wikipedia.org/wiki/Linux
+[Cygwin]: https://cygwin.com/
+[Terminal.app]: https://en.wikipedia.org/wiki/Terminal_(macOS)
+[Python 3]: https://www.python.org/
+[unzip]: https://linux.die.net/man/1/unzip
+[curl]: https://linux.die.net/man/1/curl
+[pip]: https://pypi.org/project/pip/
+[python3-bs4]: https://pypi.org/project/beautifulsoup4/
+[python3-socks]: https://pypi.org/project/PySocks/
+[mysqlclient]: https://pypi.org/project/mysqlclient/
+
 adpn-ingest-test
 ================
 	

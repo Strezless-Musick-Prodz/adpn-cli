@@ -1,4 +1,9 @@
 #!/usr/bin/python3
+#
+# Produce a manifest HTML file from a standardized template to be staged along
+# with a LOCKSS Archival Unit (AU).
+#
+# @version 2019.0719
 
 import os
 import sys
