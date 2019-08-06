@@ -37,10 +37,11 @@ Exit codes:
 2-255 = HTTP request failure (usually a curl or wget error code)
 """
 
-SCRIPTDIR=`dirname $0`
-SCRIPT=`basename $0`
+SCRIPTDIR=$(dirname $0)
+SCRIPT=$(basename $0)
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
+JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches ##################################################
@@ -96,14 +97,22 @@ done
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	exit 0
+if [ ! -z "${_PARAM[props-server]}" ] ; then
+	PROPS="${_PARAM[props-server]}"
+else
+	PROPS=$( cat "${JSONCONFFILE}" | adpn-json.py --key=props-server )
 fi
-
-PROPS="${_PARAM[props-server]}"
 XMLDIR="${_PARAM[xmldir]}"
 WGET="${_PARAM[wget]}" # curl, wget, or similar; should print to stdout
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	echo ""
+	echo "props-server: ${PROPS}"
+	echo "xmldir: ${XMLDIR}"
+	echo "curl/wget: ${WGET}"
+	exit 0
+fi
 
 if [[ -z "${_ARGV[1]}" ]] ; then
 	PEER=ALL
