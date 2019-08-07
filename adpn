@@ -54,21 +54,7 @@ done
 
 SWITCHFILES+=(${CMDLINETXT})
 
-cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
-	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
-		KEY="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[3]}"
-		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-			VALUE="$KEY"
-		fi
-		_PARAM[$KEY]="${VALUE}"
-		
-	elif [[ ! -z "${SWITCH}" ]] ; then
-		_ARGV+=("${SWITCH}")
-		
-	fi
-	
-done
+adpn_command_line "${SWITCHFILES[@]}"
 
 rm "${CMDLINETXT}"
 

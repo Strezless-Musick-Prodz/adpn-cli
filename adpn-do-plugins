@@ -7,9 +7,8 @@
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
 SCRIPT=$(basename $SCRIPTPATH)
-PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
-PROPSFILE="${SCRIPTDIR}/adpnet.json"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
@@ -53,21 +52,7 @@ done
 
 SWITCHFILES+=(${CMDLINETXT})
 
-cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
-	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
-		KEY="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[3]}"
-		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-			VALUE="$KEY"
-		fi
-		_PARAM[$KEY]="${VALUE}"
-		
-	elif [[ ! -z "${SWITCH}" ]] ; then
-		_ARGV+=("${SWITCH}")
-		
-	fi
-	
-done
+adpn_command_line "${SWITCHFILES[@]}"
 
 rm "${CMDLINETXT}"
 
