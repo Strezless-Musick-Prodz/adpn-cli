@@ -87,9 +87,9 @@ done
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( adpnparam props-server )
-[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( adpnparam xmldir )
-[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( adpnparam wget )
+[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( adpnprop props-server )
+[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( adpnprop xmldir )
+[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( adpnprop wget )
 
 [[ ! -z "${XMLDIR}" ]] || XMLDIR=~
 [[ ! -z "${WGET}" ]] || WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"

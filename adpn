@@ -184,10 +184,10 @@ case "${CMD}" in
 		SUBCMD="${_ARGV[2]}"
 		case "${SUBCMD}" in
 			"")
-				adpnparam
+				adpnprop
 				;;
 			"get")
-				adpnparam "${_ARGV[3]}"
+				adpnprop "${_ARGV[3]}"
 				EXITCODE=$?
 				;;
 			*)

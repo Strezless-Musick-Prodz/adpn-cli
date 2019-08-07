@@ -57,15 +57,11 @@ rm "${CMDLINETXT}"
 ##########################################################################################
 ### SCRIPT: Get admin e-mail address, subject, and body from config, cmd line or stdin ### ##########################################################################################
 
-if [ ! -z "${_PARAM[to]}" ] ; then
-	ADMIN_EMAIL=$( rawurlencode "${_PARAM[to]}" )
-else
-	ADMIN_EMAIL=$( rawurlencode "$(adpnparam admin-email)" )
-fi
-SUBJECT_TEXT=$( rawurlencode "${_PARAM[subject]}" )
-if [[ -z "${SUBJECT_TEXT}" ]] ; then
-	SUBJECT_TEXT=$( rawurlencode "ADPNet Ingest" )
-fi
+[ ! -z "${_PARAM[to]}" ] && ADMIN_EMAIL="${_PARAM[to]}" || ADMIN_EMAIL=$(adpnprop admin-email)
+[ ! -z "${_PARAM[subject]}" ] && SUBJECT_TEXT="${_PARAM[subject]}" || SUBJECT_TEXT="ADPNet Ingest"
+
+ADMIN_EMAIL=$( rawurlencode "${ADMIN_EMAIL}" )
+SUBJECT_TEXT=$( rawurlencode "${SUBJECT_TEXT}" )
 BODY_TEXT=$( rawurlencode "$( cat "${_ARGV[@]}" )" )
 
 ##########################################################################################
