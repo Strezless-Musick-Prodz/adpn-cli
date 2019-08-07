@@ -48,17 +48,7 @@ JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 ##########################################################################################
 
 declare -a _ARGV ; _ARGV=("$0")
-declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]=~ [wget]="" )
-
-_PARAM[wget]=`which curl`
-if [[ ! -z "${_PARAM[wget]}" ]] ; then
-	_PARAM[wget]="${_PARAM[wget]} --fail --silent"
-else
-	_PARAM[wget]=`which wget`
-	if [[ ! -z "${_PARAM[wget]}" ]] ; then
-		_PARAM[wget]="${_PARAM[wget]} --quiet --output-document=-"
-	fi
-fi
+declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]="" [wget]="" )
 
 shopt -s lastpipe
 
@@ -97,13 +87,14 @@ done
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-if [ ! -z "${_PARAM[props-server]}" ] ; then
-	PROPS="${_PARAM[props-server]}"
-else
-	PROPS=$( cat "${JSONCONFFILE}" | adpn-json.py --key=props-server )
-fi
-XMLDIR="${_PARAM[xmldir]}"
-WGET="${_PARAM[wget]}" # curl, wget, or similar; should print to stdout
+[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( cat "${JSONCONFFILE}" | adpn-json.py --key=props-server )
+[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( cat "${JSONCONFFILE}" | adpn-json.py --key=xmldir )
+[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( cat "${JSONCONFFILE}" | adpn-json.py --key=wget )
+
+[[ ! -z "${XMLDIR}" ]] || XMLDIR=~
+[[ ! -z "${WGET}" ]] || WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
+[[ ! -z "${WGET}" ]] || WGET=$(which wget) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --quiet --output-document=-"
+# curl, wget, or similar; should print to stdout
 
 if [[ ! -z "${_PARAM[help]}" ]] ; then
 	echo "${__DOC__}"
