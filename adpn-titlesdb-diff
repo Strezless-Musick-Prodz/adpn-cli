@@ -43,6 +43,14 @@ PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 
+# adpnparam: retrieve and echo a parameter from the adpnet.json config file
+# example: FOOBAR=$( adpnparam "${KEY}" )
+adpnparam() {
+	local key="${1}"
+	REPLY=$(cat "${JSONCONFFILE}" | adpn-json.py --key="${key}")
+	echo "${REPLY}" 
+}
+
 ##########################################################################################
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
@@ -87,9 +95,9 @@ done
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( cat "${JSONCONFFILE}" | adpn-json.py --key=props-server )
-[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( cat "${JSONCONFFILE}" | adpn-json.py --key=xmldir )
-[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( cat "${JSONCONFFILE}" | adpn-json.py --key=wget )
+[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( adpnparam props-server )
+[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( adpnparam xmldir )
+[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( adpnparam wget )
 
 [[ ! -z "${XMLDIR}" ]] || XMLDIR=~
 [[ ! -z "${WGET}" ]] || WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
