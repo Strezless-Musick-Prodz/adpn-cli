@@ -8,33 +8,13 @@
 # - Attempts to find an OUTLOOK.EXE, and if found, uses command-line parameters to spawn
 #   a new e-mail with the specified e-mail address, subject line and body.
 #
-# @version 2019.0722
+# @version 2019.0807
 
-SCRIPTNAME="$(basename $0)"
-SCRIPTDIR="$(dirname $0)"
-PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/adpnet.json"
+SCRIPTPATH=$(which $0)
+SCRIPTDIR=$(dirname "${SCRIPTPATH}")
+SCRIPTNAME=$(basename "${SCRIPTPATH}")
 
-# rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
-# example: FOOBAR=$( rawurlencode "${DATA}" )
-# uses code from @Orwellophile at https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
-rawurlencode() {
-  local string="${1}"
-  local strlen=${#string}
-  local encoded=""
-  local pos c o
-
-  for (( pos=0 ; pos<strlen ; pos++ )); do
-     c=${string:$pos:1}
-     case "$c" in
-        [-_.~a-zA-Z0-9] ) o="${c}" ;;
-        * )               printf -v o '%%%02x' "'$c"
-     esac
-     encoded+="${o}"
-  done
-  echo "${encoded}"    # You can either set a return variable (FASTER) 
-  REPLY="${encoded}"   #+or echo the result (EASIER)... or both... :p
-}
+source "${SCRIPTDIR}/adpn-define-aliases"
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
@@ -80,7 +60,7 @@ rm "${CMDLINETXT}"
 if [ ! -z "${_PARAM[to]}" ] ; then
 	ADMIN_EMAIL=$( rawurlencode "${_PARAM[to]}" )
 else
-	ADMIN_EMAIL=$( rawurlencode "$(cat ${CONFFILE} | adpn-json.py --key=admin-email)" )
+	ADMIN_EMAIL=$( rawurlencode "$(adpnparam admin-email)" )
 fi
 SUBJECT_TEXT=$( rawurlencode "${_PARAM[subject]}" )
 if [[ -z "${SUBJECT_TEXT}" ]] ; then

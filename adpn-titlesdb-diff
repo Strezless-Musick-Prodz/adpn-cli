@@ -37,19 +37,11 @@ Exit codes:
 2-255 = HTTP request failure (usually a curl or wget error code)
 """
 
-SCRIPTDIR=$(dirname $0)
-SCRIPT=$(basename $0)
-PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
-JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
+SCRIPTPATH=$(which $0)
+SCRIPTDIR=$(dirname "${SCRIPTPATH}")
+SCRIPTNAME=$(basename "${SCRIPTPATH}")
 
-# adpnparam: retrieve and echo a parameter from the adpnet.json config file
-# example: FOOBAR=$( adpnparam "${KEY}" )
-adpnparam() {
-	local key="${1}"
-	REPLY=$(cat "${JSONCONFFILE}" | adpn-json.py --key="${key}")
-	echo "${REPLY}" 
-}
+source "${SCRIPTDIR}/adpn-define-aliases"
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches ##################################################
@@ -130,14 +122,14 @@ fi
 ${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || EXITCODE=$?
 
 if [[ "${EXITCODE}" -gt 0 ]] ; then
-	echo "[${SCRIPT}] HTTP GET (${WGET}) failed, exit code: ${EXITCODE}" 1>&2
+	echo "[${SCRIPTNAME}] HTTP GET (${WGET}) failed, exit code: ${EXITCODE}" 1>&2
 	exit "${EXITCODE}"
 fi
 
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
-		echo "[${SCRIPT}] No difference found on ${PEER} @" `date`
+		echo "[${SCRIPTNAME}] No difference found on ${PEER} @" `date`
 		EXITCODE=1
 	elif [[ "${EXITCODE}" -eq 1 ]] ; then
 		EXITCODE=0
