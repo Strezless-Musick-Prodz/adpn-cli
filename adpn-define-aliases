@@ -28,6 +28,43 @@ adpnprop() {
 	return "${JSONEXIT}"
 }
 
+function adpn_command_line() {
+	shopt -s lastpipe
+	
+	cat "$@" | while IFS="" read -r SWITCH ; do
+
+		if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
+			KEY="${BASH_REMATCH[1]}"
+			VALUE="${BASH_REMATCH[3]}"
+			if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+				VALUE="$KEY"
+			fi
+			_PARAM[$KEY]="${VALUE}"
+			
+		elif [[ ! -z "${SWITCH}" ]] ; then
+			_ARGV+=("${SWITCH}")
+			
+		fi
+		
+	done
+	
+}
+
+function adpn_setting() {
+	local switch="${1}"
+	local prop="${2}"
+	
+	if [[ -z "${prop}" ]] ; then
+		prop="${1}"
+	fi
+	
+	if [[ ! -z "${_PARAM[$switch]}" ]] ; then
+		printf "%s" "${_PARAM[$switch]}"
+	else
+		adpnprop "${prop}"
+	fi
+}
+
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
 # example: FOOBAR=$( rawurlencode "${DATA}" )
 # uses code from @Orwellophile at https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command

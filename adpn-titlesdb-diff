@@ -66,34 +66,23 @@ done
 
 SWITCHFILES+=(${CMDLINETXT})
 
-cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
-
-	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
-		KEY="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[3]}"
-		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-			VALUE="$KEY"
-		fi
-		_PARAM[$KEY]="${VALUE}"
-		
-	elif [[ ! -z "${SWITCH}" ]] ; then
-		_ARGV+=("${SWITCH}")
-		
-	fi
-	
-done
+adpn_command_line "${SWITCHFILES[@]}"
 
 ##########################################################################################
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-[ ! -z "${_PARAM[props-server]}" ] && PROPS="${_PARAM[props-server]}" || PROPS=$( adpnprop props-server )
-[ ! -z "${_PARAM[xmldir]}" ] && XMLDIR="${_PARAM[xmldir]}" || XMLDIR=$( adpnprop xmldir )
-[ ! -z "${_PARAM[wget]}" ] && WGET="${_PARAM[wget]}" || WGET=$( adpnprop wget )
+PROPS=$(adpn_setting props-server)
+XMLDIR=$(adpn_setting xmldir)
+WGET=$(adpn_setting wget)
 
 [[ ! -z "${XMLDIR}" ]] || XMLDIR=~
-[[ ! -z "${WGET}" ]] || WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
-[[ ! -z "${WGET}" ]] || WGET=$(which wget) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --quiet --output-document=-"
+if [[ -z "${WGET}" ]] ; then
+	WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
+fi
+if [[ -z "${WGET}" ]] ; then
+	WGET=$(which wget) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --quiet --output-document=-"
+fi
 # curl, wget, or similar; should print to stdout
 
 if [[ ! -z "${_PARAM[help]}" ]] ; then
