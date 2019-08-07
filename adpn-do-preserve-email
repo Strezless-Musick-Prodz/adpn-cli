@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# adpn-preserve-into-email: As part of the ingest process, accept some pipelined JSON
-# data from stdin, and then drop it into an e-mail to the network admin.
+# adpn-do-preserve-email: As part of the ingest process, accept some pipelined JSON data
+# from stdin, and then drop it into an e-mail to the network admin.
 #
-# Usage: <INPUT> | adpn-preserve-into-email --subject="<SUBJECT_LINE>" [--to="<EMAIL>"]
+# Usage: <INPUT> | adpn-do-preserve-email --subject="<SUBJECT_LINE>" [--to="<EMAIL>"]
 #
 # - Attempts to find an OUTLOOK.EXE, and if found, uses command-line parameters to spawn
 #   a new e-mail with the specified e-mail address, subject line and body.

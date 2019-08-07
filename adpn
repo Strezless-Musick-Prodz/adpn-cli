@@ -2,14 +2,13 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.0716
+# @version 2019.0807
 
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
 SCRIPT=$(basename $SCRIPTPATH)
-PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
-PROPSFILE="${SCRIPTDIR}/adpnet.json"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
@@ -185,13 +184,13 @@ case "${CMD}" in
 		SUBCMD="${_ARGV[2]}"
 		case "${SUBCMD}" in
 			"")
-				cat "${PROPSFILE}" | adpn-json.py
+				adpnparam
 				;;
 			"get")
-				cat "${PROPSFILE}" | adpn-json.py --key="${_ARGV[3]}"
+				adpnparam "${_ARGV[3]}"
 				EXITCODE=$?
 				;;
-			"*")
+			*)
 				echo "[${SCRIPT} ${CMD}] '${SUBCMD}' command not understood." 1>&2
 				EXITCODE=255
 				;;
@@ -251,7 +250,7 @@ case "${CMD}" in
 #
 # Output: a report containing AU data, file size information, plugin parameters
 # and a JSON packet for use by adpn ingest and adpn publish by Config Manager.
-# Displayed to stdout; if adpn-preserve-into-email can find an e-mail client,
+# Displayed to stdout; if adpn-do-preserve-email can find an e-mail client,
 # it is also filled in to an e-mail to the Config Manager.
 #
 # @version 2019.0715
@@ -280,7 +279,7 @@ case "${CMD}" in
 				echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
 				EXITCODE="${AIT_ERRCODE}"
 			else
-				cat "${AIT_OUTPUT}" | adpn-preserve-into-email --subject="ADPNet AU for Ingest: ${_PARAM[au_title]}"
+				cat "${AIT_OUTPUT}" | adpn-do-preserve-email --subject="ADPNet AU for Ingest: ${_PARAM[au_title]}"
 			fi
 			rm "${AIT_OUTPUT}"
 		fi
