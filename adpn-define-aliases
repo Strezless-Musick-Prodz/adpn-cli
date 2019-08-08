@@ -31,8 +31,15 @@ adpnprop() {
 function pluginprop() {
 	local txt="${1}" ; shift
 	local key="${1}" ; shift
+	local regex=""
 	
-	cat "${txt}" | grep -P "^${key}\t" | lockss-plugin-props-print-parameter.py
+	if [[ -z "${key}" ]] ; then
+		regex=".*"
+	else
+		regex="^${key}\t"
+	fi
+	
+	cat "${txt}" | grep -P "${regex}" | lockss-plugin-props-print-parameter.py "$@"
 	return $?
 }
 	

@@ -30,11 +30,6 @@ Usage:
     parameters for the Publisher Plugin, and then allow the option to input parameters
     and perform a test of the accessibility of the start URL and/or manifest page for
     an HTTP GET.
-
-  adpn-ingest-test --plugin-keywords=<KEYWORDS> --plugin-details
-  
-    reports back details about the selected plugin, including required parameters,
-	without requiring you to specify a local or remote AU being staged for ingest.
 	
   Scripted:
   
@@ -185,8 +180,11 @@ cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
 			"jar")
 				JAR="${VALUE}"
 				;;
-			"help"|"plugin-details")
+			"help")
 				ADPN_INGEST_TEST_DISPLAY="${KEY}"
+				;;
+			"batch")
+				_PARAM[$KEY]="${VALUE}"
 				;;
 			"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
 				SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
@@ -224,18 +222,16 @@ fi
 ### USER INPUT: get missing parameters from the user console if not command line #########
 ##########################################################################################
 
-if [[ "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
-	if [[ -z "${_PARAM[au_title]}" ]] ; then
-		read -r -p "Ingest Name/Title: " AU_TITLE
-		_ARGV+=("--au_title=${AU_TITLE}")
-		_PARAM[au_title]="${AU_TITLE}"
-	fi
+if [[ -z "${_PARAM[au_title]}" ]] ; then
+	read -r -p "Ingest Name/Title: " AU_TITLE
+	_ARGV+=("--au_title=${AU_TITLE}")
+	_PARAM[au_title]="${AU_TITLE}"
+fi
 
-	if [[ -z "${_PARAM[local]}" && -z "${_PARAM[remote]}" ]] ; then
-		read -r -p "Local file location: " LOCALPATH
-		_ARGV+=("--local=${LOCALPATH}")
-		_PARAM[local]="${LOCALPATH}"
-	fi
+if [[ -z "${_PARAM[local]}" && -z "${_PARAM[remote]}" ]] ; then
+	read -r -p "Local file location: " LOCALPATH
+	_ARGV+=("--local=${LOCALPATH}")
+	_PARAM[local]="${LOCALPATH}"
 fi
 
 if [[
@@ -305,7 +301,7 @@ else
 		if [ ! -z "${_PARAM[file-size]}" ] ; then
 			FILESIZE_STR="${_PARAM[file-size]}"
 		fi
-		
+
 	elif [ ! -z "${_PARAM[staged]}" ] ; then
 
 		if [ ! -z "${_PARAM[peer]}" ] ; then
@@ -341,7 +337,7 @@ else
 		FILESIZE_STR=$(printf "%s (%s bytes, %d files)\n" "${DU_HUMANREADABLE}" "${DU_BYTES}" "${FIND_FILECOUNT}")
 	fi
 	
-	if [[ ! -z "${_PARAM[au_title]}" && "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
+	if [[ ! -z "${_PARAM[au_title]}" ]] ; then
 		printf "Ingest Title\t%s\n" "${_PARAM[au_title]}" >> ${PLUGINTXT}
 	fi
 	if [[ ! -z "${FILESIZE_STR}" ]] ; then
@@ -359,28 +355,20 @@ else
 	######################################################################################
 
 	lockss-retrieve-jar.py --url="${JAR}" "${SUBARGV_LOCKSSRETRIEVEJAR[@]}" | adpn-plugin-info - --quiet --format=text/tab-separated-values --jar="${JAR}" "${SUBARGV_ADPNPLUGININFO[@]}" >> ${PLUGINTXT}
-	
 	LOCKSSRETRIEVEJAR="$?"
-
-	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
-		echo_header "Plugin Details:" "-"
-	elif [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+	
+	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
 		echo_header "Ingest Information and Parameters:" "-"
 	else
 		echo_header "Ingest Information:" "-"
 	fi
 
-	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
-		cat ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-	else
-		pluginprop "${PLUGINTXT}" "Ingest Title"
-		pluginprop "${PLUGINTXT}" "File Size"
-		pluginprop "${PLUGINTXT}" "Plugin (JAR|Name|Version|ID)"
-		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-			pluginprop "${PLUGINTXT}" "PARAM[(].*[)]:"
-		fi
+	pluginprop "${PLUGINTXT}" "Ingest Title"
+	pluginprop "${PLUGINTXT}" "File Size"
+	pluginprop "${PLUGINTXT}" "Plugin (JAR|Name|Version|ID)"
+	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
+		pluginprop "${PLUGINTXT}" "PARAM[(].*[)]:"
 	fi
-	
 	######################################################################################
 	### adpn-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ######
 	######################################################################################
@@ -402,7 +390,7 @@ else
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
 		echo ""
-		if [[ "${ADPN_INGEST_TEST_DISPLAY}" != "plugin-details" ]] ; then
+		if [[ ! -z "${_PARAM[batch]}" ]] ; then
 			read -n1 -p "Read from console (Y/N)? " PARAMS_YN ; echo ""
 		else
 			PARAMS_YN=N
