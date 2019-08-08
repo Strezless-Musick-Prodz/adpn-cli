@@ -107,13 +107,8 @@ case "${CMD}" in
 			echo "${__DOC__}"
 			EXITCODE=0
 		else 
-			HELPNOTES=$( sed --quiet "/^[#] [@]method ${SCRIPT} ${HELPCMD}/,/^[#] @version/p" ${SCRIPTPATH} )
-			if [ -z "${HELPNOTES}" ] ; then
-				echo "[${SCRIPT} ${CMD}] '${HELPCMD}' help notes not yet implemented." 1>&2
-			else 
-				echo "${HELPNOTES}" | grep "^[#]" | grep -v "^[#] [@]" | sed "s/^[#] *//"
-			fi
-			EXITCODE=255
+			adpn_help_notes "${SCRIPTPATH}" "${HELPCMD}" "${CMD}"
+			EXITCODE=$?
 		fi
 		;;
 		

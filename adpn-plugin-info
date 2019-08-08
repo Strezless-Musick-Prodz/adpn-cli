@@ -3,6 +3,13 @@
 # adpn-plugin-info: Extract and report properties and configuration parameters
 # contained in a LOCKSS Plugin JAR package.
 #
+# This script depends on:
+# - unzip (in order to extract the MANIFEST.MF and plugin XML file)
+# - jar-manifest-property.py to parse the MANIFEST.MF file of the JAR package (in order to find and extract the plugin XML file)
+# - lockss-plugin-props.py to parse and report data from the LOCKSS Plugin XML file
+#
+# @package adpn-plugin-info
+#
 # Usage: adpn-plugin-info [--help|<JARFILE>] [--format=<MIME>] [--quiet] [--<KEY>=<VALUE> ...]
 #
 # Key plugin properties, each required parameter, and each plugin property dependent on
@@ -18,10 +25,10 @@
 #	--base_url=http://archives.alabama.gov/Lockss/ 	will set the parameter named 'base_url' to the value 'http://archives.alabama.gov/Lockss/'
 #	--subdirectory=NARA_documents 					will set the parameter named 'subdirectory' to the value 'NARA_documents'
 #
-# This script depends on:
-# - unzip (in order to extract the MANIFEST.MF and plugin XML file)
-# - jar-manifest-property.py to parse the MANIFEST.MF file of the JAR package (in order to find and extract the plugin XML file)
-# - lockss-plugin-props.py to parse and report data from the LOCKSS Plugin XML file
+# Exit codes:
+# 0=successfully parsed plugin JAR and applied all required parameters
+# 1=failed to parse plugin JAR
+# 2=successfully parsed plugin JAR, but not all required parameters provided
 #
 # @version 2019.0523
 
@@ -66,19 +73,8 @@ fi
 ##########################################################################################
 
 if [[ "$1" =~ ^--help$ ]] ; then
-	echo "Usage: ${SCRIPT} <JARFILE> [parameters...]"
-	echo
-	echo "Output Parameters:"
-	echo "--format=<MIME>  supported values: text/plain, text/tab-separated-values, text/html"
-	echo "--quiet          quiet mode, don't add section headers to text/plain or text/html output"
-	echo
-	echo "Configuration Parameters for the plugin can be filled in using switches"
-	echo "of the format --<KEY>=<VALUE>"
-	echo
-	echo "For example:"
-	echo "--base_url=http://archives.alabama.gov/Lockss/ will set the parameter named 'base_url' to the value 'http://archives.alabama.gov/Lockss/'"
-	echo "--subdirectory=NARA_documents will set the parameter named 'subdirectory' to the value 'NARA_documents'"
-	exit 0
+	adpn_help_notes "${SCRIPTPATH}"
+	exit $?
 fi
 
 ##########################################################################################

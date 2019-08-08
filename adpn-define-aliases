@@ -65,6 +65,32 @@ function adpn_command_line() {
 	
 }
 
+function adpn_help_notes () {
+	local scriptpath="${1}" ; shift
+	local method="${1}" ; shift
+	local context="${1}" ; shift
+
+	local package=$(basename "${scriptpath}")
+	local directive="[@]package ${package}"
+	local HELPNOTES=""
+	
+	if [[ ! -z "${method}" ]] ; then
+		directive="[@]method ${package} ${method}"
+	fi
+	
+	HELPNOTES=$( sed --quiet "/^[#] ${directive}/,/^[#] @version/p" ${scriptpath} )
+	
+	if [ -z "${HELPNOTES}" ] ; then
+		echo "[${package} ${context}] '${method}' help notes not yet implemented." 1>&2
+		EXITCODE=255
+	else 
+		echo "${HELPNOTES}" | grep "^[#]" | grep -v "^[#] [@]" | sed "s/^[#] *//"
+		EXITCODE=0
+	fi
+	
+	return "${EXITCODE}"
+}
+
 function adpn_setting() {
 	local switch="${1}"
 	local prop="${2}"
