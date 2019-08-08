@@ -373,11 +373,11 @@ else
 	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
 		cat ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 	else
-		grep -P '^Ingest Title' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-		grep -P '^File Size' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
-		grep -P '^Plugin (JAR|Name|Version|ID)' ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+		pluginprop "${PLUGINTXT}" "Ingest Title"
+		pluginprop "${PLUGINTXT}" "File Size"
+		pluginprop "${PLUGINTXT}" "Plugin (JAR|Name|Version|ID)"
 		if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-			grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
+			pluginprop "${PLUGINTXT}" "PARAM[(].*[)]:"
 		fi
 	fi
 	

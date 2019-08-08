@@ -28,6 +28,14 @@ adpnprop() {
 	return "${JSONEXIT}"
 }
 
+function pluginprop() {
+	local txt="${1}" ; shift
+	local key="${1}" ; shift
+	
+	cat "${txt}" | grep -P "^${key}\t" | lockss-plugin-props-print-parameter.py
+	return $?
+}
+	
 function adpn_command_line() {
 	shopt -s lastpipe
 	
