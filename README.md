@@ -10,6 +10,13 @@ Main tools:
 * `adpn-ingest-into-titlesdb.py`: Python script to add a staged AU to the titlesdb MySQL database
 * `adpn-titlesdb-diff`: bash script to test before/after state of the titlesdb XML listing
 
+Development started in May 2019 by Charles Johnson, Collections Archivist,
+Alabama Department of Archives and History (<charlesw.johnson@archives.alabama.gov>).
+
+All the original code in here is hereby released into the public domain. Any code copied
+or derived from other public sources is noted in comments, and is governed by the
+licensing terms preferred by the authors of the original code. (CJ, 2019/05/23)
+
 Requirements and Dependencies
 =============================
 To use the adpn suite of utility scripts, you need:
@@ -86,13 +93,6 @@ adpn-ingest-test
 		[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<ID>]
 		[--au_title=<TITLE>] [--local=<PATH>|--remote|--help]
 		[--<KEY>=<FIELD> ...]
-
-Development started in May 2019 by Charles Johnson, Collections Archivist,
-Alabama Department of Archives and History (<charlesw.johnson@archives.alabama.gov>).
-
-All the original code in here is hereby released into the public domain. Any code copied
-or derived from other public sources is noted in comments, and is governed by the
-licensing terms preferred by the authors of the original code. (CJ, 2019/05/23)
 
 On the publisher's side, to get data needed for the content to ingest:
 ----------------------------------------------------------------------
