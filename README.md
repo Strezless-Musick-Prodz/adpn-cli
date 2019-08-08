@@ -43,13 +43,48 @@ To use the adpn suite of utility scripts, you need:
 [python3-socks]: https://pypi.org/project/PySocks/
 [mysqlclient]: https://pypi.org/project/mysqlclient/
 
+adpn
+====
+
+adpn plugins
+------------
+List available plugins or provide details on a given plugin and its required parameters.
+
+Set up your LOCKSS Daemon information in `adpnet.json` or provide it on the command line
+using --daemon=<HOST> --user=<USER> --proxy=<PROXYHOST> --port=<PROXYPORT> etc.
+
+adpn plugins list
+-----------------
+To list available plugins:
+
+	./adpn plugins list --plugin-keywords="Auburn University"
+
+gets you a list of all plugins whose names contain the keywords "Auburn" and "University"
+
+	./adpn plugins list --plugin-regex=".*Directory.*"
+
+gets you a list of all plugins whose names match the regex ".*Directory.*"
+
+adpn plugins details
+--------------------
+To output detailed information about a selected plugin:
+
+	./adpn plugins details --jar="http://configuration.adpn.org/overhead/takeover/plugins/AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin.jar"
+	./adpn plugins details --plugin-id=" gov.alabama.archives.adpn.directory.AlabamaDepartmentOfArchivesAndHistoryDirectoryPlugin"
+	
+If a wildcard match (`--plugin-keywords="..."` or `--plugin-regex="..."`) matches exactly
+one plugin, you can also use the wildcard:
+
+	./adpn plugins details --plugin-keywords="Department Directory"
+	./adpn plugins details --plugin-regex="Auburn.*Directory.*"
+
 adpn-ingest-test
 ================
 	
 	Usage: ./adpn-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
 		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--tunnel=<TUNNELHOST>]
 		[--plugin=<NAME>|--plugin-regex=<PATTERN>|--plugin-keywords=<WORDS>|--plugin-id=<ID>]
-		[--au_title=<TITLE>] [--local=<PATH>|--remote|--plugin-details|--help]
+		[--au_title=<TITLE>] [--local=<PATH>|--remote|--help]
 		[--<KEY>=<FIELD> ...]
 
 Development started in May 2019 by Charles Johnson, Collections Archivist,
@@ -58,19 +93,6 @@ Alabama Department of Archives and History (<charlesw.johnson@archives.alabama.g
 All the original code in here is hereby released into the public domain. Any code copied
 or derived from other public sources is noted in comments, and is governed by the
 licensing terms preferred by the authors of the original code. (CJ, 2019/05/23)
-
-To get basic information about a given plugin:
-----------------------------------------------
-Set up your LOCKSS Daemon information in the adpn-ingest-test.defaults.conf file
-(described below) or provide it on the command line using --daemon=<HOST> --user=<USER>
---proxy=<PROXYHOST> --port=<PROXYPORT> etc.
-
-	./adpn-ingest-test --plugin-details --plugin-keywords="Auburn University"
-
-gets you a list of all plugins whose names contain the keywords "Auburn" and "University"
-
-	./adpn-ingest-test --plugin-details --plugin-regex=".*Directory.*"
-
 
 On the publisher's side, to get data needed for the content to ingest:
 ----------------------------------------------------------------------
