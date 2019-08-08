@@ -92,10 +92,8 @@ Usage:
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname ${SCRIPTPATH})
 SCRIPT=$(basename ${SCRIPTPATH})
-PATH=${SCRIPTDIR}:${PATH}
-CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 
-PLUGINTXT=$(mktemp)
+source "${SCRIPTDIR}/adpn-define-aliases"
 
 declare -a _ARGV ; _ARGV=($0)
 declare -A _PARAM ; _PARAM=()
@@ -133,7 +131,6 @@ for CMD in "${!DEPENDENCIES[@]}" ; do
 done
 
 if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
-	rm "${PLUGINTXT}"
 	exit 255
 fi
 
@@ -157,7 +154,6 @@ if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
 	adpn-json-to-switches.py $1 >> "${CMDLINETXT}" ; AJTS_ERRCODE="$?"
 	if [[ "${AJTS_ERRCODE}" -eq 255 ]] ; then
 		echo "[${SCRIPT}] Aborted by user keyboard break (Ctrl-C)." 1>&2
-		rm "${PLUGINTXT}" "${CMDLINETXT}"
 		exit 255
 	fi
 	shift
@@ -221,7 +217,6 @@ rm "${CMDLINETXT}"
 
 if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "help" ]] ; then
 	echo "${__doc__}"
-	rm "${PLUGINTXT}"
 	exit
 fi
 
@@ -277,6 +272,8 @@ fi
 ### lockss-plugin-url.py: Retrieve URL of the Plugin JAR package. ########################
 ##########################################################################################
 
+PLUGINTXT=$(mktemp)
+
 NONUNIQUE_URL=0
 if [[ -z "${JAR}" ]] ; then
 	JAR=`lockss-plugin-url.py "${SUBARGV_LOCKSSPLUGINURL[@]}"`
@@ -291,9 +288,7 @@ if [[ -z "${JAR}" ]] ; then
 elif [[ "${NONUNIQUE_URL}" -eq 2 ]] ; then
 
 	EXITCODE=2
-	echo ""
-	echo "MULTIPLE MATCHING PLUGINS:"
-	echo "=========================="
+	echo_header "Multiple Matching Plugins:" "="
 	echo "${JAR}"
 	
 else
@@ -367,16 +362,12 @@ else
 	
 	LOCKSSRETRIEVEJAR="$?"
 
-	echo ""
 	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
-		echo "PLUGIN DETAILS:"
-		echo "---------------"
+		echo_header "Plugin Details:" "-"
 	elif [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
-		echo "INGEST INFORMATION AND PARAMETERS:"
-		echo "----------------------------------"
-	else 
-		echo "INGEST INFORMATION:"
-		echo "-------------------"
+		echo_header "Ingest Information and Parameters:" "-"
+	else
+		echo_header "Ingest Information:" "-"
 	fi
 
 	if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "plugin-details" ]] ; then
@@ -399,9 +390,7 @@ else
 		echo -n "JSON PACKET:	"
 		cat ${PLUGINTXT} | lockss-plugin-props-print-parameter.py --output=application/json
 		
-		echo ""
-		echo "URL RETRIEVAL TESTS:"
-		echo "--------------------"
+		echo_header "URL Retrieval Tests:" "-"
 		( cat ${PLUGINTXT} | grep -P '^au_start_url\t' | adpn-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_start_url"
 		( cat ${PLUGINTXT} | grep -P '^au_manifest\t' | adpn-ingest-test-url-ok.py "${SUBARGV_TESTURLOK[@]}" ) || ERROR_ON="${ERROR_ON} au_manifest"		
 		
@@ -409,9 +398,7 @@ else
 	
 		EXITCODE=2		
 	
-		echo ""
-		echo "REQUIRED PARAMETERS:"
-		echo "--------------------"
+		echo_header "Required Parameters:" "-"
 		grep -P "^PARAM[(].*[)]:\t" ${PLUGINTXT} | lockss-plugin-props-print-parameter.py
 		
 		echo ""
@@ -459,9 +446,7 @@ fi
 if [ ! -z "${ERROR_ON}" ] ; then
 	EXITCODE=1
 	
-	echo ""
-	echo "INGEST TEST ERRORS:"
-	echo "-------------------"
+	echo_header "Ingest Test Errors:" "-"
 	for mod in ${ERROR_ON} ; do
 		echo "Failed: ${mod}"
 	done
