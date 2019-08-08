@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.0807
+# @version 2019.0808
 
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
@@ -87,6 +87,12 @@ case "${CMD}" in
 		;;
 	
 	"version")
+# @method adpn version
+# Displays current version of the adpn script.
+#
+# Usage: adpn version
+#
+# @version 2019.0808
 		VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
 		echo "${SCRIPT} version ${VERSION}"
 		EXITCODE=0

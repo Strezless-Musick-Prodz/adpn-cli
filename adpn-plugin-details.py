@@ -293,9 +293,11 @@ Usage:
 
 			(buf, errbuf, code) = myPyPipeline([self.pLockssRetrieveJar, self.pADPNPluginInfo]).siphon()
 			
-			if code[1] == 0 :
+			if code[1] == 0 or code[1] == 2 : # 0=ok, 2=ok but parameters required
 				self.display_details(buf)
-			self.exitcode = 2 if code[1]==1 else code[1]
+				self.exitcode = 0
+			else : # 1=failure to parse plugin JAR/XML; 3...255=???
+				self.exitcode = 2 if code[1]==1 else code[1]
 			
 	def exit (self) :
 		sys.exit(self.exitcode)
