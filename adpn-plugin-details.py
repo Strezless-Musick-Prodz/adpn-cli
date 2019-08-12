@@ -3,17 +3,15 @@
 # adpn-plugin-details.py: List or detail LOCKSS Publisher Plugins from a LOCKSS daemon,
 # optionally providing details about required parameters.
 #
-# Switches can be provided on the command line, or interactively on the console at input
-# prompts. You can set default values for commonly-repeated switches (for example, if your
-# LOCKSS daemon is always at the same location, you won't need to re-enter that location
-# every time you run the script) by creating a plaintext file called:
+# Switches can be provided on the command line, or using a JSON properties file called:
 #
-# 		./adpn-ingest-test.defaults.conf
+# 		./adpnet.json
 #
-# where the conf file is located in the same directory as the adpn-ingest-test script.
-# The file should be a text/plain file, with one switch on each line of the file. If the
-# same switch is provided on the command line, the value on the command line overrides the
-# value provided in the defaults.conf file.
+# where the properties file is located in the same directory as the adpn-plugin-details.py
+# script. The file should be an application/json hash table, with each entry in the table
+# providing the name of a switch in the key, and the value for the switch in the value.
+# If the same switches are provided on the command line, the value on the command line
+# overrides the value provided in the adpnet.json file.
 #
 # @version 2019.0625
 
@@ -24,17 +22,6 @@ import subprocess
 import myLockssScripts
 from getpass import getpass
 from myLockssScripts import myPyCommandLine, myPyPipeline
-
-##########################################################################################
-### CONFIGURATION: Set up some constants #################################################
-##########################################################################################
-
-#SCRIPTDIR=`dirname $0`
-#SCRIPT=`basename $0`
-#PATH=${SCRIPTDIR}:${PATH}
-#CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
-#
-#PLUGINTXT=`mktemp`
 
 ##########################################################################################
 ### DEPENDENCIES: check for required command-line tools and Python scripts ###############
