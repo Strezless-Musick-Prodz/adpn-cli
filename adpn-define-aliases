@@ -42,7 +42,8 @@ function pluginprop() {
 	cat "${txt}" | grep -P "${regex}" | lockss-plugin-props-print-parameter.py "$@"
 	return $?
 }
-	
+
+declare -A _LINESWITCH=()
 function adpn_command_line() {
 	shopt -s lastpipe
 	
@@ -55,7 +56,8 @@ function adpn_command_line() {
 				VALUE="$KEY"
 			fi
 			_PARAM[$KEY]="${VALUE}"
-			
+	    		_LINESWITCH[$KEY]="${SWITCH}"
+
 		elif [[ ! -z "${SWITCH}" ]] ; then
 			_ARGV+=("${SWITCH}")
 			

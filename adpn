@@ -345,7 +345,8 @@ case "${CMD}" in
 				INGEST_DRY_RUN="--dry-run"
 			fi
 			
-			adpn-titlesdb-diff --before "${INGEST_TO}"
+			V="${_LINESWITCH[verbose]}"
+			adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
 
 			AIIT_OUTPUT="${_PARAM[sqldump]}"
 			if [[ -z "${AIIT_OUTPUT}" ]] ; then
@@ -358,8 +359,8 @@ case "${CMD}" in
 				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
 				EXITCODE="${AIIT_ERRCODE}"
 			else			
-				adpn-titlesdb-diff --after "${INGEST_TO}" ; ATD_ERRCODE="$?"
-				if [[ "${ATD_ERRCODE}" -gt 0 ]] ; then
+				adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; ATD_ERRCODE="$?"
+				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${INGEST_DRY_RUN}"  ]] ; then
 					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
 					EXITCODE="${ATD_ERRCODE}"
 				fi
