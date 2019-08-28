@@ -20,6 +20,7 @@ __DOC__="""
 Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]
 
   --help              	Display these usage notes
+  --verbose=<LEVEL>
   --props-server=<URL> 	URL for ADPNet config/props server
                       	  e.g. http://configuration.adpn.org/titlelist/
   --xmldir=<DIR>      	file system path for before/after snapshots
@@ -76,9 +77,14 @@ PROPS=$(adpn_setting props-server)
 XMLDIR=$(adpn_setting xmldir)
 WGET=$(adpn_setting wget)
 
+[[ -z "${_PARAM[verbose]}" ]] && V=0 || V="${_PARAM[verbose]}"
+[[ "${V}" =~ ^[0-9]+$ ]] && V="${V}" || V=1
+
 [[ ! -z "${XMLDIR}" ]] || XMLDIR=~
 if [[ -z "${WGET}" ]] ; then
 	WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
+	[[ $V -ge 1 ]] && HEADS=$(mktemp) || HEADS=""
+	[[ -n "${HEADS}" ]] && WGET="${WGET} --dump-header ${HEADS}"
 fi
 if [[ -z "${WGET}" ]] ; then
 	WGET=$(which wget) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --quiet --output-document=-"
@@ -91,6 +97,7 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	echo "props-server: ${PROPS}"
 	echo "xmldir: ${XMLDIR}"
 	echo "curl/wget: ${WGET}"
+	[[ -n "${HEADS}" ]] && rm "${HEADS}"
 	exit 0
 fi
 
@@ -105,16 +112,23 @@ NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
 
 EXITCODE=0
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
+    [[ $V -ge 1 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${OLDXML}' || EXITCODE=\$?" >&2
 	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || EXITCODE=$?
+	[[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
+	[[ -n "${HEADS}" ]] && rm "${HEADS}"
 fi
 
+[[ $V -ge 1 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${NEWXML}' || EXITCODE=\$?" >&2
 ${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || EXITCODE=$?
+[[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
+[[ -n "${HEADS}" ]] && rm "${HEADS}"
 
 if [[ "${EXITCODE}" -gt 0 ]] ; then
 	echo "[${SCRIPTNAME}] HTTP GET (${WGET}) failed, exit code: ${EXITCODE}" 1>&2
 	exit "${EXITCODE}"
 fi
 
+[[ $V -ge 1 ]] && echo "diff -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
