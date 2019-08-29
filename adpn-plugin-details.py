@@ -15,9 +15,9 @@
 #
 # @version 2019.0625
 
-import os
-import sys
+import os, sys
 import json
+import shutil
 import subprocess
 import myLockssScripts
 from getpass import getpass
@@ -27,28 +27,9 @@ from myLockssScripts import myPyCommandLine, myPyPipeline
 ### DEPENDENCIES: check for required command-line tools and Python scripts ###############
 ##########################################################################################
 #
-#declare -A DEPENDENCIES ; DEPENDENCIES=(
-#	[mktemp]="command-line %s tool"
-#	[grep]="command-line %s tool"
-#	[xargs]="command-line %s tool"
-#	[du]="command-line %s tool"
-#	[find]="command-line %s tool"
-#	[adpn-plugin-info]="%s Bash script"
-#	[lockss-plugin-url.py]="%s Python script"
-#	[lockss-retrieve-jar.py]="%s Python script"
-#	[lockss-plugin-props.py]="%s Python script"
-#	[lockss-plugin-props-print-parameter.py]="%s Python script"
-#	[adpn-ingest-test-url-ok.py]="%s Python script"
-#)
-#
+##
 #DEPENDENCY_FAILURE=""
 #for CMD in "${!DEPENDENCIES[@]}" ; do
-#	DESC=$(printf "${DEPENDENCIES[$CMD]}" "${CMD}")
-#	if [[ -z $(which ${CMD}) ]] ; then
-#		echo 1>&2
-#		echo Dependency Failure: ${CMD}. This script requires the ${DESC}. 1>&2
-#		DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+${CMD}"
-#	fi
 #done
 #
 #if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
@@ -95,6 +76,12 @@ Usage:
 		self.col0 = "all"
 		os.environ["PATH"] = ":".join( [ self.scriptdir, os.environ["PATH"] ] )
 
+		self.shell_dependencies = {
+			"adpn-plugin-info": "%s Bash script",
+			"lockss-plugin-url.py": "%s Python script",
+			"lockss-retrieve-jar.py": "%s Python script",
+		}
+		
 	def has_at_least_one (self, candidates) :
 		has = lambda key: self.switches.get(key) is not None
 		got = [ has(key) for key in candidates ]
@@ -258,8 +245,27 @@ Usage:
 	
 	def display_error (self, message) :
 		print("[%(scriptname)s] %(message)s" % {"scriptname": self.scriptname, "message": message}, file=sys.stderr)
+	
+	def do_check_dependencies (self) :
+		dependency_failure = []
+		for tool in self.shell_dependencies.keys() :
+			desc = self.shell_dependencies[tool] % [tool]
+			if not shutil.which(tool) :
+				print("", file=sys.stderr)
+				print(
+					"[%(cmd)s] Dependency Failure: %(tool)s. This tool requires the %(desc)s"
+					% {"cmd": self.scriptname, "tool": tool, "desc": desc},
+					file=sys.stderr
+				)
+				dependency_failure.append(tool)
 		
+		if len(dependency_failure) > 0 :
+			self.exitcode = 255
+			self.exit()
+
 	def execute (self) :
+		self.do_check_dependencies()
+		
 		jars = self.get_jars()
 		if len(jars) == 0 :
 			self.exitcode = 2
