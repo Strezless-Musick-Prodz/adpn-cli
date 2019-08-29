@@ -44,11 +44,12 @@ function pluginprop() {
 }
 
 declare -A _LINESWITCH=()
+
 function adpn_command_line() {
 	shopt -s lastpipe
 	
 	cat "$@" | while IFS="" read -r SWITCH ; do
-
+		
 		if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
 			KEY="${BASH_REMATCH[1]}"
 			VALUE="${BASH_REMATCH[3]}"
@@ -56,7 +57,7 @@ function adpn_command_line() {
 				VALUE="$KEY"
 			fi
 			_PARAM[$KEY]="${VALUE}"
-	    		_LINESWITCH[$KEY]="${SWITCH}"
+			_LINESWITCH[$KEY]="${SWITCH}"
 
 		elif [[ ! -z "${SWITCH}" ]] ; then
 			_ARGV+=("${SWITCH}")

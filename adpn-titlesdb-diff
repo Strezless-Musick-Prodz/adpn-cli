@@ -14,13 +14,13 @@
 # file named `adpn-titlesdb-diff.defaults.conf`, with one switch per line, in the same
 # directory as the script.
 #
-# @version 2019.0624
+# @version 2019.0829
 
 __DOC__="""
 Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]
 
   --help              	Display these usage notes
-  --verbose=<LEVEL>
+  --verbose[=<LEVEL>]  	Display diagnostic messages. (Higher levels = more messages.)
   --props-server=<URL> 	URL for ADPNet config/props server
                       	  e.g. http://configuration.adpn.org/titlelist/
   --xmldir=<DIR>      	file system path for before/after snapshots
@@ -47,6 +47,8 @@ source "${SCRIPTDIR}/adpn-define-aliases"
 ##########################################################################################
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
+
+_CMDLINE="$0 $*"
 
 declare -a _ARGV ; _ARGV=("$0")
 declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]="" [wget]="" )
@@ -80,10 +82,12 @@ WGET=$(adpn_setting wget)
 [[ -z "${_PARAM[verbose]}" ]] && V=0 || V="${_PARAM[verbose]}"
 [[ "${V}" =~ ^[0-9]+$ ]] && V="${V}" || V=1
 
+[[ $V -ge 1 ]] && echo "[${SCRIPTNAME}] command line: ${_CMDLINE}" >&2
+
 [[ ! -z "${XMLDIR}" ]] || XMLDIR=~
 if [[ -z "${WGET}" ]] ; then
 	WGET=$(which curl) && [[ ! -z "${WGET}" ]] && WGET="${WGET} --fail --silent"
-	[[ $V -ge 1 ]] && HEADS=$(mktemp) || HEADS=""
+	[[ $V -ge 2 ]] && HEADS=$(mktemp) || HEADS=""
 	[[ -n "${HEADS}" ]] && WGET="${WGET} --dump-header ${HEADS}"
 fi
 if [[ -z "${WGET}" ]] ; then
@@ -112,13 +116,13 @@ NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
 
 EXITCODE=0
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
-    [[ $V -ge 1 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${OLDXML}' || EXITCODE=\$?" >&2
+    [[ $V -ge 2 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${OLDXML}' || EXITCODE=\$?" >&2
 	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || EXITCODE=$?
 	[[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
 	[[ -n "${HEADS}" ]] && rm "${HEADS}"
 fi
 
-[[ $V -ge 1 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${NEWXML}' || EXITCODE=\$?" >&2
+[[ $V -ge 2 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${NEWXML}' || EXITCODE=\$?" >&2
 ${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || EXITCODE=$?
 [[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
 [[ -n "${HEADS}" ]] && rm "${HEADS}"
@@ -128,7 +132,7 @@ if [[ "${EXITCODE}" -gt 0 ]] ; then
 	exit "${EXITCODE}"
 fi
 
-[[ $V -ge 1 ]] && echo "diff -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
+[[ $V -ge 2 ]] && echo "diff -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
 diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then

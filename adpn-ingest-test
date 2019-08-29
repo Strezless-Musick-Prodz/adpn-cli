@@ -137,6 +137,7 @@ shopt -s lastpipe
 
 JAR=""
 HELP=""
+_CMDLINE="$0 $*"
 
 declare -a SWITCHFILES ; SWITCHFILES=()
 if [[ -r "${CONFFILE}" ]] ; then
@@ -144,73 +145,76 @@ if [[ -r "${CONFFILE}" ]] ; then
 fi
 
 CMDLINETXT=$(mktemp)
-
-if [[ "$1" == "-" || "$1" =~ [.]json$ ]] ; then
-	adpn-json-to-switches.py $1 >> "${CMDLINETXT}" ; AJTS_ERRCODE="$?"
-	if [[ "${AJTS_ERRCODE}" -eq 255 ]] ; then
-		echo "[${SCRIPT}] Aborted by user keyboard break (Ctrl-C)." 1>&2
-		exit 255
-	fi
-	shift
-	
-	cat "${CMDLINETXT}" | while IFS="" read -r SWITCH ; do
-		_ARGV+=("${SWITCH}")
-	done
-fi
+JSONSWITCHES=$(mktemp)
 
 until [[ "$#" -lt 1 ]] ; do
-	_ARGV+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
 
 SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+[[ -z "${_PARAM[verbose]}" ]] && V=0 || V="${_PARAM[verbose]}"
+[[ "${V}" =~ ^[0-9]+$ ]] && V="${V}" || V=1
+
+[[ "${V}" -ge 1 ]] && echo "[${SCRIPT}] command line: ${_CMDLINE}" >& 2
+
+if [[ "${_ARGV[1]}" == "-" || "${_ARGV[1]}" =~ [.]json$ ]] ; then
+	[[ "${V}" -ge 1 ]] && echo "[${SCRIPT}] reading JSON input from: ${_ARGV[1]}" >& 2
+	adpn-json-to-switches.py "${_ARGV[1]}" >> "${JSONSWITCHES}" ; AJTS_ERRCODE="$?"
+	if [[ "${AJTS_ERRCODE}" -eq 255 ]] ; then
+		echo "[${SCRIPT}] Aborted by user keyboard break (Ctrl-C)." 1>&2
+		exit 255
+	fi
+fi
+
+_ARGV=()
+_PARAM=()
+_LINESWITCH=()
+
+SWITCHFILES=()
+SWITCHFILES+=(${CONFFILE})
+SWITCHFILES+=(${JSONSWITCHES})
+SWITCHFILES+=(${CMDLINETXT})
 ADPN_INGEST_TEST_DISPLAY=ingest
 
-cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
+adpn_command_line "${SWITCHFILES[@]}"
 
-	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
-		KEY="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[3]}"
-		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-			VALUE="${KEY}"
-		fi
-		
-		case "${KEY}" in
-			"jar")
-				JAR="${VALUE}"
-				;;
-			"help")
-				ADPN_INGEST_TEST_DISPLAY="${KEY}"
-				;;
-			"batch")
-				_PARAM[$KEY]="${VALUE}"
-				;;
-			"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
-				SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
-				;;
-			"proxy"|"port"|"tunnel"|"tunnel-port")
-				SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
-				SUBARGV_TESTURLOK[$KEY]="--${KEY}=${VALUE}"
-				;;
-			"au_title"|"local"|"remote"|"staged"|"file-size"|"peer"|"peer-from"|"peer-to")
-				_PARAM[$KEY]="${VALUE}"
-				;;
-			"subdirectory"|"directory")
-				_PARAM[$KEY]="--${KEY}=${VALUE}"
-				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
-				;;
-			*)
-				SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
-				;;
-		esac
-		
-	elif [[ ! -z "${SWITCH}" ]] ; then
-		SUBARGV_ADPNPLUGININFO[$SWITCH]="${SWITCH}"
-	fi
-	
+for KEY in "${!_PARAM[@]}" ; do
+	VALUE="${_PARAM[$KEY]}"
+	case "${KEY}" in
+		"jar")
+			JAR="${VALUE}"
+			;;
+		"help")
+			ADPN_INGEST_TEST_DISPLAY="${KEY}"
+			;;
+		"batch"|"au_title"|"local"|"remote"|"staged"|"file-size"|"peer"|"peer-from"|"peer-to"|"verbose")
+			# NOOP: adpn-ingest-test parameters, not a passthru
+			;;
+		"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
+			SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
+			;;
+		"proxy"|"port"|"tunnel"|"tunnel-port")
+			SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
+			SUBARGV_TESTURLOK[$KEY]="--${KEY}=${VALUE}"
+			;;
+		"subdirectory"|"directory")
+			SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
+			;;
+		*)
+			SUBARGV_ADPNPLUGININFO[$KEY]="--${KEY}=${VALUE}"
+			;;
+	esac
 done
 
+[[ "${V}" -ge 3 ]] && printf "\n[%s] parameters:" "${SCRIPT}" >&2
+[[ "${V}" -ge 3 ]] && printf "\n[%s] %s" "${SCRIPT}" "$(declare -p _ARGV)" >&2
+[[ "${V}" -ge 3 ]] && printf "\n[%s] %s\n\n" "${SCRIPT}" "$(declare -p _PARAM)" >&2
+
+rm "${JSONSWITCHES}"
 rm "${CMDLINETXT}"
 
 if [[ "${ADPN_INGEST_TEST_DISPLAY}" == "help" ]] ; then
@@ -222,13 +226,13 @@ fi
 ### USER INPUT: get missing parameters from the user console if not command line #########
 ##########################################################################################
 
-if [[ -z "${_PARAM[au_title]}" ]] ; then
+if [[ -z "${_PARAM[au_title]}" && -z "${_PARAM[batch]}" ]] ; then
 	read -r -p "Ingest Name/Title: " AU_TITLE
 	_ARGV+=("--au_title=${AU_TITLE}")
 	_PARAM[au_title]="${AU_TITLE}"
 fi
 
-if [[ -z "${_PARAM[local]}" && -z "${_PARAM[remote]}" ]] ; then
+if [[ -z "${_PARAM[local]}" && -z "${_PARAM[remote]}" && -z "${_PARAM[batch]}" ]] ; then
 	read -r -p "Local file location: " LOCALPATH
 	_ARGV+=("--local=${LOCALPATH}")
 	_PARAM[local]="${LOCALPATH}"
@@ -240,6 +244,7 @@ if [[
 	&& -z "${SUBARGV_LOCKSSPLUGINURL[plugin-regex]}" 
 	&& -z "${SUBARGV_LOCKSSPLUGINURL[plugin-keywords]}" 
 	&& -z "${SUBARGV_LOCKSSPLUGINURL[plugin-id]}" 
+	&& -z "${_PARAM[batch]}"
 ]] ; then
 	read -r -p "Publisher Plugin (keywords): " PUBLISHERPLUGIN
 	_ARGV+=("--plugin-keywords=${PUBLISHERPLUGIN}")

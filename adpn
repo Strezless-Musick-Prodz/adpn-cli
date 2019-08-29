@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.0808
+# @version 2019.0829
 
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
@@ -302,13 +302,15 @@ case "${CMD}" in
 #
 # @version 2019.0715
 
+		V="${_LINESWITCH[verbose]}"
+
 		AIT_OUTPUT="$(mktemp)"
 		AIT_INPUT="${_ARGV[2]}"
 		if [[ -z "${AIT_INPUT}" ]] ; then
 			AIT_INPUT="-"
 		fi
 		
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 > "${AIT_OUTPUT}"
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 ${V} > "${AIT_OUTPUT}"
 		AIT_ERRCODE="$?"
 
 		cat "${AIT_OUTPUT}" ; echo
@@ -345,7 +347,6 @@ case "${CMD}" in
 				INGEST_DRY_RUN="--dry-run"
 			fi
 			
-			V="${_LINESWITCH[verbose]}"
 			adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
 
 			AIIT_OUTPUT="${_PARAM[sqldump]}"
