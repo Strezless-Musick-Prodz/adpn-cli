@@ -113,7 +113,7 @@ Written to stdout, one switch per line. For example:
 				% {"script": self.scriptname, "file": e.filename},
 				file=sys.stderr
 			)
-			self.exitcode = 255
+			self.exitcode = 2
 		
 		except PermissionError as e: 
 		
@@ -122,7 +122,7 @@ Written to stdout, one switch per line. For example:
 				% {"script": self.scriptname, "file": e.filename},
 				file=sys.stderr
 			)
-			self.exitcode = 255
+			self.exitcode = 3
 			
 		except IsADirectoryError as e: 
 
@@ -131,7 +131,7 @@ Written to stdout, one switch per line. For example:
 				% {"script": self.scriptname, "file": e.filename},
 				file=sys.stderr
 			)
-			self.exitcode = 255
+			self.exitcode = 4
 
 		except json.decoder.JSONDecodeError as e :
 	
