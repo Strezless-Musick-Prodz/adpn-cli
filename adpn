@@ -286,7 +286,7 @@ case "${CMD}" in
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2019.0715
+# @version 2019.0829
 
 # @method adpn publish
 # Config Manager: accept JSON data specifying a new AU for ingest,
