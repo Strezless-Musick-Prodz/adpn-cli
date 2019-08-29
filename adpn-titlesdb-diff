@@ -132,7 +132,7 @@ if [[ "${EXITCODE}" -gt 0 ]] ; then
 	exit "${EXITCODE}"
 fi
 
-[[ $V -ge 2 ]] && echo "diff -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
+[[ $V -ge 2 ]] && echo "diff --color -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
 diff --color -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
