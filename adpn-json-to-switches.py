@@ -3,7 +3,7 @@
 # adpn-json-to-switches.py: utility script, converts data from a JSON hash table provided
 # on stdin to switches used by adpn-ingest-test and related scripts.
 #
-# @version 2019.0711
+# @version 2019.0829
 
 import sys
 import os.path
@@ -97,6 +97,42 @@ Written to stdout, one switch per line. For example:
 			)
 			self.exitcode = 255
 		
+		except BrokenPipeError as e :
+		
+			print(
+				("[%(script)s] JSON input aborted by broken pipe; no data decoded.")
+				% {"script": self.scriptname},
+				file=sys.stderr
+			)
+			self.exitcode = 255
+			
+		except FileNotFoundError as e: 
+		
+			print(
+				("[%(script)s] JSON input file [%(file)s] not found; no data decoded.")
+				% {"script": self.scriptname, "file": e.filename},
+				file=sys.stderr
+			)
+			self.exitcode = 255
+		
+		except PermissionError as e: 
+		
+			print(
+				("[%(script)s] JSON input file [%(file)s] may not be read (permissions error); no data decoded.")
+				% {"script": self.scriptname, "file": e.filename},
+				file=sys.stderr
+			)
+			self.exitcode = 255
+			
+		except IsADirectoryError as e: 
+
+			print(
+				("[%(script)s] JSON input cannot be read from a directory [%(file)s]; no data decoded.")
+				% {"script": self.scriptname, "file": e.filename},
+				file=sys.stderr
+			)
+			self.exitcode = 255
+
 		except json.decoder.JSONDecodeError as e :
 	
 			print(
