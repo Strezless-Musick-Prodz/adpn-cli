@@ -364,6 +364,8 @@ case "${CMD}" in
 				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${INGEST_DRY_RUN}"  ]] ; then
 					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
 					EXITCODE="${ATD_ERRCODE}"
+				else
+					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit ingested into ${INGEST_FROM} titlesdb." 1>&2
 				fi
 			fi
 		fi

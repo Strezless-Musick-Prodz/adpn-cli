@@ -133,10 +133,10 @@ if [[ "${EXITCODE}" -gt 0 ]] ; then
 fi
 
 [[ $V -ge 2 ]] && echo "diff -u '${OLDXML}' '${NEWXML}' ; EXITCODE=\$?" >&2
-diff -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
+diff --color -u "${OLDXML}" "${NEWXML}" ; EXITCODE=$?
 if [[ -z "${_PARAM[before]}" ]] ; then
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
-		echo "[${SCRIPTNAME}] No difference found on ${PEER} @" `date`
+		echo "[${SCRIPTNAME}] No difference found on ${PEER} @" $(date) >&2
 		EXITCODE=1
 	elif [[ "${EXITCODE}" -eq 1 ]] ; then
 		EXITCODE=0
