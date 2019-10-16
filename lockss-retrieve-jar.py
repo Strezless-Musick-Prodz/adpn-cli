@@ -91,8 +91,14 @@ if __name__ == '__main__':
 			if fail :
 				print("Exit code: " + str(fail), file=sys.stderr)
 				retry = False
-			
+	
+	exitcode = 0
 	if len(errmesg) > 0 :
 		print("[" + script + "] error: " + errmesg, file=sys.stderr)
+		exitcode = 1
+	elif len(blob) == 0 :	
+		print("[" + script + "] error: empty result", file=sys.stderr)
+		exitcode = 255
 	else :
 		sys.stdout.buffer.write(blob)
+	sys.exit(exitcode)
