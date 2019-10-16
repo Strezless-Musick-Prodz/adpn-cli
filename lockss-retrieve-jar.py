@@ -67,7 +67,7 @@ if __name__ == '__main__':
 			if 403 == e.code :
 				errmesg = errmesg + ". Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
 		except urllib.request.URLError as e :
-			errmesg = "URL: <Unrecognized Error>"
+			errmesg = "URL Error: <Unrecognized Error> " + str(e.args) + " " + str(e.__context__)
 			if isinstance(e.reason, str) :
 				errmesg = "URL Error: " + e.reason
 			elif isinstance(e.reason, socks.ProxyConnectionError) :
