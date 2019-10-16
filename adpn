@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.0829
+# @version 2019.1016
 
 SCRIPTPATH=$(which $0)
 SCRIPTDIR=$(dirname $SCRIPTPATH)
