@@ -79,7 +79,7 @@ if __name__ == '__main__':
 					errmesg = errmesg + ". Do you need to set up the proxy connection?"
 					
 		except Exception as e :
-			errmesg = "<Unrecognized Exception> (" + e.__class__.__name__ + ")"
+			errmesg = "<Unrecognized Exception> (" + e.__class__.__name__ + ") " + str(e.args) + " " + str(e.__context__)
 
 		if retry :
 			diag = "[%(script)s] %(errmesg)s. Trying to open SSH tunnel [%(tunnel)s]..." % {"script": script, "errmesg": errmesg, "tunnel": switches['tunnel']}
