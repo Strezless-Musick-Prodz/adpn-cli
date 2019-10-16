@@ -41,6 +41,7 @@ if __name__ == '__main__':
 	script = os.path.basename(script)
 	
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+		"url": "", 
 		"proxy": "", "port": 8080,
 		"tunnel": "", "tunnel-port": 22
 	}).parse()
@@ -52,6 +53,8 @@ if __name__ == '__main__':
 	firstTry = True
 	retry = False
 
+	blob = ""
+	
 	while firstTry or retry :
 		errmesg = ""
 		firstTry = False
