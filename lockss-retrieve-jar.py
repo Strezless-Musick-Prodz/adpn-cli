@@ -64,7 +64,7 @@ if __name__ == '__main__':
 			if 403 == e.code :
 				errmesg = errmesg + ". Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
 		except urllib.request.URLError as e :
-			mesg = "URL: <Unrecognized Error>"
+			errmesg = "URL: <Unrecognized Error>"
 			if isinstance(e.reason, str) :
 				errmesg = "URL Error: " + e.reason
 			elif isinstance(e.reason, socks.ProxyConnectionError) :
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 					errmesg = errmesg + ". Do you need to set up the proxy connection?"
 					
 		except Exception as e :
-			mesg = "<Unrecognized Exception>"
+			errmesg = "<Unrecognized Exception> (" + e.__class__.__name__ + ")"
 
 		if retry :
 			diag = "[%(script)s] %(errmesg)s. Trying to open SSH tunnel [%(tunnel)s]..." % {"script": script, "errmesg": errmesg, "tunnel": switches['tunnel']}
