@@ -2,7 +2,7 @@
 #
 # adpn-define-aliases: some basic subroutines used across many of the adpn suite of scripts
 #
-# @version 2019.0807
+# @version 2019.1016
 
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
@@ -47,8 +47,8 @@ declare -A _LINESWITCH=()
 
 function adpn_command_line() {
 	shopt -s lastpipe
-	
-	cat "$@" | while IFS="" read -r SWITCH ; do
+
+	cat "$@" 2>/dev/null | while IFS="" read -r SWITCH ; do
 		
 		if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
 			KEY="${BASH_REMATCH[1]}"

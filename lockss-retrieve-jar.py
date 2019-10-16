@@ -26,7 +26,7 @@
 # 		If --tunnel is omitted, the host assumes no tunneling
 # 		If --tunnel-port is omitted, it defaults to port 22
 #
-# @version 2019.0614
+# @version 2019.1016
 
 import sys, os.path, re
 import socks, socket
