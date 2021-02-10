@@ -2,11 +2,12 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2019.1016
+# @version 2021.0210
 
-SCRIPTPATH=$(which $0)
-SCRIPTDIR=$(dirname $SCRIPTPATH)
-SCRIPT=$(basename $SCRIPTPATH)
+SCRIPTPATH="$( which "$0" )"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$( dirname "${SCRIPTPATH}" )"
+SCRIPT="$( basename "${SCRIPTPATH}" )"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 
