@@ -122,8 +122,8 @@ Returns exit code 0 on success.
 	def au_name (self, text: str) -> str :
 		return re.sub(r"[^A-Za-z0-9]", "", text)
 	
-    def do_connect_to_db (self) :
- 		self.db = MySQLdb.connect(
+	def do_connect_to_db (self) :
+		self.db = MySQLdb.connect(
 			host=self.switches['mysql-host'],
 			user=self.switches['mysql-user'],
 			passwd=self.switches['mysql-password'],
@@ -230,7 +230,7 @@ USE adpn;
 		return [ row for row in self.cur.fetchall() ]
 		
 	def display (self) :
-        self.do_connect_to_db()
+		self.do_connect_to_db()
 		
 		self.switches['au_id'] = self.get_au_id()
 		print("# au_id:", self.switches['au_id'])
@@ -261,7 +261,7 @@ USE adpn;
 		self.db.close()
 	
 	def display_peers (self) :
-        self.do_connect_to_db()
+		self.do_connect_to_db()
 		
 		peers = self.get_peers()
 		for peer in peers :
@@ -270,23 +270,23 @@ USE adpn;
 			
 		self.db.close()
 
-    def display_preserved_tables (self) :
-        self.do_connect_to_db()
-        
-        # Initial ingests, peer assignments and promotions in titledb touch three (3) tables:
-        #
-        #   au_titlelist
-        #   au_titlelist_params
-        #   adpn_peer_titles
-        #
-        
-        self.cur.execute("SELECT * FROM au_titlelist")
+	def display_preserved_tables (self) :
+		self.do_connect_to_db()
+		
+		# Initial ingests, peer assignments and promotions in titledb touch three (3) tables:
+		#
+		#   au_titlelist
+		#   au_titlelist_params
+		#   adpn_peer_titles
+		#
+		
+		self.cur.execute("SELECT * FROM au_titlelist")
 		au_titlelist = [ row[0] for row in self.cur.fetchall() ]
+		
+		for row in au_titlelist :
+			print("\t".join(row))
 
-        for row in au_titlelist :
-            print("\t".join(row))
-
-        self.db.close()
+		self.db.close()
  
 	def display_usage (self) :
 		print(self.__doc__)
@@ -331,8 +331,8 @@ if __name__ == '__main__' :
 		script.display_usage()
 	elif len(switches['list-peers']) :
 		script.display_peers()
-    elif len(switches['snapshot']) :
-        script.display_preserved_tables()
+	elif len(switches['snapshot']) :
+		script.display_preserved_tables()
 	elif script.data is None :
 		exitcode = 2
 		script.display_error("JSON encoding error. Could not extract key-value pairs from provided data.")
