@@ -91,7 +91,7 @@ Returns exit code 0 on success.
 
 	def wants_json (self) -> bool :
 		noJson = False
-		for switch in ['help', 'list-peers'] :
+		for switch in ['help', 'list-peers', 'snapshot'] :
 			if switch in self.switches :
 				noJson = (noJson or (len(self.switches[switch])>0))
 		return (not noJson)
