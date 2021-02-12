@@ -281,7 +281,7 @@ USE adpn;
 		#
 		
 		self.cur.execute("SELECT * FROM au_titlelist")
-		au_titlelist = [ row[0] for row in self.cur.fetchall() ]
+		au_titlelist = [ row for row in self.cur.fetchall() ]
 		
 		for row in au_titlelist :
 			print("\t".join(row))
