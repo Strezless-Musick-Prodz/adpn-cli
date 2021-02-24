@@ -382,7 +382,7 @@ case "${CMD}" in
 #   adpn rebalance
 #   adpn rebalance destination
 
-	adpn-do-rebalance "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+	adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 	;;
 
 	"plugins")
@@ -396,7 +396,7 @@ case "${CMD}" in
 #
 # @version 2019.0716
 
-		adpn-do-plugins "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		adpn-do-plugins --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 		;;
 	
 	*)

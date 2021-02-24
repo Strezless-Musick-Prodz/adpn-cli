@@ -65,9 +65,17 @@ EXITCODE=0
 V="${_LINESWITCH[verbose]}"
 CMD="${_ARGV[1]}"
 
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+fi
+if [[ -n "${CMD}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+fi
+
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT} version ${VERSION}"
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
 	CMD="version"
 fi
 
@@ -181,8 +189,60 @@ case "${CMD}" in
  		
 		;;
 	
+	"lockdown")
+		CONF_DIR="/cache0/gamma/config"
+		if [[ -n "${_PARAMS[config]}" ]] ; then
+			CONF_DIR="${_PARAMS[config]}"
+		fi
+		
+		if [[ -d "${CONF_DIR}" ]] ; then
+			cd "${CONF_DIR}"
+			if [[ -w "${CONF_DIR}/expert_config.txt" ]] ; then
+				__DISABLER__="""org.lockss.crawler.enabled=false
+org.lockss.poll.v3.enableV3Poller=false
+org.lockss.poll.v3.enableV3Voter=false
+"""
+				CONF_TXT="${CONF_DIR}/expert_config.txt"
+				if [[ -n "${_PARAM[revoke]}" ]] ; then
+					CONF_TMP_TXT=$( mktemp expert_config_XXXXXX --suffix=.txt )
+					FIRST_LINE="$( printf "%s" "${__DISABLER__}" | head -n 1 )"
+					LAST_LINE="$( printf "%s" "${__DISABLER__}" | tail -n 1 )"
+					
+					sed "/^${FIRST_LINE}/,/^${LAST_LINE}/d" "${CONF_TXT}" > "${CONF_TMP_TXT}"
+					if [[ -n "${V}" ]] ; then
+						diff -u "${CONF_TXT}" "${CONF_TMP_TXT}"
+					fi
+					
+					mv ${V} "${CONF_TXT}" "${CONF_TXT}~"
+					mv ${V} "${CONF_TMP_TXT}" "${CONF_TXT}"
+
+				else
+					cp ${V} "${CONF_TXT}" "${CONF_TXT}~"
+					printf "%s" "${__DISABLER__}" >> "${CONF_TXT}"
+					if [[ -n "${V}" ]] ; then
+						diff -u "${CONF_TXT}~" "${CONF_TXT}"
+					fi
+				fi
+				
+			elif [[ ! -f "${CONF_DIR}/expert_config.txt" ]] ; then
+				printf "[%s] Error: LOCKSS expert_config.txt file not found at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+				EXITCODE=255
+
+			else 
+				printf "[%s] Error: cannot edit LOCKSS expert_config.txt file at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+				EXITCODE=255
+			
+			fi
+			
+		else
+			printf "[%s] Error: LOCKSS config directory not found at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+			printf "If you know the correct directory for LOCKSS config, use %s %s --config=[<DIR>]\n" "${SCRIPT}" "${CMD}" 1>&2
+			EXITCODE=255
+		fi		
+		;;
+		
 	"sync")
-		"${SCRIPTPATH}" secure ${V} --context="${CMD}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
+		"${SCRIPTPATH}" secure ${V} --context="${SCRIPT_CMD_NAME}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
 		if [[ "${EXITCODE}" -eq 0 ]] ; then
 			IC=""
 			if [[ -n "${V}" ]] ; then
@@ -195,7 +255,7 @@ case "${CMD}" in
 		;;
 
 	"resettle")
-		"${SCRIPTPATH}" secure ${V} --context="${CMD}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
+		"${SCRIPTPATH}" secure ${V} --context="${SCRIPT_CMD_NAME}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
 		if [[ "${EXITCODE}" -eq 0 ]] ; then
 			sudo mv ${V} "${_PARAM[from]}" "${_PARAM[to]}"
 			EXITCODE=$?
@@ -207,14 +267,14 @@ case "${CMD}" in
 		TO="${_PARAM[to]}"
 		
 		if [[ -n "${_PARAM[context]}" ]] ; then
-			CMD="${_PARAM[context]}"
+			SCRIPT_CMD_NAME="${_PARAM[context]}"
 		fi
 		
 		if [[ -z "${FROM}" ]] ; then
-			printf "[%s %s] REQUIRED: --from=[<SRC>]\n" "${SCRIPT}" "${CMD}" 1>&2
+			printf "[%s] REQUIRED: --from=[<SRC>]\n" "${SCRIPT_CMD_NAME}" 1>&2
 			EXITCODE=255
 		elif [[ -z "${TO}" ]] ; then
-			printf "[%s %s] REQUIRED: --to=[<DEST>]\n" "${SCRIPT}" "${CMD}" 1>&2
+			printf "[%s] REQUIRED: --to=[<DEST>]\n" "${SCRIPT_CMD_NAME}" 1>&2
 			EXITCODE=255
 		else
 			# secure the destination directory's existence and permissions, if necessary
@@ -332,7 +392,7 @@ case "${CMD}" in
 		;;
 		
 	*)
-		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
 		echo "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
