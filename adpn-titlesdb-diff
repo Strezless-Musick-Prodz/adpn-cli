@@ -122,13 +122,14 @@ if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
 	[[ -n "${HEADS}" ]] && rm "${HEADS}"
 fi
 
-[[ $V -ge 2 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${NEWXML}' || EXITCODE=\$?" >&2
-${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${NEWXML}" || EXITCODE=$?
+TDB_URL="${PROPS}index?peer=${PEER}&stype=1&ext=.xml"
+[[ $V -ge 2 ]] && echo "${WGET} '${TDB_URL}' > '${NEWXML}' || EXITCODE=\$?" >&2
+${WGET} "${TDB_URL}" > "${NEWXML}" || EXITCODE=$?
 [[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
 [[ -n "${HEADS}" ]] && rm "${HEADS}"
 
 if [[ "${EXITCODE}" -gt 0 ]] ; then
-	echo "[${SCRIPTNAME}] HTTP GET (${WGET}) failed, exit code: ${EXITCODE}" 1>&2
+	echo "[${SCRIPTNAME}] HTTP GET (${WGET}:${TDB_URL}) failed, exit code: ${EXITCODE}" 1>&2
 	exit "${EXITCODE}"
 fi
 
