@@ -10,9 +10,9 @@
 # Exits with code 0 on success, or non-zero exit code on failure, to allow for pipelining
 # with other ADPN Ingest tools.
 #
-# @version 2019.0624
+# @version 2021.0212
 
-import sys, os, fileinput, json, re
+import sys, os, fileinput, tempfile, datetime, json, csv, re
 import MySQLdb
 
 from myLockssScripts import myPyCommandLine
@@ -216,6 +216,22 @@ USE adpn;
 			peer = self.data[field]
 		return peer
 	
+	def get_mysql_table_state(self, table: str) :	
+		self.cur.execute("SHOW COLUMNS FROM " + table)
+		cols = [ column[0] for column in self.cur.fetchall() ]
+		self.cur.execute("SELECT * FROM " + table)
+		rows = [ row for row in self.cur.fetchall() ]
+		return { "cols": cols, "rows": rows }
+		
+	def get_au_titlelist_table_state(self) :
+		return self.get_mysql_table_state("au_titlelist")
+
+	def get_au_titlelist_params_table_state(self) :
+		return self.get_mysql_table_state("au_titlelist_params")
+
+	def get_adpn_peer_titles_table_state(self) :
+		return self.get_mysql_table_state("adpn_peer_titles")
+	
 	def get_peers(self, active = "y") :
 		criteria = []
 		if len(active) > 0 :
@@ -280,12 +296,30 @@ USE adpn;
 		#   adpn_peer_titles
 		#
 		
-		self.cur.execute("SELECT * FROM au_titlelist")
-		au_titlelist = [ row for row in self.cur.fetchall() ]
-		
-		for row in au_titlelist :
-			print("\t".join(row))
+		outpath = self.switches['output']
+		sdate = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
+		tables = {
+			"au_titlelist": self.get_au_titlelist_table_state,
+			"au_titlelist_params": self.get_au_titlelist_params_table_state,
+			"adpn_peer_titles": self.get_adpn_peer_titles_table_state
+		}
+		
+		for k, m in tables.items() :
+			out_filename=( outpath + "/snapshot-" + k + "-" + sdate + ".sql" )
+			print("* Writing table [" + k + "] rows to " + out_filename, end=" ... ")
+			try :
+				with open(out_filename, 'w') as f :
+					out_csv = csv.writer(f)
+					state = m()
+					print("#", end="", file=f)
+					out_csv.writerow(state["cols"])
+					for row in state["rows"] :
+						out_csv.writerow(row)
+					print( "(ok)" )
+			except IOError as e :
+				print( "[ERROR!]" )
+			
 		self.db.close()
  
 	def display_usage (self) :
@@ -316,7 +350,7 @@ if __name__ == '__main__' :
 		defaultArgv = sys.argv[0:0] + []
 	
 	(defaultArgv, defaultSwitches) = myPyCommandLine(defaultArgv).parse()
-	defaultSwitches = {**{"dry-run": "", "help": "", "list-peers": "", "insert_title": False}, **defaultSwitches}
+	defaultSwitches = {**{"dry-run": "", "help": "", "list-peers": "", "snapshot": "", "output": tempfile.gettempdir(), "insert_title": False}, **defaultSwitches}
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
 	

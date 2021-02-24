@@ -65,7 +65,10 @@ if __name__ == '__main__':
 		except urllib.request.HTTPError as e :
 			errmesg = "HTTP ERROR " + str(e.code) + " " + e.reason
 			if 403 == e.code :
-				errmesg = errmesg + ". Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
+				errmesg = errmesg + " [URL=" + switches['url']
+				if len(switches['proxy']) > 0 :
+					errmesg = errmesg + ", proxy=" + switches['proxy'] + ":" + switches['port']
+				errmesg = errmesg + "]. Do you need to connect through a proxy? / Usage: " + sys.argv[0] +  " --url=[<URL>] --proxy=[<PROXYHOST>] --port=[<PORT>]"
 		except urllib.request.URLError as e :
 			errmesg = "URL Error: <Unrecognized Error> " + str(e.args) + " " + str(e.__context__)
 			if isinstance(e.reason, str) :
