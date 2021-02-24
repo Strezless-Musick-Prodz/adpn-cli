@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0210
+# @version 2021.0224
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -373,6 +373,18 @@ case "${CMD}" in
 		fi
 		;;
 	
+	"rebalance")
+# @method adpn rebalance
+# Helps rebalance cached AUs on a LOCKSS cache.
+#
+# Usage:
+# 
+#   adpn rebalance
+#   adpn rebalance destination
+
+	adpn-do-rebalance "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+	;;
+
 	"plugins")
 # @method adpn plugins
 # List LOCKSS Publisher Plugins or display details for a selected Plugin.

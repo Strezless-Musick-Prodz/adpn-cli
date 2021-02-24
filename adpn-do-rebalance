@@ -1,0 +1,203 @@
+#!/bin/bash
+#
+# adpn-do-rebalance: script to handle adpn rebalance commands
+#
+# @version 2021.0224
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  destination  	Output a destination directory for the rebalanced AU
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=()
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+V="${_PARAM[verbose]}"
+CMD="${_ARGV[1]}"
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"list")
+# @method adpn rebalance list
+# Display a list of available cache directories with free space.
+# 
+# Usage: adpn rebalance list
+#
+# @version 2021.0224
+
+		if [[ -z "${CMD}" ]] ; then
+			CMD="list"
+		fi
+		
+		# look for a list of LOCKSS cache directories.
+		GAMMAS=$( find / -maxdepth 2 -name 'gamma' 2>/dev/null )
+		
+		printf "[%s] Available cache volumes:\n\n" "${SCRIPT} ${CMD}"
+		printf "%s" "${GAMMAS}" | xargs df --human-readable
+		EXITCODE="$?"
+		;;
+	
+	"destination")
+# @method adpn rebalance destination
+# Generates and displays a directory name for the next available AU directory in a LOCKSS cache volume.
+#
+# Usage: adpn rebalance destination [<DIRECTORY>] [<OPTIONS>]...
+#
+# DIRECTORY is a path to one or more of the LOCKSS cache volumes on your LOCKSS box. These are usually
+# called things like /cache0, /cache1, /cache2, etc. If in doubt, you can use the `adpn rebalance list`
+# command to get a list of likely candidates:
+#
+# 	adpn rebalance list.
+#
+# @version 2021.0224
+
+		declare -a DESTINATION_VOLUMES=()
+		if [[ "${_PARAM[on]}" ]] ; then
+			DESTINATION_VOLUMES+=("${_PARAM[on]}")
+		fi
+		for DESTINATION in "${_ARGV[@]:2}" ; do
+			DESTINATION_VOLUMES+=("${DESTINATION}")
+		done
+		
+		if [[ "${#DESTINATION_VOLUMES[@]}" -gt 0 ]] ; then
+			for DESTINATION in "${DESTINATION_VOLUMES[@]}" ; do
+				CACHE_DIR=$( find "${DESTINATION}" -maxdepth 2 -path '*/gamma/cache' )
+				if [[ -d "${CACHE_DIR}" ]] ; then
+					cd "${CACHE_DIR}"
+
+					SLUGS=$( find . -maxdepth 1 -type d | xargs -n 1 basename )
+					LONGEST=$( printf "%s" "${SLUGS}" | wc -L )
+					PATTERN=$( printf '^[a-z]{%d}' "${LONGEST}" )
+					LAST_IN_TRANCHE=$( printf "%s" "${SLUGS}" | grep -E "${PATTERN}" | sort -r | head -n 1 )
+					NEXT_IN_TRANCHE=$( "${SCRIPTPATH}" increment --carry "${LAST_IN_TRANCHE}" )
+					
+					if [[ -n "${V}" ]] ; then
+						printf "[%s %s] Last AU cache directory on %s: %s\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" "${LAST_IN_TRANCHE}" 1>&2
+						if [[ -n "${NEXT_IN_TRANCHE}" ]] ; then
+							printf "[%s %s] Next AU cache directory on %s: %s\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" "${NEXT_IN_TRANCHE}" 1>&2
+						fi
+					fi
+					
+					if [[ -n "${NEXT_IN_TRANCHE}" ]] ; then
+						printf "%s/%s\n" "${CACHE_DIR}" "${NEXT_IN_TRANCHE}"
+					else
+						printf "[%s %s] Could not determine next AU cache directory on %s !\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" 1>&2
+						EXITCODE=1
+					fi
+				fi
+			done
+		else
+			EXITCODE=1
+			printf "[%s %s] You need to mention one or more LOCKSS volumes. Usage:\n\n" "${SCRIPT}" "${CMD}" 1>&2
+			# FIXME - we need to be able to use adpn_help_notes or similar in sub-scripts....
+		fi
+		;;
+	
+	"increment")
+		
+		if [[ -n "${_PARAM[carry]}" ]] ; then
+			if [[ -z "${_ARGV[2]}" ]] ; then
+				_ARGV[2]="_"
+			fi
+		fi
+		
+		for DIGITS in "${_ARGV[@]:2}" ; do
+
+			LEASTSIG="${DIGITS: -1}"
+			MOSTSIG="${DIGITS:0: -1}"
+			
+			INC=$( printf "%s" "${LEASTSIG}" | tr "_a-z" "a-z_" )
+			if [[ "${INC}" == "_" ]] ; then
+
+				# Carry me back to the most significant digits
+				MOSTSIG=$( "${SCRIPTPATH}" "${CMD}" --carry "${MOSTSIG}" )
+				INC="a"
+
+			fi
+			
+			OUTPUT="${MOSTSIG}${INC}"
+			if [[ -n "${V}" ]] ; then
+				printf "INCREMENTED: %s\n" "${OUTPUT}" 1>&2
+			fi
+			printf "%s\n" "${OUTPUT}"
+		done
+		
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}
