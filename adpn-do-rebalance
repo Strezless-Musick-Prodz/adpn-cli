@@ -285,7 +285,7 @@ org.lockss.poll.v3.enableV3Voter=false
 					ANCHOR="${PWD}"
 					cd "${SRC}"
 					
-					sudo python "${SCRIPTDIR}/externals/bagit-python/bagit.py" ${Q} "${SRC}" ; EXITCODE=$?
+					sudo python3 "${SCRIPTDIR}/externals/bagit-python/bagit.py" ${Q} "${SRC}" ; EXITCODE=$?
 					if [[ "${EXITCODE}" -eq 0 ]] ; then
 						REF_DIR="${SRC}"
 						DATA_DIR="${SRC}/data"
@@ -315,7 +315,7 @@ org.lockss.poll.v3.enableV3Voter=false
 					ANCHOR="${PWD}"
 					cd "${DEST}"
 					[[ -z "${V}" ]] || printf "[%s] Validating sync using bagit --validate '%s'\n" "${SCRIPT_CMD_NAME}" "${DEST}"
-					python "${SCRIPTDIR}/externals/bagit-python/bagit.py" --validate ${Q} "${DEST}"
+					python3 "${SCRIPTDIR}/externals/bagit-python/bagit.py" --validate ${Q} "${DEST}"
 					[[ "${EXITCODE}" -gt 0 ]] || EXITCODE=$?
 					cd "${ANCHOR}"
 				else
