@@ -103,6 +103,69 @@ case "${CMD}" in
 			CMD="list"
 		fi
 		
+		"${SCRIPTPATH}" sql --execute="SELECT * FROM au_publishers"
+		EXITCODE="$?"
+		;;
+	
+	"add")
+# @method adpn publisher add
+# Add a new publisher to the list of AU publishers on the props server.
+# 
+# Usage: 	adpn publisher add <AU_PUB_ID> [<OPTIONS>]...
+#
+# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: AUB, ADAH)
+#
+# 
+# @version 2021.0302
+
+		declare -a WORDS
+		WORDS=( "${_ARGV[@]:2}" )
+
+		ARG_ID="${_PARAM[id]}"
+		if [[ -z "${ARG_ID}" ]] ; then
+			ARG_ID="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+
+		ARG_NAME="${_PARAM[name]}"
+		if [[ -z "${ARG_NAME}" ]] ; then
+			ARG_NAME="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+
+		if [[ -z "${ARG_ID}" ]] ; then
+			read -p "Publisher ID code (e.g.: AUB, ADAH): " ARG_ID
+		fi
+		if [[ -z "${ARG_NAME}" ]] ; then
+			read -p "Institution Name (e.g.: Alabama Department of Archives and History): " ARG_NAME
+		fi
+		
+		ARG_PUB_NAME="${_PARAM[pub_name]}"
+		if [[ -z "${ARG_PUB_NAME}" ]] ; then
+			ARG_PUB_NAME="$( printf "All %s AUs" "${ARG_NAME}" )"
+		fi
+		
+		ARG_PUB_CLASS="${_PARAM[pub_class]}"
+		if [[ -z "${ARG_PUB_CLASS}" ]] ; then
+			ARG_PUB_CLASS="xpath"
+		fi
+		
+		ARG_PUB_XPATH="${_PARAM[pub_xpath]}"
+		if [[ -z "${ARG_PUB_XPATH}" ]] ; then
+			ARG_PUB_XPATH="$( printf "[attributes/publisher='%s']" "${ARG_NAME}" )"
+		fi
+
+		SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "INSERT INTO au_publishers (au_pub_id, au_pub, au_pub_name, au_pub_class, au_pub_xpath) VALUES (?, ?, ?, ?, ?)" )
+		SQL_SET=$( printf 'SET @V_PUB_ID="%s", @V_PUB="%s", @V_PUB_NAME="%s", @V_PUB_CLASS="%s", @V_PUB_XPATH="%s"' "${ARG_ID}" "${ARG_NAME}" "${ARG_PUB_NAME}" "${ARG_PUB_CLASS}" "${ARG_PUB_XPATH}" )
+		SQL_EXECUTE=$( printf 'EXECUTE stmt1 USING @V_PUB_ID, @V_PUB, @V_PUB_NAME, @V_PUB_CLASS, @V_PUB_XPATH' )
+		SQL_DEALLOCATE=$( printf 'DEALLOCATE PREPARE stmt1' )
+
+		SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
+		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
+\		EXITCODE="$?"
+		;;
+	
+	"sql")
 		MYSQL_HOST="$( adpn_setting "mysql-host" "mysql/host" )"
 		MYSQL_DB="$( adpn_setting "mysql-db" "mysql/db" )"
 		MYSQL_USER="$( adpn_setting "mysql-user" "mysql/user" )"
@@ -116,23 +179,8 @@ case "${CMD}" in
 			MYSQL_PASSWORD_SWITCH=$(printf "%s--password=%s" "" "${MYSQL_PASSWORD}")
 		fi
 		
-		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" --execute "SELECT * FROM au_publishers"
+		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" "${_LINESWITCH[execute]}"
 		EXITCODE="$?"
-		;;
-	
-	"add")
-# @method adpn publisher add
-# Add a new publisher to the list of AU publishers on the props server.
-# 
-# Usage: 	adpn publisher add <AU_PUB_ID> [<OPTIONS>]...
-#
-# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: AUB, ADAH)
-#
-# 
-# @version 2021.0224
-
-		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not yet implemented." 1>&2
-		EXITCODE=255
 		;;
 		
 	"version"|"help")
