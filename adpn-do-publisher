@@ -107,7 +107,16 @@ case "${CMD}" in
 		MYSQL_DB="$( adpn_setting "mysql-db" "mysql/db" )"
 		MYSQL_USER="$( adpn_setting "mysql-user" "mysql/user" )"
 		MYSQL_PASSWORD="$( adpn_setting "mysql-password" "mysql/password" )"
-		mysql --user="${MYSQL_USER}" --password="${MYSQL_PASSWORD}" --database="${MYSQL_DB}" --host="${MYSQL_HOST}" --execute "SELECT * FROM au_publishers"
+		
+		if [[ -z "${MYSQL_PASSWORD}" ]] ; then
+			MYSQL_PASSWORD_SWITCH=""
+		elif [[ "${MYSQL_PASSWORD}" == "-" ]] ; then
+			MYSQL_PASSWORD_SWITCH="--password"
+		else
+			MYSQL_PASSWORD_SWITCH=$(printf "%s--password=%s" "" "${MYSQL_PASSWORD}")
+		fi
+		
+		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" --execute "SELECT * FROM au_publishers"
 		EXITCODE="$?"
 		;;
 	
