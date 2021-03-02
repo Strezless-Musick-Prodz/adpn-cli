@@ -382,9 +382,14 @@ case "${CMD}" in
 #   adpn rebalance
 #   adpn rebalance destination
 
-	adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
-	;;
+		adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		;;
 
+	"publisher")
+	
+		adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		;;
+	
 	"plugins")
 # @method adpn plugins
 # List LOCKSS Publisher Plugins or display details for a selected Plugin.
