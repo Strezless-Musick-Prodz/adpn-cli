@@ -111,11 +111,21 @@ case "${CMD}" in
 # @method adpn publisher add
 # Add a new publisher to the list of AU publishers on the props server.
 # 
-# Usage: 	adpn publisher add <AU_PUB_ID> [<OPTIONS>]...
+# Usage: 	adpn publisher add [<AU_PUB_ID>|--id=<AU_PUB_ID>] [--name=<PUBLISHER_NAME>] [<OPTIONS>]...
 #
-# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: AUB, ADAH)
-#
+# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: "AUB", "ADAH")
+# PUBLISHER_NAME is a human-readable institution name (e.g.: "Auburn University")
 # 
+# If either is not provided on the command-line, the script will prompt for values
+# interactively from standard input.
+#
+# Options:
+# 	--pub_name=<AUS_TITLE>  	human-readable label for all AUs from this publisher (ex.: All Auburn University AUs)
+# 	--pub_class=<PUB_CLASS>		au_pub_class. This defaults to, and typically should remain, "xpath".
+# 	--pub_xpath=<XPATH>     	an XPath expression for au_pub_xpath
+#
+# If any options are omitted, a sensible default will be used based on the PUBLISHER_NAME.
+#
 # @version 2021.0302
 
 		declare -a WORDS
@@ -162,7 +172,7 @@ case "${CMD}" in
 
 		SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
 		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
-\		EXITCODE="$?"
+		EXITCODE="$?"
 		;;
 	
 	"sql")

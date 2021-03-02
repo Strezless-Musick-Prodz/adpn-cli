@@ -375,17 +375,33 @@ case "${CMD}" in
 	
 	"rebalance")
 # @method adpn rebalance
-# Helps rebalance cached AUs on a LOCKSS cache.
+# Config Manager: Helps rebalance cached AUs on a LOCKSS cache.
 #
 # Usage:
 # 
 #   adpn rebalance
+#   adpn rebalance script
 #   adpn rebalance destination
+#   adpn rebalance lockdown
+#   adpn rebalance sync
+#   adpn rebalance reregister
+#
+# @version 2021.0302
 
 		adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 		;;
 
 	"publisher")
+# @method adpn publisher
+# Config Manager: Helps review and manage the list of AU publishers on a LOCKSS props server.
+#
+# Usage:
+# 
+#   adpn publisher
+#   adpn publisher list
+#   adpn publisher add [<AU_PUB_ID>] [<PUBLISHER_NAME>]
+#
+# @version 2021.0302
 	
 		adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 		;;
