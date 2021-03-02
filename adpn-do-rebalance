@@ -2,7 +2,7 @@
 #
 # adpn-do-rebalance: script to handle adpn rebalance commands
 #
-# @version 2021.0224
+# @version 2021.0301
 
 SCRIPTPATH="$(which "$0")"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -378,6 +378,53 @@ org.lockss.poll.v3.enableV3Voter=false
 		fi
 		;;
 
+	"reregister")
+# @method adpn rebalance reregister
+# Manipulates key-value pair settings in au.txt to replace an old volume location for a given AU with its new volume location.
+#
+# Usage: adpn rebalance reregister --from=<SRCDIR> --to=<DESTDIR> [<OPTIONS>]...
+#
+# SRCDIR is the path where the AU was previously located on your LOCKSS box.
+# DESTDIR is the path where the AU is now located on your LOCKSS box.
+#
+# If you want more information, use options:
+#
+#   --verbose 	Display verbose output
+#
+# @version 2021.0301
+		SRC="${_PARAM[from]}"
+		SRC="${SRC%/}" # take off any trailing slashes
+		DEST="${_PARAM[to]}"
+		DEST="${DEST%/}" # take off any trailing slashes
+		DEST_GAMMA="$( "${SCRIPTPATH}" source --gamma "${DEST}" )"
+
+		AU_TXT="/cache0/gamma/config/au.txt"
+		TMP_AU_TXT="$( mktemp )"
+		
+		if [[ -r "${DEST}/#au_id_file" ]] ; then
+			GET_AU_ID="$( cat "${DEST}/#au_id_file" | grep -E "^au[.]id=" | sed -r 's/^au[.]id\s*=\s*//' )"
+			if [[ -n "${GET_AU_ID}" ]] ; then
+				FIND_KEY_UNIQID_PATTERN=$( printf "%s" "${GET_AU_ID}" | sed -r "s/[^A-Za-z0-9]/./g" )
+				FIND_KEY=$( printf "^(org[.]lockss[.]au[.]%s[.]reserved[.]repository)=(.*)$" "${FIND_KEY_UNIQID_PATTERN}" )
+				DEST_GAMMA_ESCAPED=$( printf '%s' "local\\\\:${DEST_GAMMA//\//\\/}" )
+				cat "${AU_TXT}" | sed -r "s/${FIND_KEY}/\1=${DEST_GAMMA_ESCAPED}/g" > "${TMP_AU_TXT}"
+				if [[ -n "${V}" ]] ; then
+					diff -u "${AU_TXT}" "${TMP_AU_TXT}"
+				fi
+				
+				cp ${V} "${AU_TXT}" "${AU_TXT}~"
+				sudo chown ${V} --reference="${AU_TXT}" "${AU_TXT}~"
+				sudo chmod ${V} --reference="${AU_TXT}" "${AU_TXT}~"
+				
+				mv ${V} "${TMP_AU_TXT}" "${AU_TXT}"
+				sudo chown ${V} --reference="${AU_TXT}~" "${AU_TXT}"
+				sudo chmod ${V} --reference="${AU_TXT}~" "${AU_TXT}"
+			fi
+		fi
+		
+		;;
+		
+		
 	"secure")
 		FROM="${_PARAM[from]}"
 		TO="${_PARAM[to]}"
@@ -407,6 +454,23 @@ org.lockss.poll.v3.enableV3Voter=false
 			fi
 			test -d "${TO_DIR}" ; EXITCODE=$?
 		fi
+		;;
+	
+	"source")
+		for SRC in "${_ARGV[@]:2}" ; do
+			if [[ -n "${SRC}" ]] ; then
+				SRC_BASE=$( basename "${SRC}" )
+				SRC_DIR=$( dirname "${SRC}" )
+				while [[ "${SRC_DIR}" != '/' ]] ; do
+					SRC_BASE=$( basename "${SRC_DIR}" )
+					SRC_DIR=$( dirname "${SRC_DIR}" )
+				done
+				
+				if [[ -n "${SRC_BASE}" ]] ; then
+					find "${SRC_DIR}${SRC_BASE}" -maxdepth 1 -name "gamma"
+				fi
+			fi
+		done
 		;;
 		
 	"destination")
