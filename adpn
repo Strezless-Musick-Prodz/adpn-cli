@@ -355,6 +355,7 @@ case "${CMD}" in
 				AIIT_OUTPUT="/dev/null"
 			fi
 			
+			adpn-ingest-into-titlesdb.py --snapshot
 			echo "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py ${INGEST_DRY_RUN} --from="${INGEST_FROM}" --to="${INGEST_TO}" > "${AIIT_OUTPUT}" ; AIIT_ERRCODE="$?"
 			
 			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then

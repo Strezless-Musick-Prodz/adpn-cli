@@ -68,7 +68,7 @@ or password on stderr.
 		url = None
 		if ('daemon' in self.switches and not 'url' in self.switches) :
 			daemonUrl = 'http://%(daemon)s'
-			daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=(output)s'
+			daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=%(output)s'
 			
 			url = urllib.parse.urljoin(
 				daemonUrl % {'daemon': self.switches['daemon']},
@@ -178,9 +178,15 @@ or password on stderr.
 		"""
 
 		try :
+			if (self.switches['debug']) :
+				print("[dbg] html=urllib.request.urlopen(url).read()", file=sys.stderr)
+				print("[dbg] url=", url, file=sys.stderr)
 			html = urllib.request.urlopen(url).read()
 		except urllib.error.HTTPError as e :
 			if 401 == e.code :
+				if (self.switches['debug']) :
+					print("[dbg] html = self.get_from_url_with_authentication(url)", file=sys.stderr)
+					print("[dbg] url=", url, file=sys.stderr)
 				html = self.get_from_url_with_authentication(url)
 			else :
 				raise
@@ -272,7 +278,7 @@ or password on stderr.
 
 						# retrieve URL of JAR file
 						try :
-							subxml = self.get_from_url(linkedurl, { **self.switches, **{'error': 'raise'} }, '' )
+							subxml = self.get_from_url(linkedurl)
 						except urllib.error.HTTPError :
 							subxml = ''
 					
@@ -405,7 +411,11 @@ or password on stderr.
 	def execute (self) :
 		pluginJars = {}
 		try :
+			if (self.switches['debug']) :
+				print("[dbg] blob=self.read_daemon_data()", file=sys.stderr)
 			blob=self.read_daemon_data()
+			if (self.switches['debug']) :
+				print("[dbg] self.get_soup_jars(blob)", file=sys.stderr)
 			pluginJars = self.get_soup_jars(blob)
 		except FileNotFoundError as e :
 			self.display_error(str(e), -1)
@@ -420,6 +430,9 @@ or password on stderr.
 				message = ("Socket Error %d: %s" % e.reason.args)
 				exitcode = e.reason.args[0]
 			self.display_error(message, exitcode)
+
+		if (self.switches['debug']) :
+			print("[dbg] checking plug_matchers", file=sys.stderr)
 		
 		plug_matchers = {
 			'*': lambda name, row: True,
@@ -481,7 +494,8 @@ if __name__ == '__main__':
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
 		"output": "text/tab-separated-values",
-		"realm": "LOCKSS Admin"
+		"realm": "LOCKSS Admin",
+		"debug": 0
 	}).parse()
 
 	script = LockssPluginDetails(scriptname, switches)	

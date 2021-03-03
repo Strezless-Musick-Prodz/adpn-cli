@@ -135,7 +135,7 @@ Usage:
 		except (KeyError, TypeError) :
 
 			cmdline = myPyCommandLine(['lockss-plugin-url.py']).compose(self.plugin_url_switches(pairs=True))
-			
+
 			try:
 				buf = subprocess.check_output(cmdline)
 			except subprocess.CalledProcessError as e :
@@ -265,7 +265,6 @@ Usage:
 
 	def execute (self) :
 		self.do_check_dependencies()
-		
 		jars = self.get_jars()
 		if len(jars) == 0 :
 			self.exitcode = 2
