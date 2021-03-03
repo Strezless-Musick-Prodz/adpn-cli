@@ -1,0 +1,211 @@
+#!/bin/bash
+#
+# adpn-do-publisher: script to handle adpn publisher commands
+#
+# @version 2021.0302
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  destination  	Output a destination directory for the rebalanced AU
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=()
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+V="${_LINESWITCH[verbose]}"
+Q=""
+if [[ -z "${_PARAM[verbose]}" ]] ; then
+	Q="--quiet"
+fi
+
+CMD="${_ARGV[1]}"
+
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+fi
+if [[ -n "${CMD}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+fi
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"list")
+# @method adpn publisher list
+# Display a list of available publishers with their au_pub_id codes.
+# 
+# Usage: adpn publisher list
+#
+# @version 2021.0302
+
+		if [[ -z "${CMD}" ]] ; then
+			CMD="list"
+		fi
+		
+		"${SCRIPTPATH}" sql --execute="SELECT * FROM au_publishers"
+		EXITCODE="$?"
+		;;
+	
+	"add")
+# @method adpn publisher add
+# Add a new publisher to the list of AU publishers on the props server.
+# 
+# Usage: 	adpn publisher add [<AU_PUB_ID>|--id=<AU_PUB_ID>] [--name=<PUBLISHER_NAME>] [<OPTIONS>]...
+#
+# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: "AUB", "ADAH")
+# PUBLISHER_NAME is a human-readable institution name (e.g.: "Auburn University")
+# 
+# If either is not provided on the command-line, the script will prompt for values
+# interactively from standard input.
+#
+# Options:
+# 	--pub_name=<AUS_TITLE>  	human-readable label for all AUs from this publisher (ex.: All Auburn University AUs)
+# 	--pub_class=<PUB_CLASS>		au_pub_class. This defaults to, and typically should remain, "xpath".
+# 	--pub_xpath=<XPATH>     	an XPath expression for au_pub_xpath
+#
+# If any options are omitted, a sensible default will be used based on the PUBLISHER_NAME.
+#
+# @version 2021.0302
+
+		declare -a WORDS
+		WORDS=( "${_ARGV[@]:2}" )
+
+		ARG_ID="${_PARAM[id]}"
+		if [[ -z "${ARG_ID}" ]] ; then
+			ARG_ID="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+
+		ARG_NAME="${_PARAM[name]}"
+		if [[ -z "${ARG_NAME}" ]] ; then
+			ARG_NAME="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+
+		if [[ -z "${ARG_ID}" ]] ; then
+			read -p "Publisher ID code (e.g.: AUB, ADAH): " ARG_ID
+		fi
+		if [[ -z "${ARG_NAME}" ]] ; then
+			read -p "Institution Name (e.g.: Alabama Department of Archives and History): " ARG_NAME
+		fi
+		
+		ARG_PUB_NAME="${_PARAM[pub_name]}"
+		if [[ -z "${ARG_PUB_NAME}" ]] ; then
+			ARG_PUB_NAME="$( printf "All %s AUs" "${ARG_NAME}" )"
+		fi
+		
+		ARG_PUB_CLASS="${_PARAM[pub_class]}"
+		if [[ -z "${ARG_PUB_CLASS}" ]] ; then
+			ARG_PUB_CLASS="xpath"
+		fi
+		
+		ARG_PUB_XPATH="${_PARAM[pub_xpath]}"
+		if [[ -z "${ARG_PUB_XPATH}" ]] ; then
+			ARG_PUB_XPATH="$( printf "[attributes/publisher='%s']" "${ARG_NAME}" )"
+		fi
+
+		SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "INSERT INTO au_publishers (au_pub_id, au_pub, au_pub_name, au_pub_class, au_pub_xpath) VALUES (?, ?, ?, ?, ?)" )
+		SQL_SET=$( printf 'SET @V_PUB_ID="%s", @V_PUB="%s", @V_PUB_NAME="%s", @V_PUB_CLASS="%s", @V_PUB_XPATH="%s"' "${ARG_ID}" "${ARG_NAME}" "${ARG_PUB_NAME}" "${ARG_PUB_CLASS}" "${ARG_PUB_XPATH}" )
+		SQL_EXECUTE=$( printf 'EXECUTE stmt1 USING @V_PUB_ID, @V_PUB, @V_PUB_NAME, @V_PUB_CLASS, @V_PUB_XPATH' )
+		SQL_DEALLOCATE=$( printf 'DEALLOCATE PREPARE stmt1' )
+
+		SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
+		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
+		EXITCODE="$?"
+		;;
+	
+	"sql")
+		MYSQL_HOST="$( adpn_setting "mysql-host" "mysql/host" )"
+		MYSQL_DB="$( adpn_setting "mysql-db" "mysql/db" )"
+		MYSQL_USER="$( adpn_setting "mysql-user" "mysql/user" )"
+		MYSQL_PASSWORD="$( adpn_setting "mysql-password" "mysql/password" )"
+		
+		if [[ -z "${MYSQL_PASSWORD}" ]] ; then
+			MYSQL_PASSWORD_SWITCH=""
+		elif [[ "${MYSQL_PASSWORD}" == "-" ]] ; then
+			MYSQL_PASSWORD_SWITCH="--password"
+		else
+			MYSQL_PASSWORD_SWITCH=$(printf "%s--password=%s" "" "${MYSQL_PASSWORD}")
+		fi
+		
+		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" "${_LINESWITCH[execute]}"
+		EXITCODE="$?"
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}

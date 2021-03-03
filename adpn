@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0210
+# @version 2021.0301
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -374,6 +374,39 @@ case "${CMD}" in
 		fi
 		;;
 	
+	"rebalance")
+# @method adpn rebalance
+# Config Manager: Helps rebalance cached AUs on a LOCKSS cache.
+#
+# Usage:
+# 
+#   adpn rebalance
+#   adpn rebalance script
+#   adpn rebalance destination
+#   adpn rebalance lockdown
+#   adpn rebalance sync
+#   adpn rebalance reregister
+#
+# @version 2021.0302
+
+		adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		;;
+
+	"publisher")
+# @method adpn publisher
+# Config Manager: Helps review and manage the list of AU publishers on a LOCKSS props server.
+#
+# Usage:
+# 
+#   adpn publisher
+#   adpn publisher list
+#   adpn publisher add [<AU_PUB_ID>] [<PUBLISHER_NAME>]
+#
+# @version 2021.0302
+	
+		adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		;;
+	
 	"plugins")
 # @method adpn plugins
 # List LOCKSS Publisher Plugins or display details for a selected Plugin.
@@ -385,7 +418,7 @@ case "${CMD}" in
 #
 # @version 2019.0716
 
-		adpn-do-plugins "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		adpn-do-plugins --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 		;;
 	
 	*)

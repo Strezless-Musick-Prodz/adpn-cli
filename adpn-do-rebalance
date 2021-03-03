@@ -1,0 +1,585 @@
+#!/bin/bash
+#
+# adpn-do-rebalance: script to handle adpn rebalance commands
+#
+# @version 2021.0301
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  destination  	Output a destination directory for the rebalanced AU
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=()
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+V="${_LINESWITCH[verbose]}"
+Q=""
+if [[ -z "${_PARAM[verbose]}" ]] ; then
+	Q="--quiet"
+fi
+
+CMD="${_ARGV[1]}"
+
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+fi
+if [[ -n "${CMD}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+fi
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"list")
+# @method adpn rebalance list
+# Display a list of available cache directories with free space.
+# 
+# Usage: adpn rebalance list
+#
+# @version 2021.0224
+
+		if [[ -z "${CMD}" ]] ; then
+			CMD="list"
+		fi
+		
+		# look for a list of LOCKSS cache directories.
+		GAMMAS=$( find / -maxdepth 2 -name 'gamma' 2>/dev/null )
+		
+		printf "[%s] Available cache volumes:\n\n" "${SCRIPT} ${CMD}"
+		printf "%s" "${GAMMAS}" | xargs df --human-readable
+		EXITCODE="$?"
+		;;
+	
+	"script")
+# @method adpn rebalance script
+# Generate and print out a short bash script to rebalance from one volume to the next.
+# The script that is produced MUST be run by root or a user with sudo privileges.
+# 
+# Usage: 	adpn rebalance script [<AU>] <SOURCE> <DESTINATION> [<OPTIONS>]...
+#
+# AU is the letter code for the AU directory.
+#   Example: to rebalance /cache0/gamma/cache/abc to /cache1, use: adpn rebalance script abc /cache0 /cache1
+#
+# SOURCE is the file system location of the LOCKSS cache volume that HAS the AU.
+#   If AU is NOT specified, use the full path to the AU directory:
+#   Example: adpn rebalance /cache0/gamma/cache/abc /cache1
+#   If AU IS specified, you can abbreviate to  the mount point for the volume:
+#   Example: adpn rebalance abc /cache0 /cache1
+#
+# DESTINATION is the file system location of the LOCKSS cache volume where you WILL MOVE the AU.
+#   Example: adpn rebalance script /cache0/gamma/cache/abc /cache1
+#   to rebalance cache/abc from /cache0 to /cache1
+#
+# @version 2021.0224
+
+		declare -a WORDS
+		WORDS=( "${_ARGV[@]:2}" )
+
+		ARG_OBJECT="${_PARAM[au]}"
+		if [[ -z "${ARG_OBJECT}" ]] ; then
+			ARG_OBJECT="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+		
+		ARG_SRC="${_PARAM[from]}"
+		if [[ -z "${ARG_SRC}" ]] ; then
+			ARG_SRC="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )
+		fi
+		
+		ARG_DEST="${_PARAM[to]}"
+		if [[ -z "${ARG_DEST}" ]] ; then
+			ARG_DEST="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )
+			
+			if [[ -z "${ARG_DEST}" ]] ; then
+				ARG_DEST="${ARG_SRC}"
+				ARG_SRC="$( dirname "${ARG_OBJECT}" )"
+				ARG_OBJECT="$( basename "${ARG_OBJECT}" )"
+			fi
+
+		fi
+		
+		
+		SRC_GAMMA=$( "${SCRIPTPATH}" destination --gamma "${ARG_SRC}" )
+		SRC=$( printf "%s/cache/%s" "${SRC_GAMMA}" "${ARG_OBJECT}" )
+		SRC_HIDDEN=$( printf "%s/hide/%s" "${SRC_GAMMA}" "${ARG_OBJECT}" )
+		INTERMEDIATE_GAMMA=$( "${SCRIPTPATH}" destination --gamma "${ARG_DEST}" )
+		INTERMEDIATE_DEST=$( printf "%s/copy/%s" "${INTERMEDIATE_GAMMA}" "${ARG_OBJECT}" )
+		FINAL_DEST=$( "${SCRIPTPATH}" destination "${ARG_DEST}" )
+
+		MACHINE="$( uname -n )"
+		TODAY="$( date )"
+		
+		printf '#!/bin/bash\n'
+		printf '#\n'
+		printf '# generated by %s@%s at %s\n' "${USER}" "${MACHINE}" "${TODAY}"
+		printf '\n'
+		printf 'if [[ "$1" =~ ^--verbose(=.*)?$ ]] ; then V="$1" ; shift ; else V="" ; fi\n'
+		SCRIPTCMD=$( printf '"%s" sync %s ${V} --from="%s" --to="%s"' "${SCRIPTPATH}" "${V}" "${SRC}" "${INTERMEDIATE_DEST}" )
+		SCRIPTPROMPT=$( printf 'read -p %scmd: [%s] Enter OK to continue: %s OK' "'" "${SCRIPTCMD}" "'" )
+		SCRIPTOK='OK="$( printf "%s" "${OK}" | tr "[:upper:]" "[:lower:]")"'
+		printf "%s\n" "${SCRIPTPROMPT}"
+		printf "%s\n" "${SCRIPTOK}"
+		printf "%s %s ; %s\n" 'if [[ "${OK}" == "ok" ]] ; then' "${SCRIPTCMD}" 'fi'
+		
+		SCRIPTCMD=$( printf '"%s" resettle %s ${V} --from="%s" --to="%s"' "${SCRIPTPATH}" "${V}" "${INTERMEDIATE_DEST}" "${FINAL_DEST}" )
+		SCRIPTPROMPT=$( printf 'read -p %scmd: [%s] Enter OK to continue: %s OK' "'" "${SCRIPTCMD}" "'" )
+		printf "%s\n" "${SCRIPTPROMPT}"
+		printf "%s\n" "${SCRIPTOK}"
+		printf "%s %s ; %s\n" 'if [[ "${OK}" == "ok" ]] ; then' "${SCRIPTCMD}" 'fi'
+
+		SCRIPTCMD=$( printf '"%s" resettle %s ${V} --from="%s" --to="%s"' "${SCRIPTPATH}" "${V}" "${SRC}" "${SRC_HIDDEN}" )
+		SCRIPTPROMPT=$( printf 'read -p %scmd: [%s] Enter OK to continue: %s OK' "'" "${SCRIPTCMD}" "'" )
+		printf "%s\n" "${SCRIPTPROMPT}"
+		printf "%s\n" "${SCRIPTOK}"
+		printf "%s %s ; %s\n" 'if [[ "${OK}" == "ok" ]] ; then' "${SCRIPTCMD}" 'fi'
+ 		
+		;;
+	
+	"lockdown")
+		CONF_DIR="/cache0/gamma/config"
+		if [[ -n "${_PARAMS[config]}" ]] ; then
+			CONF_DIR="${_PARAMS[config]}"
+		fi
+		
+		if [[ -d "${CONF_DIR}" ]] ; then
+			cd "${CONF_DIR}"
+			if [[ -w "${CONF_DIR}/expert_config.txt" ]] ; then
+				__DISABLER__="""org.lockss.crawler.enabled=false
+org.lockss.poll.v3.enableV3Poller=false
+org.lockss.poll.v3.enableV3Voter=false
+"""
+				CONF_TXT="${CONF_DIR}/expert_config.txt"
+				if [[ -n "${_PARAM[revoke]}" ]] ; then
+					CONF_TMP_TXT=$( mktemp expert_config_XXXXXX --suffix=.txt )
+					FIRST_LINE="$( printf "%s" "${__DISABLER__}" | head -n 1 )"
+					LAST_LINE="$( printf "%s" "${__DISABLER__}" | tail -n 1 )"
+					
+					sed -e "/^$/,/^$/d" -e "/^${FIRST_LINE}/,/^${LAST_LINE}/d" "${CONF_TXT}" > "${CONF_TMP_TXT}"
+					if [[ -n "${V}" ]] ; then
+						diff -u "${CONF_TXT}" "${CONF_TMP_TXT}"
+					fi
+					
+					mv ${V} "${CONF_TXT}" "${CONF_TXT}~"
+					mv ${V} "${CONF_TMP_TXT}" "${CONF_TXT}"
+
+				else
+					cp ${V} "${CONF_TXT}" "${CONF_TXT}~"
+					printf "\n%s" "${__DISABLER__}" >> "${CONF_TXT}"
+					if [[ -n "${V}" ]] ; then
+						diff -u "${CONF_TXT}~" "${CONF_TXT}"
+					fi
+				fi
+				
+			elif [[ ! -f "${CONF_DIR}/expert_config.txt" ]] ; then
+				printf "[%s] Error: LOCKSS expert_config.txt file not found at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+				EXITCODE=255
+
+			else 
+				printf "[%s] Error: cannot edit LOCKSS expert_config.txt file at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+				EXITCODE=255
+			
+			fi
+			
+		else
+			printf "[%s] Error: LOCKSS config directory not found at %s\n" "${SCRIPT_CMD_NAME}" "${CONF_DIR}" 1>&2
+			printf "If you know the correct directory for LOCKSS config, use %s %s --config=[<DIR>]\n" "${SCRIPT}" "${CMD}" 1>&2
+			EXITCODE=255
+		fi		
+		;;
+		
+	"sync")
+		"${SCRIPTPATH}" secure ${V} --context="${SCRIPT_CMD_NAME}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
+		if [[ "${EXITCODE}" -eq 0 ]] ; then
+			IC=""
+			if [[ -n "${V}" ]] ; then
+				IC="--itemize-changes"
+			fi
+			
+			SRC="${_PARAM[from]}"
+			DEST="${_PARAM[to]}"
+			
+			# Bag and tag the source directory.
+			if [[ -d "${SRC}" ]] ; then
+				if [[ ! -d "${SRC}/data" || ! -f "${SRC}/bagit.txt" ]] ; then
+					SRC_LOC="$( readlink -f "${SRC}" )"
+					SRC_SLUG="$( basename "${SRC_LOC}" )"
+					SRC_PARENT="$( dirname "${SRC_LOC}" )"
+					SRC_PARENT_DIR="$( basename "${SRC_PARENT}" )"
+					SRC_GRANDPA="$( dirname "${SRC_PARENT}" )"
+					
+					if [[ "${SRC_PARENT_DIR}" == "cache" ]] ; then
+						SRC_FROM="${SRC_LOC}"
+						SRC_TO="${SRC_GRANDPA}/hide/${SRC_SLUG}"
+						"${SCRIPTPATH}" resettle ${V} --context="${SCRIPT_CMD_NAME}" --from="${SRC_FROM}" --to="${SRC_TO}" ; EXITCODE=$?
+						if [[ "${EXITCODE}" -eq 0 ]] ; then
+							SRC="${SRC_TO}"
+							if [[ ! -e "${SRC_LOC}" ]] ; then
+								sudo ln -s ${V} "${SRC_TO}" "${SRC_LOC%/}" # %/ = remove trailing slash
+							fi
+						fi
+					fi
+					
+					ANCHOR="${PWD}"
+					cd "${SRC}"
+					
+					sudo python3 "${SCRIPTDIR}/externals/bagit-python/bagit.py" ${Q} "${SRC}" ; EXITCODE=$?
+					if [[ "${EXITCODE}" -eq 0 ]] ; then
+						REF_DIR="${SRC}"
+						DATA_DIR="${SRC}/data"
+						if [[ -d "${DATA_DIR}" ]] ; then
+							sudo chown ${V} --reference="${REF_DIR}" "${DATA_DIR}"
+							sudo chmod ${V} --reference="${REF_DIR}" "${DATA_DIR}"
+						fi
+						
+						if [[ -L "${SRC_LOC%/}" ]] ; then
+							sudo rm ${V} "${SRC_LOC%/}"
+							sudo ln -s ${V} "${SRC_TO}/data" "${SRC_LOC%/}" # %/ = remove trailing slash
+							sudo chown ${V} --no-dereference --reference="${REF_DIR}" "${SRC_LOC%/}"
+						fi
+					fi
+					
+					cd "${ANCHOR}"
+				fi
+			fi
+			
+			# Make the transfer
+			sudo rsync --archive --delete ${IC} "${SRC%/}/" "${DEST}"
+			EXITCODE=$?
+
+			# Validate the transfer, using bagit.py or diff -r
+			if [[ -d "${DEST}" ]] ; then
+				if [[ -d "${DEST}/data" && -f "${DEST}/bagit.txt" ]] ; then
+					ANCHOR="${PWD}"
+					cd "${DEST}"
+					[[ -z "${V}" ]] || printf "[%s] Validating sync using bagit --validate '%s'\n" "${SCRIPT_CMD_NAME}" "${DEST}"
+					python3 "${SCRIPTDIR}/externals/bagit-python/bagit.py" --validate ${Q} "${DEST}"
+					[[ "${EXITCODE}" -gt 0 ]] || EXITCODE=$?
+					cd "${ANCHOR}"
+				else
+					[[ -z "${V}" ]] || printf "[%s] Validating sync using diff --recursive '%s' '%s'\n" "${SCRIPT_CMD_NAME}" "${SRC}" "${DEST}"
+					diff -q --recursive "${SRC}" "${DEST}"
+					[[ "${EXITCODE}" -gt 0 ]] || EXITCODE=$?
+				fi
+			else
+				printf "[%s] Destination directory not found: %s" "${SCRIPT_CMD_NAME}" "${DEST}" 1>&2
+			fi
+
+		fi
+		;;
+
+	"resettle")
+		"${SCRIPTPATH}" secure ${V} --context="${SCRIPT_CMD_NAME}" --from="${_PARAM[from]}" --to="${_PARAM[to]}" ; EXITCODE=$?
+		if [[ "${EXITCODE}" -eq 0 ]] ; then
+			SRC="${_PARAM[from]}"
+			SRC="${SRC%/}" # take off any trailing slashes
+			DEST="${_PARAM[to]}"
+			DEST="${DEST%/}" # take off any trailing slashes
+
+			# If --from=... is just a symlink that points to (the same place as) --to=..., just delete the symlink.
+			if [[ -L "${SRC}" ]] ; then
+				SRC_ENDPOINT="$( readlink -f "${SRC}" )"
+				SRC_ENDPOINT_BASE="$( basename "${SRC_ENDPOINT}" )"
+				SRC_ENDPOINT_PARENT="$( dirname "${SRC_ENDPOINT}" )"
+				DEST_ENDPOINT="$( readlink -f "${DEST}" )"
+				if [[ "${SRC_ENDPOINT}" == "${DEST_ENDPOINT}" ]] ; then
+					sudo rm ${V} "${SRC}" ; EXITCODE=$?
+				elif [[ "${SRC_ENDPOINT_PARENT}" == "${DEST_ENDPOINT}" ]] ; then
+					if [[ "${SRC_ENDPOINT_BASE}" == "data" ]] ; then
+						sudo rm ${V} "${SRC}" ; EXITCODE=$?
+					fi
+				fi
+			fi
+			
+			POST_LINK=""
+			SRC_PARENT="$( dirname "${SRC}" )"
+			DEST_PARENT="$( dirname "${DEST}" )"
+			if [[ "${SRC_PARENT}" =~ .*/copy$ ]] ; then
+				if [[ "${DEST_PARENT}" =~ .*/cache$ ]] ; then
+					if [[ -d "${SRC}/data" && -f "${SRC}/bagit.txt" ]] ; then
+						POST_LINK="${SRC}/data"
+						SRC="${SRC}/data"
+					fi
+				fi
+			fi
+
+			# If --from=... was not for simple deletion, then move it on over.
+			if [[ -e "${SRC}" ]] ; then
+				sudo mv ${V} "${SRC}" "${DEST}" ; EXITCODE=$?
+			fi
+
+			if [[ -n "${POST_LINK}" ]] ; then
+				DEST_ENDPOINT="$( readlink -f "${DEST}" )"
+				sudo ln -s ${V} "${DEST_ENDPOINT}" "${POST_LINK}"
+			fi
+
+		fi
+		;;
+
+	"reregister")
+# @method adpn rebalance reregister
+# Manipulates key-value pair settings in au.txt to replace an old volume location for a given AU with its new volume location.
+#
+# Usage: adpn rebalance reregister --from=<SRCDIR> --to=<DESTDIR> [<OPTIONS>]...
+#
+# SRCDIR is the path where the AU was previously located on your LOCKSS box.
+# DESTDIR is the path where the AU is now located on your LOCKSS box.
+#
+# If you want more information, use options:
+#
+#   --verbose 	Display verbose output
+#
+# @version 2021.0301
+		SRC="${_PARAM[from]}"
+		SRC="${SRC%/}" # take off any trailing slashes
+		DEST="${_PARAM[to]}"
+		DEST="${DEST%/}" # take off any trailing slashes
+		DEST_GAMMA="$( "${SCRIPTPATH}" source --gamma "${DEST}" )"
+
+		AU_TXT="/cache0/gamma/config/au.txt"
+		TMP_AU_TXT="$( mktemp )"
+		
+		if [[ -r "${DEST}/#au_id_file" ]] ; then
+			GET_AU_ID="$( cat "${DEST}/#au_id_file" | grep -E "^au[.]id=" | sed -r 's/^au[.]id\s*=\s*//' )"
+			if [[ -n "${GET_AU_ID}" ]] ; then
+				FIND_KEY_UNIQID_PATTERN=$( printf "%s" "${GET_AU_ID}" | sed -r "s/[^A-Za-z0-9]/./g" )
+				FIND_KEY=$( printf "^(org[.]lockss[.]au[.]%s[.]reserved[.]repository)=(.*)$" "${FIND_KEY_UNIQID_PATTERN}" )
+				DEST_GAMMA_ESCAPED=$( printf '%s' "local\\\\:${DEST_GAMMA//\//\\/}" )
+				cat "${AU_TXT}" | sed -r "s/${FIND_KEY}/\1=${DEST_GAMMA_ESCAPED}/g" > "${TMP_AU_TXT}"
+				if [[ -n "${V}" ]] ; then
+					diff -u "${AU_TXT}" "${TMP_AU_TXT}"
+				fi
+				
+				cp ${V} "${AU_TXT}" "${AU_TXT}~"
+				sudo chown ${V} --reference="${AU_TXT}" "${AU_TXT}~"
+				sudo chmod ${V} --reference="${AU_TXT}" "${AU_TXT}~"
+				
+				mv ${V} "${TMP_AU_TXT}" "${AU_TXT}"
+				sudo chown ${V} --reference="${AU_TXT}~" "${AU_TXT}"
+				sudo chmod ${V} --reference="${AU_TXT}~" "${AU_TXT}"
+			fi
+		fi
+		
+		;;
+		
+		
+	"secure")
+		FROM="${_PARAM[from]}"
+		TO="${_PARAM[to]}"
+		
+		if [[ -n "${_PARAM[context]}" ]] ; then
+			SCRIPT_CMD_NAME="${_PARAM[context]}"
+		fi
+		
+		if [[ -z "${FROM}" ]] ; then
+			printf "[%s] REQUIRED: --from=[<SRC>]\n" "${SCRIPT_CMD_NAME}" 1>&2
+			EXITCODE=255
+		elif [[ -z "${TO}" ]] ; then
+			printf "[%s] REQUIRED: --to=[<DEST>]\n" "${SCRIPT_CMD_NAME}" 1>&2
+			EXITCODE=255
+		else
+			# secure the destination directory's existence and permissions, if necessary
+			TO_DIR="$( dirname "${TO}" )"
+			TO_PARENT="$( dirname "${TO_DIR}" )"
+			REF_DIR="${TO_PARENT}/cache"
+
+			if [[ ! -d "${TO_DIR}" ]] ; then
+				sudo mkdir --parents ${V} "${TO_DIR}"
+				if [[ -d "${REF_DIR}" ]] ; then
+					sudo chown ${V} --reference="${REF_DIR}" "${TO_DIR}"
+					sudo chmod ${V} --reference="${REF_DIR}" "${TO_DIR}"
+				fi
+			fi
+			test -d "${TO_DIR}" ; EXITCODE=$?
+		fi
+		;;
+	
+	"source")
+		for SRC in "${_ARGV[@]:2}" ; do
+			if [[ -n "${SRC}" ]] ; then
+				SRC_BASE=$( basename "${SRC}" )
+				SRC_DIR=$( dirname "${SRC}" )
+				while [[ "${SRC_DIR}" != '/' ]] ; do
+					SRC_BASE=$( basename "${SRC_DIR}" )
+					SRC_DIR=$( dirname "${SRC_DIR}" )
+				done
+				
+				if [[ -n "${SRC_BASE}" ]] ; then
+					find "${SRC_DIR}${SRC_BASE}" -maxdepth 1 -name "gamma"
+				fi
+			fi
+		done
+		;;
+		
+	"destination")
+# @method adpn rebalance destination
+# Generates and displays a directory name for the next available AU directory in a LOCKSS cache volume.
+#
+# Usage: adpn rebalance destination [<DIRECTORY>] [<OPTIONS>]...
+#
+# DIRECTORY is a path to one or more of the LOCKSS cache volumes on your LOCKSS box. These are usually
+# called things like /cache0, /cache1, /cache2, etc. If in doubt, you can use the `adpn rebalance list`
+# command to get a list of likely candidates:
+#
+# 	adpn rebalance list.
+#
+# @version 2021.0224
+
+		declare -a DESTINATION_VOLUMES=()
+		if [[ "${_PARAM[on]}" ]] ; then
+			DESTINATION_VOLUMES+=("${_PARAM[on]}")
+		fi
+		for DESTINATION in "${_ARGV[@]:2}" ; do
+			DESTINATION_VOLUMES+=("${DESTINATION}")
+		done
+		
+		if [[ "${#DESTINATION_VOLUMES[@]}" -gt 0 ]] ; then
+			for DESTINATION in "${DESTINATION_VOLUMES[@]}" ; do
+				CACHE_DIR=$( find "${DESTINATION}" -maxdepth 2 -path '*/gamma/cache' )
+				if [[ -d "${CACHE_DIR}" ]] ; then
+					if [[ -z "${_PARAM[gamma]}" ]] ; then
+						cd "${CACHE_DIR}"
+
+						SLUGS=$( find . -maxdepth 1 -type d | xargs -n 1 basename )
+						LONGEST=$( printf "%s" "${SLUGS}" | wc -L )
+						PATTERN=$( printf '^[a-z]{%d}' "${LONGEST}" )
+						LAST_IN_TRANCHE=$( printf "%s" "${SLUGS}" | grep -E "${PATTERN}" | sort -r | head -n 1 )
+						NEXT_IN_TRANCHE=$( "${SCRIPTPATH}" increment --carry "${LAST_IN_TRANCHE}" )
+						
+						if [[ -n "${V}" ]] ; then
+							printf "[%s %s] Last AU cache directory on %s: %s\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" "${LAST_IN_TRANCHE}" 1>&2
+							if [[ -n "${NEXT_IN_TRANCHE}" ]] ; then
+								printf "[%s %s] Next AU cache directory on %s: %s\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" "${NEXT_IN_TRANCHE}" 1>&2
+							fi
+						fi
+						
+						if [[ -n "${NEXT_IN_TRANCHE}" ]] ; then
+							printf "%s/%s\n" "${CACHE_DIR}" "${NEXT_IN_TRANCHE}"
+						else
+							printf "[%s %s] Could not determine next AU cache directory on %s !\n" "${SCRIPT}" "${CMD}" "${DESTINATION}" 1>&2
+							EXITCODE=1
+						fi
+					
+					else
+						GAMMA_DIR=$( dirname "${CACHE_DIR}" )
+						printf "%s\n" "${GAMMA_DIR}"
+
+					fi
+				fi
+			done
+		else
+			EXITCODE=1
+			printf "[%s %s] You need to mention one or more LOCKSS volumes. Usage:\n\n" "${SCRIPT}" "${CMD}" 1>&2
+			# FIXME - we need to be able to use adpn_help_notes or similar in sub-scripts....
+		fi
+		;;
+	
+	"increment")
+		
+		if [[ -n "${_PARAM[carry]}" ]] ; then
+			if [[ -z "${_ARGV[2]}" ]] ; then
+				_ARGV[2]="_"
+			fi
+		fi
+		
+		for DIGITS in "${_ARGV[@]:2}" ; do
+
+			LEASTSIG="${DIGITS: -1}"
+			MOSTSIG="${DIGITS:0: -1}"
+			
+			INC=$( printf "%s" "${LEASTSIG}" | tr "_a-z" "a-z_" )
+			if [[ "${INC}" == "_" ]] ; then
+
+				# Carry me back to the most significant digits
+				MOSTSIG=$( "${SCRIPTPATH}" "${CMD}" --carry "${MOSTSIG}" )
+				INC="a"
+
+			fi
+			
+			OUTPUT="${MOSTSIG}${INC}"
+			if [[ -n "${V}" ]] ; then
+				printf "INCREMENTED: %s\n" "${OUTPUT}" 1>&2
+			fi
+			printf "%s\n" "${OUTPUT}"
+		done
+		
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}
