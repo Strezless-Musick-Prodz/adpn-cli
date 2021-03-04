@@ -352,7 +352,7 @@ case "${CMD}" in
 
 			AIIT_OUTPUT="${_PARAM[sqldump]}"
 			if [[ -z "${AIIT_OUTPUT}" ]] ; then
-				AIIT_OUTPUT="/dev/null"
+				[[ -z "${INGEST_DRY_RUN}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
 			fi
 			
 			adpn-ingest-into-titlesdb.py --snapshot
