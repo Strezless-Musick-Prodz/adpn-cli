@@ -84,13 +84,14 @@ Usage:
 ### CONFIGURATION: Set up some constants #################################################
 ##########################################################################################
 
-SCRIPTPATH=$(which $0)
-SCRIPTDIR=$(dirname ${SCRIPTPATH})
-SCRIPT=$(basename ${SCRIPTPATH})
+SCRIPTPATH=$(which "$0")
+SCRIPTPATH=$(readlink -f "${SCRIPTPATH}")
+SCRIPTDIR=$(dirname "${SCRIPTPATH}")
+SCRIPT=$(basename "${SCRIPTPATH}")
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 
-declare -a _ARGV ; _ARGV=($0)
+declare -a _ARGV ; _ARGV=("$0")
 declare -A _PARAM ; _PARAM=()
 declare -A SUBARGV_LOCKSSPLUGINURL ; SUBARGV_LOCKSSPLUGINURL=()
 declare -A SUBARGV_ADPNPLUGININFO ; SUBARGV_ADPNPLUGININFO=()
