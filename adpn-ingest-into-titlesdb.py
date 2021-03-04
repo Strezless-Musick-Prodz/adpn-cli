@@ -306,7 +306,7 @@ USE adpn;
 		}
 		
 		for k, m in tables.items() :
-			out_filename=( outpath + "/snapshot-" + k + "-" + sdate + ".sql" )
+			out_filename=( outpath + "/snapshot-" + self.switches['mysql-db'] + "-" + k + "-" + sdate + ".csv" )
 			print("* Writing table [" + k + "] rows to " + out_filename, end=" ... ")
 			try :
 				with open(out_filename, 'w') as f :
