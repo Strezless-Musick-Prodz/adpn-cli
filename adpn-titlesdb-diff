@@ -79,6 +79,10 @@ PROPS=$(adpn_setting props-server)
 XMLDIR=$(adpn_setting xmldir)
 WGET=$(adpn_setting wget)
 
+if [[ -n "${PROPS}" ]] ; then
+	TITLELIST="${PROPS%%+(/)}/titlelist/" 
+fi
+
 [[ -z "${_PARAM[verbose]}" ]] && V=0 || V="${_PARAM[verbose]}"
 [[ "${V}" =~ ^[0-9]+$ ]] && V="${V}" || V=1
 
@@ -115,14 +119,14 @@ OLDXML="${XMLDIR}/titlesdb.${PEER}.0.xml"
 NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
 
 EXITCODE=0
+TDB_URL="${TITLELIST}index?peer=${PEER}&stype=0&ext=.xml"
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
-    [[ $V -ge 2 ]] && echo "${WGET} '${PROPS}index?peer=${PEER}&stype=1&ext=.xml' > '${OLDXML}' || EXITCODE=\$?" >&2
-	${WGET} "${PROPS}index?peer=${PEER}&stype=1&ext=.xml" > "${OLDXML}" || EXITCODE=$?
+    [[ $V -ge 2 ]] && echo "${WGET} '${TDB_URL}' > '${OLDXML}' || EXITCODE=\$?" >&2
+	${WGET} "${TDB_URL}" > "${OLDXML}" || EXITCODE=$?
 	[[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
 	[[ -n "${HEADS}" ]] && rm "${HEADS}"
 fi
 
-TDB_URL="${PROPS}index?peer=${PEER}&stype=1&ext=.xml"
 [[ $V -ge 2 ]] && echo "${WGET} '${TDB_URL}' > '${NEWXML}' || EXITCODE=\$?" >&2
 ${WGET} "${TDB_URL}" > "${NEWXML}" || EXITCODE=$?
 [[ -n "${HEADS}" ]] && cat "${HEADS}" >& 2
