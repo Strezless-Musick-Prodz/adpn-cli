@@ -172,7 +172,15 @@ if [[ "${_ARGV[1]}" == "-" || "${_ARGV[1]}" =~ [.]json$ ]] ; then
 fi
 
 _ARGV=()
-_PARAM=()
+_PARAM=( ) # Defaults before command-line.
+for DEFAULT in "daemon" "daemon/user" "daemon/pass" ; do
+	DEFAULT_VALUE=$(adpnprop "${DEFAULT}")
+	if [[ -n "${DEFAULT_VALUE}" ]] ; then
+		DEFAULT_KEY="$( basename "${DEFAULT}" )"
+		_PARAM["${DEFAULT_KEY}"]="${DEFAULT_VALUE}"
+	fi 
+done
+
 _LINESWITCH=()
 
 SWITCHFILES=()
