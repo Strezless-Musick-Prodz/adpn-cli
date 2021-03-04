@@ -14,7 +14,7 @@
 # file named `adpn-titlesdb-diff.defaults.conf`, with one switch per line, in the same
 # directory as the script.
 #
-# @version 2019.0829
+# @version 2021.0304
 
 __DOC__="""
 Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]

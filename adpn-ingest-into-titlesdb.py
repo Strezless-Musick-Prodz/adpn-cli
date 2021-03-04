@@ -10,7 +10,7 @@
 # Exits with code 0 on success, or non-zero exit code on failure, to allow for pipelining
 # with other ADPN Ingest tools.
 #
-# @version 2021.0212
+# @version 2021.0304
 
 import sys, os, fileinput, tempfile, datetime, json, csv, re
 import MySQLdb
