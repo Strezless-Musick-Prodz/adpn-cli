@@ -162,7 +162,7 @@ adpn_command_line "${SWITCHFILES[@]}"
 
 [[ "${V}" -ge 1 ]] && echo "[${SCRIPT}] command line: ${_CMDLINE}" >& 2
 
-if [[ "${_ARGV[1]}" == "-" || "${_ARGV[1]}" =~ [.]json$ ]] ; then
+if [[ "${_ARGV[1]}" == "-" || -r "${_ARGV[1]}" ]] ; then
 	[[ "${V}" -ge 1 ]] && echo "[${SCRIPT}] reading JSON input from: ${_ARGV[1]}" >& 2
 	adpn-json-to-switches.py "${_ARGV[1]}" >> "${JSONSWITCHES}" ; AJTS_ERRCODE="$?"
 	if [[ "${AJTS_ERRCODE}" -eq 255 ]] ; then

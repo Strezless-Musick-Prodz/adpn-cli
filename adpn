@@ -302,7 +302,7 @@ case "${CMD}" in
 				read -p "To (ALL|<PEER>): " INGEST_TO
 			fi
 		fi
-		
+
 		adpn-ingest-test "${AIT_INPUT}" --remote=1 --peer-to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
 		EXITCODE="$?"
 
@@ -328,7 +328,7 @@ case "${CMD}" in
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2019.0829
+# @version 2021.0318
 
 # @method adpn publish
 # Config Manager: accept JSON data specifying a new AU for ingest,
@@ -342,7 +342,7 @@ case "${CMD}" in
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2019.0715
+# @version 2021.0318
 
 		V="${_LINESWITCH[verbose]}"
 
