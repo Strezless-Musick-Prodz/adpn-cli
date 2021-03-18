@@ -300,7 +300,7 @@ case "${CMD}" in
 			PEER_TO=$( adpnprop "peer" )
 		fi
 		if [[ -n "${PEER_TO}" ]] ; then
-			PEER_TO=$( printf "--peer-to=%s" "${PEER_TO}" )
+			PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
 		fi
 
 		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" ${V} > "${AIT_OUTPUT}"
