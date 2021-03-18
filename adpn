@@ -295,15 +295,15 @@ case "${CMD}" in
 			AIT_INPUT="-"
 		fi
 
-		INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-		if [[ -z "${INGEST_TO}" ]] ; then
-			INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
-			if [[ -z "${INGEST_TO}" ]] ; then
-				read -p "To (ALL|<PEER>): " INGEST_TO
-			fi
+		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+		if [[ -z "${PEER_TO}" ]] ; then
+			PEER_TO=$( adpnprop "peer" )
+		fi
+		if [[ -n "${PEER_TO}" ]] ; then
+			PEER_TO=$( printf "--peer-to=%s" "${PEER_TO}" )
 		fi
 
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 --peer-to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" ${V} > "${AIT_OUTPUT}"
 		EXITCODE="$?"
 
 		cat "${AIT_OUTPUT}" ; echo	
