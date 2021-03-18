@@ -272,6 +272,47 @@ case "${CMD}" in
 			rm "${AIT_OUTPUT}"
 		fi
 		;;
+	
+	"verify")
+# @method adpn verify
+# Peer Manager, Config Manager: accept JSON data specifying a new AU for ingest
+# test connection to the staging server and verify parameters
+#
+# Usage: adpn verify [-|<JSONFILE>] [<OPTIONS>]
+#
+# Options:
+#
+#   --from=<PUB> 	code for origin publisher (AUB, ADAH, etc.); overrides JSON data
+# 	--to=<PEER>   	node to publish to (AUB1, AUB2, ADAH, ...; ALL=entire network)
+# 	--peer=<PEER>   synonym for --to==<PEER>
+#
+# @version 2021.0318
+		V="${_LINESWITCH[verbose]}"
+
+		AIT_OUTPUT="$(mktemp)"
+		AIT_INPUT="${_ARGV[2]}"
+		if [[ -z "${AIT_INPUT}" ]] ; then
+			AIT_INPUT="-"
+		fi
+
+		INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+		if [[ -z "${INGEST_TO}" ]] ; then
+			INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
+			if [[ -z "${INGEST_TO}" ]] ; then
+				read -p "To (ALL|<PEER>): " INGEST_TO
+			fi
+		fi
+		
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 --peer-to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
+		EXITCODE="$?"
+
+		cat "${AIT_OUTPUT}" ; echo	
+		rm "${AIT_OUTPUT}"
+		
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
+		fi
+		;;
 		
 	"ingest"|"publish")
 # @method adpn ingest
@@ -305,34 +346,18 @@ case "${CMD}" in
 
 		V="${_LINESWITCH[verbose]}"
 
-		AIT_OUTPUT="$(mktemp)"
-		AIT_INPUT="${_ARGV[2]}"
-		if [[ -z "${AIT_INPUT}" ]] ; then
-			AIT_INPUT="-"
-		fi
+		AV_OUTPUT="$(mktemp)"
+		adpn verify "${_CMDLINE[@]:2}" > "${AV_OUTPUT}"
+		AV_ERRCODE="$?"
 
-		INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-		if [[ "publish" == "${CMD}" ]] ; then
-			INGEST_TO="ALL"
-		fi
-		if [[ -z "${INGEST_TO}" ]] ; then
-			INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
-			if [[ -z "${INGEST_TO}" ]] ; then
-				read -p "To (ALL|<PEER>): " INGEST_TO
-			fi
-		fi
+		cat "${AV_OUTPUT}" ; echo
+		JSON_PACKET=$(grep "^JSON PACKET:" "${AV_OUTPUT}" | cut --fields=2-)
 		
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 --peer-to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
-		AIT_ERRCODE="$?"
-
-		cat "${AIT_OUTPUT}" ; echo
-		JSON_PACKET=$(grep "^JSON PACKET:" "${AIT_OUTPUT}" | cut --fields=2-)
+		rm "${AV_OUTPUT}"
 		
-		rm "${AIT_OUTPUT}"
-		
-		if [[ "${AIT_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
-			EXITCODE="${AIT_ERRCODE}"
+		if [[ "${AV_ERRCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn verify failed." 1>&2
+			EXITCODE="${AV_ERRCODE}"
 		
 		elif [[ -z "${_PARAM[peer]}" ]] ; then
 
@@ -341,6 +366,17 @@ case "${CMD}" in
 				INGEST_FROM=$(echo "${JSON_PACKET}" | adpn-json.py --key="From Peer")
 				if [[ -z "${INGEST_FROM}" ]] ; then
 					read -p "From (ALL|<PEER>): " INGEST_FROM
+				fi
+			fi
+
+			INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+			if [[ "publish" == "${CMD}" ]] ; then
+				INGEST_TO="ALL"
+			fi
+			if [[ -z "${INGEST_TO}" ]] ; then
+				INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
+				if [[ -z "${INGEST_TO}" ]] ; then
+					read -p "To (ALL|<PEER>): " INGEST_TO
 				fi
 			fi
 			
