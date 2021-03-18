@@ -322,7 +322,7 @@ case "${CMD}" in
 			fi
 		fi
 		
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 --to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 --peer-to="${INGEST_TO}" ${V} > "${AIT_OUTPUT}"
 		AIT_ERRCODE="$?"
 
 		cat "${AIT_OUTPUT}" ; echo
