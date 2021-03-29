@@ -109,17 +109,15 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	exit 0
 fi
 
-if [[ -z "${_ARGV[1]}" ]] ; then
-	PEER=ALL
-else
-	PEER="${_ARGV[1]}"
-fi
+PEER="$( [[ -z "${_ARGV[1]}" ]] && printf "%s" "ALL" || printf "%s" "${_ARGV[1]}" )"
+P_STYPE="$( [[ -z "${_PARAM[stype]}" ]] && printf "%s" "0" || printf "%s" "${_PARAM[stype]}" )"
+P_EXT="$( [[ -z "${_PARAM[ext]}" ]] && printf "%s" ".xml" || printf "%s" "${_PARAM[ext]}" )"
 
-OLDXML="$( [[ -z "${_PARAM[before]}" || "${_PARAM[before]}" == "before" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}.0.xml" || printf "%s" "${_PARAM[before]}" )"
-NEWXML="$( [[ -z "${_PARAM[after]}" || "${_PARAM[after]}" == "after" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}.1.xml" || printf "%s" "${_PARAM[after]}" )"
+OLDXML="$( [[ -z "${_PARAM[before]}" || "${_PARAM[before]}" == "before" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}-${P_STYPE}.0${P_EXT}" || printf "%s" "${_PARAM[before]}" )"
+NEWXML="$( [[ -z "${_PARAM[after]}" || "${_PARAM[after]}" == "after" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}-${P_STYPE}.1${P_EXT}" || printf "%s" "${_PARAM[after]}" )"
 
 EXITCODE=0
-TDB_URL="${TITLELIST}index?peer=${PEER}&stype=0&ext=.xml"
+TDB_URL="${TITLELIST}index?peer=${PEER}&stype=${P_STYPE}&ext=${P_EXT}"
 if [[ ! -z "${_PARAM[before]}" || ! -r "${OLDXML}" ]] ; then
     [[ $V -ge 2 ]] && echo "${WGET} '${TDB_URL}' > '${OLDXML}' || EXITCODE=\$?" >&2
 	${WGET} "${TDB_URL}" > "${OLDXML}" || EXITCODE=$?

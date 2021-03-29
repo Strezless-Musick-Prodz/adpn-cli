@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0318
+# @version 2021.0330
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -314,7 +314,7 @@ case "${CMD}" in
 		fi
 		;;
 		
-	"ingest"|"publish")
+	"ingest")
 # @method adpn ingest
 # Config Manager: accept JSON data specifying a new AU for ingest,
 # test connection to the staging server and verify parameters; then
@@ -324,25 +324,11 @@ case "${CMD}" in
 #
 # Options:
 #   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
-#   --to=ALL|<PEER>         node to publish to (AUB, ADAH...; ALL=entire network)	
+#   --to=ALL|<PEER>     	node to publish to (AUB, ADAH...; ALL=entire network)	
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2021.0318
-
-# @method adpn publish
-# Config Manager: accept JSON data specifying a new AU for ingest,
-# test connection to the staging server and verify parameters; then
-# insert into titlesdb for whole network and confirm insertion.
-#
-# Usage: adpn publish [-|<JSONFILE>] [<OPTIONS>]...
-#
-# Options:
-#   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
-#   --dry-run           	output SQL script for titlesdb insert but do not execute
-#   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
-#
-# @version 2021.0318
+# @version 2021.0330
 
 		V="${_LINESWITCH[verbose]}"
 
@@ -359,7 +345,7 @@ case "${CMD}" in
 			echo "[${SCRIPT} ${CMD}] adpn verify failed." 1>&2
 			EXITCODE="${AV_ERRCODE}"
 		
-		elif [[ -z "${_PARAM[peer]}" ]] ; then
+		else 
 
 			INGEST_FROM="${_PARAM[from]}"
 			if [[ -z "${INGEST_FROM}" ]] ; then
@@ -370,9 +356,6 @@ case "${CMD}" in
 			fi
 
 			INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-			if [[ "publish" == "${CMD}" ]] ; then
-				INGEST_TO="ALL"
-			fi
 			if [[ -z "${INGEST_TO}" ]] ; then
 				INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
 				if [[ -z "${INGEST_TO}" ]] ; then
@@ -380,10 +363,7 @@ case "${CMD}" in
 				fi
 			fi
 			
-			INGEST_DRY_RUN=""
-			if [[ ! -z "${_PARAM[dry-run]}" ]] ; then
-				INGEST_DRY_RUN="--dry-run"
-			fi
+			INGEST_DRY_RUN="$( [[ ! -z "${_PARAM[dry-run]}" ]] && printf "%s" "--dry-run" || printf "%s" "" )"
 			
 			adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
 
@@ -408,6 +388,70 @@ case "${CMD}" in
 					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit ingested into ${INGEST_FROM} titlesdb." 1>&2
 				fi
 			fi
+		fi
+		;;
+		
+	"publish")
+# @method adpn publish
+# Config Manager: accept JSON data specifying a new AU for ingest,
+# test connection to the staging server and verify parameters; then
+# insert into titlesdb for whole network and confirm insertion.
+#
+# Usage: adpn publish [-|<JSONFILE>] [<OPTIONS>]...
+#
+# Options:
+#   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
+#   --dry-run           	output SQL script for titlesdb insert but do not execute
+#   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
+#
+# @version 2021.0330
+
+		V="${_LINESWITCH[verbose]}"
+
+		AI_OUTPUT="$(mktemp)"
+		adpn ingest "${_CMDLINE[@]:2}" --to=ALL > "${AI_OUTPUT}"
+		AI_ERRCODE="$?"
+
+		cat "${AI_OUTPUT}"
+		JSON_PACKET=$(grep "^JSON PACKET:" "${AI_OUTPUT}" | cut --fields=2-)
+		
+		rm "${AI_OUTPUT}"
+
+		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn ingest failed." 1>&2
+			EXITCODE="${AI_ERRCODE}"
+		
+		else
+
+			TDB_XML=$( adpnprop "props/titlesdb.xml" )
+			if [[ -r "${TDB_XML}" ]] ; then
+
+				TDB_PATH=$( readlink -f "${TDB_XML}" )
+				TDB_DIR=$( dirname "${TDB_PATH}" )
+				TDB_FILE=$( basename "${TDB_PATH}" )
+				
+				cd "${TDB_DIR}"
+				adpn-titlesdb-diff --before="${TDB_PATH}" --stype=1
+				git --no-pager diff
+				
+				AU_TITLE=$(echo "${JSON_PACKET}" | adpn-json.py --key="Ingest Title")
+
+				printf "%s\n" "############################"
+				printf "%s\n" "## NEXT STEPS TO COMPLETE ##"
+				printf "%s\n" "############################"
+				printf "\n"
+				printf "%s\n" '# --- cut here --- #'
+				printf "cd '%s'\n" "${TDB_DIR}"
+				printf "git add '%s'\n" "${TDB_FILE}"
+				printf "git commit --message 'Promoted new AU (%s)'\n" "${AU_TITLE}"
+				printf "%s\n" '# --- cut here --- #'
+
+			else 
+			
+				printf "[${SCRIPT} ${CMD}] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n" "${TDB_XML}" 1>&2
+				
+			fi
+			
 		fi
 		;;
 	
