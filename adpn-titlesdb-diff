@@ -14,7 +14,7 @@
 # file named `adpn-titlesdb-diff.defaults.conf`, with one switch per line, in the same
 # directory as the script.
 #
-# @version 2021.0304
+# @version 2021.0330
 
 __DOC__="""
 Usage: adpn-titlesdb-diff [<OPTION>]... [<PEER>|ALL]
@@ -115,8 +115,8 @@ else
 	PEER="${_ARGV[1]}"
 fi
 
-OLDXML="${XMLDIR}/titlesdb.${PEER}.0.xml"
-NEWXML="${XMLDIR}/titlesdb.${PEER}.1.xml"
+OLDXML="$( [[ -z "${_PARAM[before]}" || "${_PARAM[before]}" == "before" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}.0.xml" || printf "%s" "${_PARAM[before]}" )"
+NEWXML="$( [[ -z "${_PARAM[after]}" || "${_PARAM[after]}" == "after" ]] && printf "%s" "${XMLDIR}/titlesdb.${PEER}.1.xml" || printf "%s" "${_PARAM[after]}" )"
 
 EXITCODE=0
 TDB_URL="${TITLELIST}index?peer=${PEER}&stype=0&ext=.xml"
