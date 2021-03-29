@@ -281,12 +281,12 @@ case "${CMD}" in
 # Usage: adpn verify [-|<JSONFILE>] [<OPTIONS>]
 #
 # Options:
-#
-#   --from=<PUB> 	code for origin publisher (AUB, ADAH, etc.); overrides JSON data
-# 	--to=<PEER>   	node to publish to (AUB1, AUB2, ADAH, ...; ALL=entire network)
-# 	--peer=<PEER>   synonym for --to==<PEER>
+#    --from=<PUB> 	code for origin publisher (AUB, ADAH, etc.); overrides JSON data
+#    --to=<PEER>   	node to publish to (AUB1, AUB2, ADAH, ...; ALL=entire network)
+#    --peer=<PEER> 	synonym for --to=<PEER>
 #
 # @version 2021.0318
+
 		V="${_LINESWITCH[verbose]}"
 
 		AIT_OUTPUT="$(mktemp)"
@@ -430,12 +430,21 @@ case "${CMD}" in
 				TDB_DIR=$( dirname "${TDB_PATH}" )
 				TDB_FILE=$( basename "${TDB_PATH}" )
 				
+				printf "\n"
+				printf "* Generating new static %s for network..." "${TDB_FILE}"
+
 				cd "${TDB_DIR}"
 				adpn-titlesdb-diff --before="${TDB_PATH}" --stype=1
-				git --no-pager diff
+
+				printf " (ok)\n"
+
+				printf "* Comparing new %s to prior revision...\n\n"
+				
+				git --no-pager diff --exit-code && printf "%s\n" "[no difference]"
 				
 				AU_TITLE=$(echo "${JSON_PACKET}" | adpn-json.py --key="Ingest Title")
 
+				printf "%s\n"
 				printf "%s\n" "############################"
 				printf "%s\n" "## NEXT STEPS TO COMPLETE ##"
 				printf "%s\n" "############################"
