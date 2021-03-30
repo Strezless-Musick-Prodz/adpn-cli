@@ -383,7 +383,7 @@ case "${CMD}" in
 				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${INGEST_DRY_RUN}"  ]] ; then
 					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
 					EXITCODE="${ATD_ERRCODE}"
-				else
+				elif [[ -z "${_PARAM[context]}" ]] ; then
 					echo "" 1>&2
 					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit ingested into ${INGEST_FROM} titlesdb." 1>&2
 				fi
@@ -409,7 +409,7 @@ case "${CMD}" in
 		V="${_LINESWITCH[verbose]}"
 
 		AI_OUTPUT="$(mktemp)"
-		adpn ingest "${_CMDLINE[@]:2}" --to=ALL > "${AI_OUTPUT}"
+		adpn ingest "${_CMDLINE[@]:2}" --to=ALL --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -422,6 +422,8 @@ case "${CMD}" in
 			EXITCODE="${AI_ERRCODE}"
 		
 		else
+			printf "\n" 1>&2
+			printf "[${SCRIPT} ${CMD}] DONE: Archival Unit published to ${INGEST_FROM} titlesdb.\n" 1>&2
 
 			TDB_XML=$( adpnprop "props/titlesdb.xml" )
 			if [[ -r "${TDB_XML}" ]] ; then
