@@ -130,15 +130,25 @@ rawurlencode() {
   local strlen=${#string}
   local encoded=""
   local pos c o
-
+  local level="${2}"
+  
   for (( pos=0 ; pos<strlen ; pos++ )); do
      c=${string:$pos:1}
      case "$c" in
-        [-_.~a-zA-Z0-9] ) o="${c}" ;;
-        * )               printf -v o '%%%02x' "'$c"
+        [-_a-zA-Z0-9] ) 	o="${c}" ;;
+        [.~] )          	[[ "${level}" -ge 2 ]] && printf -v o '%%%02X' "'$c" || o="${c}" ;;
+        * )             	printf -v o '%%%02X' "'$c"
      esac
      encoded+="${o}"
   done
   echo "${encoded}"    # You can either set a return variable (FASTER) 
   REPLY="${encoded}"   #+or echo the result (EASIER)... or both... :p
 }
+
+# urldecode: Decodes a command-line parameter from URL (%hex) style encoding to plain text
+# one-liner solution provided by @guest and @netdesignate at https://stackoverflow.com/a/37840948
+function urldecode() { : "${*//+/ }"; echo -e "${_//%/\\x}"; }
+
+# join_by: Joins a list of parameters using a delimiter string
+# one-liner solution provided by @Nicholas Sushkin at https://stackoverflow.com/a/17841619
+function join_by { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
