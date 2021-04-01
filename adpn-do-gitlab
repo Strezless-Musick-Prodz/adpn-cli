@@ -181,9 +181,11 @@ case "${CMD}" in
 		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
 		RE_PACKET="^JSON\s+PACKET:\s*"
+		
 		if [[ "${EXITCODE}" -eq 0 ]] ; then
-			#printf "DBG(file): %s\n"  "$( cat "${F_GL_ISSUE}" )" 1>&2
+			ALL_GREPS=1 # assume failure until we find a match
 			
+			# 1. Scan for the JSON packet, if any, in issue.description
 			IFS=""
 			cat "${F_GL_ISSUE}" | while read -r LINE ; do
 
@@ -196,16 +198,21 @@ case "${CMD}" in
 
 				printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}"
 				GREPEXIT="$?"
-				if [[ "${GREPEXIT}" -ge "${EXITCODE}" ]] ; then
-					EXITCODE="$GREPEXIT"
+				
+				# if not found, retain some data for possible error message
+				if [[ "${GREPEXIT}" -ge 0 ]] ; then
 					ERR_DATA=$( printf "%s [title: '%s']" "${ERR_DATA}" "${ISH_TITLE}" )
 				fi
+				
+				# if found, flag this as OK
+				if [[ "${GREPEXIT}" -lt "${ALL_GREPS}" ]] ; then
+					ALL_GREPS="${GREPEXIT}"
+				fi
+
 			done
-		fi
 		
-		if [[ "${EXITCODE}" -eq 1 ]] ; then
-			# Try looking in the notes
-			ISHN="${ISH}#notes"
+			# 2. Scan for the JSON packet, if any, in issue/notes.body
+			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
 			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode > "${F_GL_ISSUE}"
 			EXITCODE="$?"
 			
@@ -216,13 +223,18 @@ case "${CMD}" in
 					ENCBODY=$( echo "${LINE}" | cut --field=4 )
 					BODY=$( urldecode "${ENCBODY}" )
 					GREP=$( printf "%s" "${BODY}" | grep -E "${RE_PACKET}" )
-					EXITCODE="$?"
+					GREPEXIT="$?"
 
 					if [[ -n "${GREP}" ]] ; then
 						printf "%s\n" "${GREP}"
-						break;
+					fi
+					
+					# if found, flag this as OK
+					if [[ "${GREPEXIT}" -lt "${ALL_GREPS}" ]] ; then
+						ALL_GREPS="${GREPEXIT}"
 					fi
 				done
+				EXITCODE="${ALL_GREPS}"
 			fi
 		fi
 		
