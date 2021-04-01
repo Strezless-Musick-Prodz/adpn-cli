@@ -244,38 +244,49 @@ case "${CMD}" in
 			"${ME}" packet "${_CMDLINE[@]:3}" ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "issue" ]] ; then
-		
+		# Treat this as a request for a Gitlab Issue object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/issues.html>
+				
 			"${ME}" issue "${_CMDLINE[@]:3}" ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "project" ]] ; then
-		
+		# Treat this as a request for a Gitlab Project object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/projects.html>		
+
 			"${ME}" project "${_CMDLINE[@]:3}" ; EXITCODE="$?"
 			
 		else 
-		# Treat this as one or more direct requests to the Gitlab API
+		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
 
 			PRIVATE_TOKEN=$( adpnprop "gitlab/token" )
-
-			API_URL=$( adpnprop "gitlab/base" )
-			if [[ -n "${_PARAM[url]}" ]] ; then
-				API_URL="${_PARAM[url]}"
-			fi
-		
-			declare -A CURL_SW=()
-			CURL_SW["silent"]="--silent"
-			CURL_SW["request"]="--request GET"
-			if [[ -n "${_PARAM[fail]}" ]] ; then
-				CURL_SW["fail"]="--fail"
-			fi
-			for SLUG in "${_ARGV[@]:2}" ; do
-				URL=$( printf "${API_URL}" "${SLUG#/}" )
-				curl ${CURL_SW[@]} --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "${URL}"
-
-				CURLEXIT="$?"
-				if [[ "${CURLEXIT}" -ge "${EXITCODE}" ]] ; then
-					EXITCODE="${CURLEXIT}"
+			if [[ -z "${PRIVATE_TOKEN}" ]] ; then
+				printf "[%s] WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>\n" "${SCRIPT_CMD_NAME}" 1>&2
+			else 
+			
+				API_URL=$( adpnprop "gitlab/base" )
+				if [[ -n "${_PARAM[url]}" ]] ; then
+					API_URL="${_PARAM[url]}"
 				fi
-			done
+		
+				declare -a CURL_SW=()
+				CURL_SW+=( "--silent" )
+				CURL_SW+=( "--request" "GET" )
+				if [[ -n "${_PARAM[fail]}" ]] ; then
+					CURL_SW+=( "--fail" )
+				fi
+				if [[ -n "${PRIVATE_TOKEN}" ]] ; then
+					CURL_SW+=( "--header" )
+					CURL_SW+=( "PRIVATE-TOKEN: ${PRIVATE_TOKEN}"  )
+				fi
+				
+				for SLUG in "${_ARGV[@]:2}" ; do
+					URL=$( printf "${API_URL}" "${SLUG#/}" )
+					curl "${CURL_SW[@]}" "${URL}"
+
+					CURLEXIT="$?"
+					if [[ "${CURLEXIT}" -ge "${EXITCODE}" ]] ; then
+						EXITCODE="${CURLEXIT}"
+					fi
+				done
+			fi
 		fi
 		;;
 		
