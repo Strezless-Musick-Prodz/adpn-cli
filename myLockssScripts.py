@@ -143,16 +143,28 @@ class myPyJSON :
 	"""Extract JSON hash tables from plain-text input, for example copy-pasted or piped into stdin.
 	"""
 	
-	def __init__ (self) :
+	def __init__ (self, splat=True, cascade=False) :
 		"""Initialize the JSON extractor pattern."""
-		self._jsonPattern = "^(([A-Za-z0-9]+\s*)+:\s*)?([{].*[}])\s*$"
+		self._jsonProlog = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
 		self._jsonText = [ ]
+		self._splat = splat
+		self._cascade = cascade
 		
 	@property
-	def pattern (self) :
+	def prolog (self) :
 		"""Regex that matches and parses out the JSON representation from a line of text."""
-		return self._jsonPattern
+		return self._jsonProlog
 	
+	@property
+	def splat (self) :
+		"""Switch for splatting (or not) single item lists into their first unit."""
+		return self._splat
+		
+	@property
+	def cascade (self) :
+		"""Switch for joining (or not) multiple data items in a first-to-last cascade or list them separately."""
+		return self._cascade
+		
 	@property
 	def json (self) -> list :
 		"""List of all the JSON representations taken from the accepted input."""
@@ -170,20 +182,34 @@ class myPyJSON :
 	@property
 	def allData (self) :
 		"""A unified hash table that merges together all the tables parsed from the JSON representations."""
-		data = { "hashes": { "used": 0, "data": { } }, "lists": { "used": 0, "data": [ ] } } 
-		for table in self.data :
-			if isinstance(table, dict) :
-				data["hashes"]["data"] = {**data["hashes"]["data"], **table}
-				data["hashes"]["used"] = 1
-			elif isinstance(table, list) :
-				data["lists"]["data"].extend(table)
-				data["lists"]["used"] = 1
+		data = {
+			"splat": { "used": False, "data": [ ] },
+			"hashes": { "used": 0, "data": { } },
+			"lists": { "used": 0, "data": [ ] }
+		} 
 		
-		splat = [ data[glob]["data"] for glob in data.keys() if data[glob]["used"] ]
-		if len(splat) == 1 :
-			splat = splat[0]
-		return splat
+		for table in self.data :
+			if self.cascade :
+				if isinstance(table, dict) :
+					data["hashes"]["data"] = {**data["hashes"]["data"], **table}
+					data["hashes"]["used"] = True
+				elif isinstance(table, list) :
+					data["lists"]["data"].extend(table)
+					data["lists"]["used"] = True
+			else :
+				data["splat"]["used"] = True
+				data["splat"]["data"].extend( [ table ] )
+			
+		splat = [ self.splatted(data[glob]["data"]) for glob in data.keys() if data[glob]["used"] ]
+		return self.splatted(splat, force=True)
 	
+	def splatted (self, data, force=False) :
+		splat = data
+		if force or self.splat :
+			if isinstance(data, list) :
+				splat = data[0] if len(data)==1 else data
+		return splat
+		
 	def accept (self, jsonSource) :
 		"""Accept the plain-text input containing one or more JSON hash tables within the text.
 		
@@ -191,13 +217,13 @@ class myPyJSON :
 		(for example, flieinput.input()).
 		"""
 		if isinstance(jsonSource, str) :
-			src = jsonSource.split("\n")
+			src = jsonSource
 		else :
-			src = jsonSource		
-		
-		jsonMatches = [ re.match(self.pattern, line) for line in src ]
-		self._jsonText = [ ref.group(3) for ref in jsonMatches if ref ]
-	
+			src = "\n".join(jsonSource)
+
+		split_src = re.split(self.prolog, src, flags=re.M)
+		self._jsonText = [ bit for bit in split_src if len(bit.strip()) > 0 ]
+
 		if len(self._jsonText) == 0 :
 			self._jsonText = [ "".join(src) ]
 			
