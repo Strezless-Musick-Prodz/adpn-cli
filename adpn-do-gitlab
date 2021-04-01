@@ -1,0 +1,297 @@
+#!/bin/bash
+#
+# adpn-do-gitlab: script to handle Gitlab API commands
+#
+# @version 2021.0401
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+ME="${SCRIPTPATH}"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  issue  	Retrieve information about a Gitlab Issue thread
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=()
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+VV="${_LINESWITCH[verbose]}"
+QQ="${_LINESWITCH[quiet]}"
+V="${_LINESWITCH[verbose]}"
+Q=""
+
+if [[ -z "${_PARAM[verbose]}" ]] ; then
+	Q="--quiet"
+fi
+if [[ -n "${QQ}" ]] ; then
+	Q="--quiet"
+fi
+
+CMD="${_ARGV[1]}"
+
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+fi
+if [[ -n "${CMD}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+fi
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"list"|"project")
+# @method adpn gitlab list
+# Display a list of available projects.
+# 
+# Usage: adpn gitlab list
+#
+# @version 2021.0331
+
+		if [[ -z "${CMD}" ]] ; then
+			CMD="list"
+		fi
+		
+		if [[ -n "${_ARGV[*]:2}" ]] ; then
+			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
+			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
+			"${ME}" get "/projects?membership=1" | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
+		else
+			"${ME}" get "/projects?membership=1" | adpn-json.py --parse --key=id:path_with_namespace
+		fi
+		EXITCODE="$?"
+		;;
+
+	"issue")
+		API_PATH="/issues"
+		
+		[[ -n "${_PARAM[project]}" ]] && PROJECT="${_PARAM[project]}" || PROJECT="${_ARGV[2]}"
+
+		ISSUE_ASPECT=$( printf "%s" "${PROJECT}" | cut --field=3 --delimiter='#' --only-delimited )
+		ISSUE_ID=$( printf "%s" "${PROJECT}" | cut --field=2 --delimiter='#' --only-delimited )
+		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
+		
+		if [[ -n "${PROJECT}" ]] ; then
+			PROJECT_ID=$( "${ME}" project "${PROJECT}" | cut --field=2 )
+		fi
+		
+		if [[ -n "${_ARGV[3]}" ]] ; then
+			ISSUE_ID="${_ARGV[3]}"
+		fi
+
+		declare -a ADPN_JSON_SW=()
+		
+		[[ -n "${PROJECT_ID}" ]] && API_PATH=$( printf "/projects/%d%s" "${PROJECT_ID}" "${API_PATH}" )
+		[[ -n "${ISSUE_ID}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ID}" )
+		[[ -n "${ISSUE_ASPECT}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ASPECT}" )
+		
+		if [[ -n "${_PARAM[debug]}" ]] ; then
+			printf "[${SCRIPT}] ISSUE ID: %s\n" "${ISSUE_ID}" 1>&2
+			declare -p _ARGV 1>&2
+		fi
+		
+		if [[ -n "${_PARAM[key]}" ]] ; then
+			ADPN_JSON_SW+=( "--key=${_PARAM[key]}" )
+		fi
+
+		if [[ -n "${_PARAM[output]}" ]] ; then
+			ADPN_JSON_SW+=( $(printf "%s--output=%s" "" "${_PARAM[output]}" ) )
+		elif [[ -z "${_PARAM[key]}" ]] ; then
+			ADPN_JSON_SW+=( "--output=urlencode" )			
+		fi
+
+		F_JSON_OUT=$(mktemp)
+		"${ME}" get --fail "${API_PATH}" > "${F_JSON_OUT}"
+		EXITCODE="$?"
+
+		if [[ "${_PARAM[output]}" =~ ^(application/)?json$ ]] ; then
+			cat "${F_JSON_OUT}"
+		elif [[ "${EXITCODE}" -eq 0 ]] ; then
+			cat "${F_JSON_OUT}" | adpn-json.py --parse "${ADPN_JSON_SW[@]}"
+			EXITCODE="$?"
+		fi
+
+		rm "${F_JSON_OUT}"
+		;;
+
+	"packet")
+		
+		F_GL_ISSUE=$(mktemp)
+		ERR_DATA=""
+				
+		ISH="${_ARGV[2]}"
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		
+		RE_PACKET="^JSON\s+PACKET:\s*"
+		if [[ "${EXITCODE}" -eq 0 ]] ; then
+			#printf "DBG(file): %s\n"  "$( cat "${F_GL_ISSUE}" )" 1>&2
+			
+			IFS=""
+			cat "${F_GL_ISSUE}" | while read -r LINE ; do
+
+				ISSUE_ID=$( echo "${LINE}" | cut --field=2 )
+				ENCTITLE=$( echo "${LINE}" | cut --field=4 )
+				ENCBODY=$( echo "${LINE}" | cut --field=6 )
+				
+				ISH_TITLE=$( urldecode "${ENCTITLE}" )
+				ISH_BODY=$( urldecode "${ENCBODY}" )
+
+				printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}"
+				GREPEXIT="$?"
+				if [[ "${GREPEXIT}" -ge "${EXITCODE}" ]] ; then
+					EXITCODE="$GREPEXIT"
+					ERR_DATA=$( printf "%s [title: '%s']" "${ERR_DATA}" "${ISH_TITLE}" )
+				fi
+			done
+		fi
+		
+		if [[ "${EXITCODE}" -eq 1 ]] ; then
+			# Try looking in the notes
+			ISHN="${ISH}#notes"
+			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode > "${F_GL_ISSUE}"
+			EXITCODE="$?"
+			
+			if [[ "${EXITCODE}" -eq 0 ]] ; then
+				IFS=""
+				cat "${F_GL_ISSUE}" | while read -r LINE ; do
+					NOTE_ID=$( echo "${LINE}" | cut --field=2 )
+					ENCBODY=$( echo "${LINE}" | cut --field=4 )
+					BODY=$( urldecode "${ENCBODY}" )
+					GREP=$( printf "%s" "${BODY}" | grep -E "${RE_PACKET}" )
+					EXITCODE="$?"
+
+					if [[ -n "${GREP}" ]] ; then
+						printf "%s\n" "${GREP}"
+						break;
+					fi
+				done
+			fi
+		fi
+		
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			if [[ -z "${QQ}" ]] ; then
+				printf "[%s] No JSON packet found for issue %s%s\n" "${SCRIPT_CMD_NAME}" "${ISH}" "${ERR_DATA}" 1>&2
+			fi
+		fi
+		
+		rm -f "${F_GL_ISSUE}"
+		;;
+		
+	"get")
+
+		OBJECT="${_CMDLINE[2]}"
+		if [[ "${OBJECT}" == "packet" ]] ; then
+		# Treat this as a request for a JSON packet encoded within a given Gitlab Issue
+		
+			"${ME}" packet "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+			
+		elif [[ "${OBJECT}" == "issue" ]] ; then
+		
+			"${ME}" issue "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+			
+		elif [[ "${OBJECT}" == "project" ]] ; then
+		
+			"${ME}" project "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+			
+		else 
+		# Treat this as one or more direct requests to the Gitlab API
+
+			PRIVATE_TOKEN=$( adpnprop "gitlab/token" )
+
+			API_URL=$( adpnprop "gitlab/base" )
+			if [[ -n "${_PARAM[url]}" ]] ; then
+				API_URL="${_PARAM[url]}"
+			fi
+		
+			declare -A CURL_SW=()
+			CURL_SW["silent"]="--silent"
+			CURL_SW["request"]="--request GET"
+			if [[ -n "${_PARAM[fail]}" ]] ; then
+				CURL_SW["fail"]="--fail"
+			fi
+			for SLUG in "${_ARGV[@]:2}" ; do
+				URL=$( printf "${API_URL}" "${SLUG#/}" )
+				curl ${CURL_SW[@]} --header "PRIVATE-TOKEN: ${PRIVATE_TOKEN}" "${URL}"
+
+				CURLEXIT="$?"
+				if [[ "${CURLEXIT}" -ge "${EXITCODE}" ]] ; then
+					EXITCODE="${CURLEXIT}"
+				fi
+			done
+		fi
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}

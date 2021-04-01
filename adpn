@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0330
+# @version 2021.0401
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -289,12 +289,22 @@ case "${CMD}" in
 
 		V="${_LINESWITCH[verbose]}"
 
-		AIT_OUTPUT="$(mktemp)"
+		declare -a TEMP_CLEANUP=()
+		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 		AIT_INPUT="${_ARGV[2]}"
+		
 		if [[ -z "${AIT_INPUT}" ]] ; then
 			AIT_INPUT="-"
 		fi
 
+		if [[ "${AIT_INPUT}" =~ ^gitlab:(.*)$ ]] ; then
+			ISSUE="${BASH_REMATCH[1]}"
+			printf "* Retrieving JSON for Gitlab issue: %s\n" "${ISSUE}" 1>&2
+			
+			AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
+			"${SCRIPTPATH}" gitlab get packet "${ISSUE}" > "${AIT_INPUT}"
+		fi
+		
 		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
 		if [[ -z "${PEER_TO}" ]] ; then
 			PEER_TO=$( adpnprop "peer" )
@@ -306,9 +316,11 @@ case "${CMD}" in
 		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" ${V} > "${AIT_OUTPUT}"
 		EXITCODE="$?"
 
-		cat "${AIT_OUTPUT}" ; echo	
-		rm "${AIT_OUTPUT}"
-		
+		cat "${AIT_OUTPUT}" ; echo
+		for TMP in "${TEMP_CLEANUP[@]}" ; do
+			rm -v "${TMP}"
+		done
+
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
 		fi
@@ -465,7 +477,11 @@ case "${CMD}" in
 			
 		fi
 		;;
-	
+
+	"gitlab")
+		adpn-do-gitlab "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
+		;;
+
 	"serve")
 # @method adpn serve
 # Preservation Node Manager: Helps retrieve content preserved on a LOCKSS box.
@@ -526,7 +542,7 @@ case "${CMD}" in
 #
 # @version 2021.0302
 
-		adpn-do-rebalance --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		adpn-do-rebalance "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
 		;;
 
 	"publisher")
