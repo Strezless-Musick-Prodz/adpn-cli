@@ -8,6 +8,7 @@ SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
 SCRIPTDIR="$( dirname "${SCRIPTPATH}" )"
 SCRIPT="$( basename "${SCRIPTPATH}" )"
+ME="${SCRIPTPATH}"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 
@@ -20,7 +21,8 @@ __DOC__="""${__USAGE__}
 
 The most commonly used ${SCRIPT} commands are:
   preserve  	ADPNet Member: prepare an AU for preservation and notify config manager
-  ingest    	Config Manager: accept an AU from Member, test, and insert into titlesdb
+  verify	Node Manager: accept an AU from Member, test, and confirm accessibility from your node
+  ingest    	Config Manager: accept a verified AU from Node, test, and insert into titlesdb
   publish   	Config Manager: publish an accepted Member's AU to the entire network
   help      	Display usage notes for the ${SCRIPT} script or for a given command
   
@@ -66,12 +68,11 @@ rm "${CMDLINETXT}"
 EXITCODE=0
 CMD="${_ARGV[1]}"
 
-
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
 		CMD="version"
 	else
-		adpn version
+		"${ME}" version
 	fi
 fi
 
@@ -114,7 +115,7 @@ case "${CMD}" in
 			echo "${__DOC__}"
 			EXITCODE=0
 		else 
-			adpn_help_notes "${SCRIPTPATH}" "${HELPCMD}" "${CMD}"
+			adpn_help_notes "${ME}" "${HELPCMD}" "${CMD}"
 			EXITCODE=$?
 		fi
 		;;
@@ -302,7 +303,7 @@ case "${CMD}" in
 			printf "* Retrieving JSON for Gitlab issue: %s\n" "${ISSUE}" 1>&2
 			
 			AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
-			"${SCRIPTPATH}" gitlab get packet "${ISSUE}" > "${AIT_INPUT}"
+			"${ME}" gitlab get packet "${ISSUE}" > "${AIT_INPUT}"
 		fi
 		
 		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
@@ -318,7 +319,7 @@ case "${CMD}" in
 
 		cat "${AIT_OUTPUT}" ; echo
 		for TMP in "${TEMP_CLEANUP[@]}" ; do
-			rm -v "${TMP}"
+			rm "${TMP}"
 		done
 
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
@@ -345,7 +346,7 @@ case "${CMD}" in
 		V="${_LINESWITCH[verbose]}"
 
 		AV_OUTPUT="$(mktemp)"
-		adpn verify "${_CMDLINE[@]:2}" > "${AV_OUTPUT}"
+		"${ME}" verify "${_CMDLINE[@]:2}" > "${AV_OUTPUT}"
 		AV_ERRCODE="$?"
 
 		cat "${AV_OUTPUT}" ; echo
@@ -354,7 +355,7 @@ case "${CMD}" in
 		rm "${AV_OUTPUT}"
 		
 		if [[ "${AV_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn verify failed." 1>&2
+			echo "[${SCRIPT} ${CMD}] ${SCRIPT} verify failed." 1>&2
 			EXITCODE="${AV_ERRCODE}"
 		
 		else 
@@ -421,7 +422,7 @@ case "${CMD}" in
 		V="${_LINESWITCH[verbose]}"
 
 		AI_OUTPUT="$(mktemp)"
-		adpn ingest "${_CMDLINE[@]:2}" --to=ALL --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
+		"${ME}" ingest "${_CMDLINE[@]:2}" --to=ALL --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -430,7 +431,7 @@ case "${CMD}" in
 		rm "${AI_OUTPUT}"
 
 		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn ingest failed." 1>&2
+			echo "[${SCRIPT} ${CMD}] ${SCRIPT} ingest failed." 1>&2
 			EXITCODE="${AI_ERRCODE}"
 		
 		else
