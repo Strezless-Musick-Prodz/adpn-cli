@@ -170,10 +170,19 @@ class myPyJSON :
 	@property
 	def allData (self) :
 		"""A unified hash table that merges together all the tables parsed from the JSON representations."""
-		hashtable = { }
+		data = { "hashes": { "used": 0, "data": { } }, "lists": { "used": 0, "data": [ ] } } 
 		for table in self.data :
-			hashtable = {**hashtable, **table}
-		return hashtable
+			if isinstance(table, dict) :
+				data["hashes"]["data"] = {**data["hashes"]["data"], **table}
+				data["hashes"]["used"] = 1
+			elif isinstance(table, list) :
+				data["lists"]["data"].extend(table)
+				data["lists"]["used"] = 1
+		
+		splat = [ data[glob]["data"] for glob in data.keys() if data[glob]["used"] ]
+		if len(splat) == 1 :
+			splat = splat[0]
+		return splat
 	
 	def accept (self, jsonSource) :
 		"""Accept the plain-text input containing one or more JSON hash tables within the text.

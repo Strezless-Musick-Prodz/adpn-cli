@@ -56,29 +56,57 @@ Exit code:
 	def display_usage (self) :
 		print(self.__doc__)
 
-	def execute (self) :
-		try :
-			jsonInput = myPyJSON()
-			jsonInput.accept([ line for line in fileinput.input() ])
-			table = jsonInput.allData
-			
+	def display_data (self, table, parse) :
+		if ( isinstance(table, dict) ) :
 			keys = [ self.switches.get('key') ] if self.switches.get('key') is not None else table.keys()
+
 			try :
 				for key in keys :
 					if len(keys) > 1 :
 						print("%(key)s\t%(value)s" % {"key": key, "value": table[key]})
 					else :
 						print(table[key], end="")
-					self.exitcode = 0
+				self.exitcode = 0
 			except KeyError as e :
 				self.exitcode = 1
+		elif ( isinstance(table, list) ) :
 			
+			self.exitcode = 0
+
+			i = 0
+			for item in table :
+				where = ( self.switches.get('where').split(":", 1) if self.switches.get("where") is not None else [] )
+				matched = True
+				if len(where) == 2 :
+					key=where[0]
+					value=where[1]
+					if isinstance(item[key], str ) :
+						matched = ( item[key] == value )
+					elif isinstance(item[key], int ) :
+						matched = ( item[key] == int(value) )
+						
+				if matched :
+					if parse :
+						self.display_data(item, 0)
+						self.exitcode = 0
+					else :
+						print(item)
+					i = i + 1
+					
+	def execute (self) :
+		try :
+			jsonInput = myPyJSON()
+			jsonInput.accept([ line for line in fileinput.input() ])
+			table = jsonInput.allData
+			
+			self.display_data(table, self.switches.get('parse'))
+
 		except json.decoder.JSONDecodeError as e :
 	
 			print(
 				("[%(script)s] JSON encoding error. Could not extract key-value pairs from "
-				+ "the provided data:\n\n%(json)s")
-				% {"script": self.scriptname, "json": "\n".join(jsonInput.text)},
+					+ "the provided data:\n\n%(json)s")
+					% {"script": self.scriptname, "json": "\n".join(jsonInput.text)},
 				file=sys.stderr
 			)
 			self.exitcode = 2
