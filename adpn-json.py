@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 #
-# adpn-json-to-switches.py: utility script, pulls data elements from a JSON hash table
+# adpn-json.py: utility script, pulls data elements from a JSON hash table
 # provided on stdin and outputs the value (a printed str or a serialized str equivalent)
 # from a given key-value pair, so that bash scripts can capture values from JSON packets.
 #
-# @version 2021.0401
+# @version 2021.0402
 
 import sys
 import os.path

@@ -3,7 +3,7 @@
 # adpn-json-to-switches.py: utility script, converts data from a JSON hash table provided
 # on stdin to switches used by adpn-ingest-test and related scripts.
 #
-# @version 2019.0829
+# @version 2021.0402
 
 import sys
 import os.path
