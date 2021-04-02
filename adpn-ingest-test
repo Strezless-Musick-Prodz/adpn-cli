@@ -286,16 +286,18 @@ if [[ -z "${SUBARGV_LOCKSSPLUGINURL[daemon]}" ]] ; then
 	SUBARGV_LOCKSSPLUGINURL[daemon]="--daemon=${DAEMON}"
 fi
 
-if [[ -z "${SUBARGV_LOCKSSPLUGINURL[user]}" ]] ; then
-	read -r -p "LOCKSS Daemon Username: " DAEMONUSER
-	_ARGV+=("--user=${DAEMONUSER}")
-	SUBARGV_LOCKSSPLUGINURL[user]="--user=${DAEMONUSER}"
-fi
+if [[ -n "${_PARAM[daemon]}" && "-" != "${_PARAM[daemon]}" ]] ; then
+	if [[ -z "${SUBARGV_LOCKSSPLUGINURL[user]}" ]] ; then
+		read -r -p "LOCKSS Daemon Username: " DAEMONUSER
+		_ARGV+=("--user=${DAEMONUSER}")
+		SUBARGV_LOCKSSPLUGINURL[user]="--user=${DAEMONUSER}"
+	fi
 
-if [[ -z "${SUBARGV_LOCKSSPLUGINURL[pass]}" ]] ; then
-	read -r -s -p "LOCKSS Daemon Password: " DAEMONPASS ; echo
-	_ARGV+=("--pass=${DAEMONPASS}")
-	SUBARGV_LOCKSSPLUGINURL[pass]="--pass=${DAEMONPASS}"
+	if [[ -z "${SUBARGV_LOCKSSPLUGINURL[pass]}" ]] ; then
+		read -r -s -p "LOCKSS Daemon Password: " DAEMONPASS ; echo
+		_ARGV+=("--pass=${DAEMONPASS}")
+		SUBARGV_LOCKSSPLUGINURL[pass]="--pass=${DAEMONPASS}"
+	fi
 fi
 
 ##########################################################################################

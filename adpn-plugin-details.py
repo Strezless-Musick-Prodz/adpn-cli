@@ -123,10 +123,11 @@ Usage:
 		return self.has_at_least_one(self.plugin_switches())
 
 	def do_read_daemon_switches (self) :
-		if self.switches.get('user') is None or len(self.switches.get('user')) == 0 :
-			self.switches['user'] = input("LOCKSS Daemon Username: ")
-		if self.switches.get('pass') is None or len(self.switches.get('pass')) == 0 :
-			self.switches['pass'] = getpass("LOCKSS Daemon Password: ")
+		if self.switches.get('daemon') != '-' :
+			if self.switches.get('user') is None or len(self.switches.get('user')) == 0 :
+				self.switches['user'] = input("LOCKSS Daemon Username: ")
+			if self.switches.get('pass') is None or len(self.switches.get('pass')) == 0 :
+				self.switches['pass'] = getpass("--LOCKSS Daemon Password: ")
 	
 	def get_jars (self) :
 		code = 0
