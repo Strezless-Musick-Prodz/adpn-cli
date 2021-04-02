@@ -147,7 +147,7 @@ Exit code:
 				
 		return lines
 		
-	def display_data_dict (self, table, context, parse) :
+	def display_data_dict (self, table, context, parse, depth=0) :
 		keys = ( self.switches.get('key').split(":") ) if self.switches.get('key') is not None else table.keys()
 		out = []
 		paired=( self.wants_table() or (len(keys) > 1) )
@@ -163,22 +163,22 @@ Exit code:
 		else :
 			self.output.extend(out)
 			
-	def display_data_list (self, table, context, parse) :
+	def display_data_list (self, table, context, parse, depth=0) :
 		i = 0
 		for item in table :
 			if self.selected(item) :
 				if parse :
-					self.display_data(item, context, 0)
+					self.display_data(item, context, 0, depth=depth+1)
 				else :
 					self.add_output(item, table=table, context=context)
 				i = i + 1
 
-	def display_data (self, table, context, parse) :
+	def display_data (self, table, context, parse, depth=0) :
 		if ( isinstance(table, dict) ) :
-			self.display_data_dict(table, context, parse)
+			self.display_data_dict(table, context, parse, depth=depth+1)
 		elif ( isinstance(table, list) ) :
-			self.display_data_list(table, context, parse)
-		else :
+			self.display_data_list(table, context, parse, depth=depth+1)
+		elif ( ( table is not None ) or ( depth > 1 ) ) :
 			self.add_output(table, table=table, context=context)
 			
 	def execute (self) :
