@@ -10,7 +10,7 @@
 # Exits with code 0 on success, or non-zero exit code on failure, to allow for pipelining
 # with other ADPN Ingest tools.
 #
-# @version 2021.0304
+# @version 2021.0402
 
 import sys, os, fileinput, tempfile, datetime, json, csv, re
 import MySQLdb
@@ -99,15 +99,23 @@ Returns exit code 0 on success.
 	def accept_json (self, jsonLines) :
 		self._data = None
 		
-		jsonInput = myPyJSON()
+		jsonInput = myPyJSON(splat=True, cascade=True)
 		jsonInput.accept(jsonLines)
 
+		rescan=False
 		try :
-			jsonData = jsonInput.data
+			jsonData = jsonInput.allData
 		except json.decoder.JSONDecodeError as e :
-			jsonData = []
+			rescan=True
+
+		if rescan :
+			try :
+				jsonInput.accept(jsonLines, screen=rescan)
+				jsonData = jsonInput.allData
+			except json.decoder.JSONDecodeError as e:
+				jsonData = []
 		
-		self._data = {key: value for d in jsonData for key, value in d.items()}
+		self._data = jsonData
 
 	def wants_dry_run (self) -> bool :
 		isDryRun = False
@@ -356,7 +364,8 @@ if __name__ == '__main__' :
 	
 	script = ADPNIngestSQL(scriptname, switches)
 	try :
-		script.accept_json(fileinput.input() if script.wants_json() else [])
+		lineinput = [ line for line in fileinput.input() ] if script.wants_json() else []
+		script.accept_json(lineinput)
 	except KeyboardInterrupt as e :
 		script.display_error("Data input aborted by user break.")
 		
