@@ -363,6 +363,14 @@ else
 	if [[ ! -z "${_PARAM[peer-to]}" ]] ; then
 		printf "To Peer\t%s\n" "${_PARAM[peer-to]}" >> ${PLUGINTXT}
 	fi
+	if [[ ! -z "${_PARAM[ingest-report]}" ]] ; then
+		printf "Ingest Report\t%s\n" "${_PARAM[ingest-report]}" >> ${PLUGINTXT}
+	fi
+	
+	if [[ ! -z "${_PARAM[pipeline]}" ]] ; then
+		INGEST_STEP=$( printf "%s" "${_PARAM[pipeline]}" | cut --field=2 --delimiter=":" )
+		printf "Ingest Step\t%s\n" "${INGEST_STEP}" >> ${PLUGINTXT}
+	fi
 	
 	######################################################################################
 	### lockss-plugin-url.py | adpn-plugin-info: Retrieve & analyze Plugin JAR. ##########
@@ -380,6 +388,8 @@ else
 	pluginprop "${PLUGINTXT}" "Ingest Title"
 	pluginprop "${PLUGINTXT}" "File Size"
 	pluginprop "${PLUGINTXT}" "Plugin (JAR|Name|Version|ID)"
+	pluginprop "${PLUGINTXT}" "Ingest (Report|Step)"
+	
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
 		pluginprop "${PLUGINTXT}" "PARAM[(].*[)]:"
 	fi

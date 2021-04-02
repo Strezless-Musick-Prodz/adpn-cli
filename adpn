@@ -68,6 +68,23 @@ rm "${CMDLINETXT}"
 EXITCODE=0
 CMD="${_ARGV[1]}"
 
+VV="${_LINESWITCH[verbose]}"
+QQ="${_LINESWITCH[quiet]}"
+V="${_LINESWITCH[verbose]}"
+Q=""
+
+DBG="${_LINESWITCH[debug]}"
+DBGLEVEL="${_PARAM[debug]}"
+if [[ "${DBGLEVEL}" == "debug" ]] ; then
+	DBGLEVEL=1
+fi
+if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+	DBGLEVEL=$(( DBGLEVEL - 1 ))
+	DDBG="--debug=${DBGLEVEL}"
+else
+	DDBG=""
+fi
+
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
 		CMD="version"
@@ -288,22 +305,69 @@ case "${CMD}" in
 #
 # @version 2021.0318
 
-		V="${_LINESWITCH[verbose]}"
+		if [[ "${_PARAM[pipeline]}" ]] ; then
+			PIPELINE="${_LINESWITCH[pipeline]}"
+			PIPEDFROMTO="${_PARAM[pipeline]}"
 
-		declare -a TEMP_CLEANUP=()
-		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
-		AIT_INPUT="${_ARGV[2]}"
-		
-		if [[ -z "${AIT_INPUT}" ]] ; then
-			AIT_INPUT="-"
+		else
+			PIPEDFROMTO="staged:verified"
+			PIPELINE="--pipeline=${PIPEDFROMTO}"
 		fi
+		if [[ -n "${_PARAM[pipeline]}" ]] ; then
+			PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
+			PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
+			if [[ "${DBGLEVEL}" -ge 2 ]] ; then
+				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${_PARAM[pipeline]}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+			fi
+		fi
+		
+		declare -a TEMP_CLEANUP=()
 
-		if [[ "${AIT_INPUT}" =~ ^gitlab:(.*)$ ]] ; then
+		PACKET_SOURCE="${_ARGV[2]}"
+		AIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_PACKETS}" )
+		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
+		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
+
+		if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
+			cat - > "${AIT_PACKETS}"
+
+		elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
 			ISSUE="${BASH_REMATCH[1]}"
-			printf "* Retrieving JSON for Gitlab issue: %s\n" "${ISSUE}" 1>&2
+			if [[ -n "${V}" ]] ; then
+				printf "* Retrieving JSON for Gitlab issue: %s\n" "${ISSUE}" 1>&2
+			fi		
+			"${ME}" gitlab get packet "${ISSUE}" "${AGGP_SW[@]}" > "${AIT_PACKETS}"
+		else
+			cp "${PACKET_SOURCE}" "${AIT_PACKETS}"
+		fi
+		
+		if [[ -r "${AIT_PACKETS}" ]] ; then	
+			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
+			if [[ -n "${DBG}" ]] ; then
+				printf 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIT_PACKETS}" "${PIPEDFROM}" 1>&2
+			fi
 			
-			AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
-			"${ME}" gitlab get packet "${ISSUE}" > "${AIT_INPUT}"
+			GREP=$( cat "${AIT_PACKETS}" | adpn-json.py --output=application/json --where="Ingest Step:${PIPEDFROM}" )
+			if [[ -n "${GREP}" ]] ; then
+				printf "%s" "${GREP}" | head -n 1 > "${AIT_INPUT}"
+			fi
+			
+			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
+			if [[ -z "${GREP}" ]] ; then
+				if [[ -n "${DBG}" ]] ; then
+					printf 'cat "%s" | head -n 1\n' "${AIT_PACKETS}" 1>&2
+				fi
+				
+				GREP=$( cat "${AIT_PACKETS}" | head -n 1 )
+				if [[ "${GREP}" ]] ; then
+					printf "%s" "${GREP}" > "${AIT_INPUT}"
+				fi
+			fi
+			
+			if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+				printf "* DBG: JSON source = <<<EOF\n%s\nEOF;" "${GREP}" 1>&2
+			fi
+			
 		fi
 		
 		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
@@ -314,7 +378,7 @@ case "${CMD}" in
 			PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
 		fi
 
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" ${V} > "${AIT_OUTPUT}"
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} > "${AIT_OUTPUT}"
 		EXITCODE="$?"
 
 		cat "${AIT_OUTPUT}" ; echo
@@ -343,10 +407,15 @@ case "${CMD}" in
 #
 # @version 2021.0330
 
-		V="${_LINESWITCH[verbose]}"
-
 		AV_OUTPUT="$(mktemp)"
-		"${ME}" verify "${_CMDLINE[@]:2}" > "${AV_OUTPUT}"
+		
+		if [[ "${_PARAM[pipeline]}" ]] ; then
+			PIPELINE="${_LINESWITCH[pipeline]}"
+		else
+			PIPELINE="--pipeline=verified:ingested"
+		fi
+		
+		"${ME}" verify "${_CMDLINE[@]:2}" ${PIPELINE} > "${AV_OUTPUT}"
 		AV_ERRCODE="$?"
 
 		cat "${AV_OUTPUT}" ; echo
@@ -419,10 +488,8 @@ case "${CMD}" in
 #
 # @version 2021.0330
 
-		V="${_LINESWITCH[verbose]}"
-
 		AI_OUTPUT="$(mktemp)"
-		"${ME}" ingest "${_CMDLINE[@]:2}" --to=ALL --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
+		"${ME}" ingest "${_CMDLINE[@]:2}" --to=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -575,6 +642,12 @@ case "${CMD}" in
 		adpn-do-plugins --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
 		;;
 	
+	"echo")
+		declare -p _LINESWITCH
+		declare -p _ARGV
+		declare -p _PARAM
+		;;
+		
 	*)
 		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
 		echo "${__HELP__}" 1>&2

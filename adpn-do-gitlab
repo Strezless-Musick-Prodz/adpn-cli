@@ -68,6 +68,19 @@ QQ="${_LINESWITCH[quiet]}"
 V="${_LINESWITCH[verbose]}"
 Q=""
 
+DBG="${_LINESWITCH[debug]}"
+DBGLEVEL="${_PARAM[debug]}"
+if [[ "${DBGLEVEL}" == "debug" ]] ; then
+	DBGLEVEL=1
+fi
+if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+	DBGLEVEL=$(( DBGLEVEL - 1 ))
+	DDBG="--debug=${DBGLEVEL}"
+else
+	DDBG=""
+fi
+
+
 if [[ -z "${_PARAM[verbose]}" ]] ; then
 	Q="--quiet"
 fi
@@ -113,9 +126,14 @@ case "${CMD}" in
 		if [[ -n "${_ARGV[*]:2}" ]] ; then
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
-			"${ME}" get "/projects?membership=1" | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
+
+			if [[ -n "${DBG}" ]] ; then
+				echo "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}" 1>&2
+			fi
+			
+			"${ME}" get "/projects?membership=1" ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
 		else
-			"${ME}" get "/projects?membership=1" | adpn-json.py --parse --key=id:path_with_namespace
+			"${ME}" get "/projects?membership=1" ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace
 		fi
 		EXITCODE="$?"
 		;;
@@ -130,7 +148,7 @@ case "${CMD}" in
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
 		
 		if [[ -n "${PROJECT}" ]] ; then
-			PROJECT_ID=$( "${ME}" project "${PROJECT}" | cut --field=2 )
+			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${DDBG} | cut --field=2 )
 		fi
 		
 		if [[ -n "${_ARGV[3]}" ]] ; then
@@ -143,7 +161,7 @@ case "${CMD}" in
 		[[ -n "${ISSUE_ID}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ID}" )
 		[[ -n "${ISSUE_ASPECT}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ASPECT}" )
 		
-		if [[ -n "${_PARAM[debug]}" ]] ; then
+		if [[ -n "${DBG}" ]] ; then
 			printf "[${SCRIPT}] ISSUE ID: %s\n" "${ISSUE_ID}" 1>&2
 			declare -p _ARGV 1>&2
 		fi
@@ -178,7 +196,11 @@ case "${CMD}" in
 		ERR_DATA=""
 				
 		ISH="${_ARGV[2]}"
-		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		if [[ -n "${DBG}" ]] ; then
+			echo "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}" 1>&2
+		fi
+		
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
 		RE_PACKET="^JSON\s+PACKET:\s*"
 		
@@ -291,6 +313,9 @@ case "${CMD}" in
 				
 				for SLUG in "${_ARGV[@]:2}" ; do
 					URL=$( printf "${API_URL}" "${SLUG#/}" )
+					if [[ -n "${DBG}" ]] ; then
+						echo "DBG:" curl "${CURL_SW[@]}" "${URL}" 1>&2
+					fi
 					curl "${CURL_SW[@]}" "${URL}"
 
 					CURLEXIT="$?"

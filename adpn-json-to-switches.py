@@ -84,6 +84,9 @@ Written to stdout, one switch per line. For example:
 			if ('To Peer' in table) :
 				print('--peer-to=%(peer)s' % {"peer": table.get('To Peer')})
 				
+			if ('Ingest Report' in table) :
+				print('--ingest-report=%(report)s' % {"report": table.get('Ingest Report')})
+				
 			if ('parameters' in table) :
 				if len(table) > 0 :
 					for param, value in table['parameters'] :

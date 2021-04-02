@@ -94,6 +94,9 @@ Exit code:
 	def wants_table(self) :
 		return (( self.switches.get('key') is None ) or ( self.get_output_format(index=1) == "table" ))
 
+	def wants_json_output(self) :
+		return (( self.get_output_format() == "json" ) or ( self.get_output_format() == "application/json" ) )
+		
 	def data_matches (self, item, key, value) :
 		matched = True
 		if isinstance(item, dict) :
@@ -149,15 +152,20 @@ Exit code:
 		
 	def display_data_dict (self, table, context, parse, depth=0) :
 		keys = ( self.switches.get('key').split(":") ) if self.switches.get('key') is not None else table.keys()
-		out = []
+		out = {} if self.wants_json_output() else []
 		paired=( self.wants_table() or (len(keys) > 1) )
 		try :
 			for key in keys :
-				out.extend( self.get_output(table[key], key, pair=paired, table=table, context=context ) )
+				if self.wants_json_output() :
+					out[key] = table[key]
+				else :
+					out.extend( self.get_output(table[key], key, pair=paired, table=table, context=context ) )
 		except KeyError as e :
 			self.add_flag("key_error", key)
 
-		if self.wants_table() or isinstance(context, list) :
+		if self.wants_json_output() :
+			self.output.extend([ json.dumps(out) ])
+		elif self.wants_table() or isinstance(context, list) :
 			line = "\t".join(out)
 			self.output.extend([ line ])
 		else :
