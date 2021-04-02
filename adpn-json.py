@@ -85,8 +85,32 @@ Exit code:
 	def display_usage (self) :
 		print(self.__doc__)
 
+	def wants_splat(self) :
+		return ( self.switches.get('nosplat') is None )
+	
+	def wants_cascade(self) :
+		return ( self.switches.get('cascade') is not None )
+		
 	def wants_table(self) :
 		return (( self.switches.get('key') is None ) or ( self.get_output_format(index=1) == "table" ))
+
+	def data_matches (self, item, key, value) :
+		matched = True
+		if isinstance(item, dict) :
+			matched = False
+			if isinstance(item.get(key), str ) :
+				matched = ( item.get(key) == str(value) )
+			elif isinstance(item.get(key), int ) :
+				matched = ( item.get(key) == int(value) )
+		return matched
+
+	@property
+	def selected (self) :
+		ok = lambda x: True
+		if self.switches.get("where") :
+			(key,value)=self.switches.get('where').split(":", 1)		
+			ok = lambda x: self.data_matches(x, key, value)
+		return ok
 	
 	def is_multiline_output (self, output=None) :
 		out = ( self.output ) if output is None else ( output )
@@ -142,17 +166,7 @@ Exit code:
 	def display_data_list (self, table, context, parse) :
 		i = 0
 		for item in table :
-			where = ( self.switches.get('where').split(":", 1) if self.switches.get("where") is not None else [] )
-			matched = True
-			if len(where) == 2 :
-				key=where[0]
-				value=where[1]
-				if isinstance(item[key], str ) :
-					matched = ( item[key] == value )
-				elif isinstance(item[key], int ) :
-					matched = ( item[key] == int(value) )
-						
-			if matched :
+			if self.selected(item) :
 				if parse :
 					self.display_data(item, context, 0)
 				else :
@@ -165,12 +179,14 @@ Exit code:
 		elif ( isinstance(table, list) ) :
 			self.display_data_list(table, context, parse)
 		else :
-			self.add_output(item, table=table, context=context)
+			self.add_output(table, table=table, context=context)
 			
 	def execute (self) :
 		try :
-			jsonInput = myPyJSON()
+			
+			jsonInput = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
 			jsonInput.accept([ line for line in fileinput.input() ])
+			jsonInput.select_where(self.selected)
 			table = jsonInput.allData
 			
 			self.display_data(table, table, self.switches.get('parse'))

@@ -143,12 +143,13 @@ class myPyJSON :
 	"""Extract JSON hash tables from plain-text input, for example copy-pasted or piped into stdin.
 	"""
 	
-	def __init__ (self, splat=True, cascade=False) :
+	def __init__ (self, splat=True, cascade=False, where=None) :
 		"""Initialize the JSON extractor pattern."""
 		self._jsonProlog = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
 		self._jsonText = [ ]
 		self._splat = splat
 		self._cascade = cascade
+		self.select_where(where)
 		
 	@property
 	def prolog (self) :
@@ -164,7 +165,12 @@ class myPyJSON :
 	def cascade (self) :
 		"""Switch for joining (or not) multiple data items in a first-to-last cascade or list them separately."""
 		return self._cascade
-		
+	
+	@property
+	def selected (self) :
+		"""Lambda that filters JSON data objects according to programmatic criteria."""
+		return self._where
+			
 	@property
 	def json (self) -> list :
 		"""List of all the JSON representations taken from the accepted input."""
@@ -181,33 +187,43 @@ class myPyJSON :
 		
 	@property
 	def allData (self) :
-		"""A unified hash table that merges together all the tables parsed from the JSON representations."""
+		"""A unified hash table that either lists or merges together all the tables parsed from the JSON representations."""
 		data = {
 			"splat": { "used": False, "data": [ ] },
 			"hashes": { "used": 0, "data": { } },
 			"lists": { "used": 0, "data": [ ] }
-		} 
+		}
 		
-		for table in self.data :
-			if self.cascade :
-				if isinstance(table, dict) :
-					data["hashes"]["data"] = {**data["hashes"]["data"], **table}
-					data["hashes"]["used"] = True
-				elif isinstance(table, list) :
-					data["lists"]["data"].extend(table)
-					data["lists"]["used"] = True
-			else :
-				data["splat"]["used"] = True
-				data["splat"]["data"].extend( [ table ] )
+		for datum in self.data :
+			if self.selected(datum) :
+				if self.cascade :
+					if isinstance(datum, dict) :
+						data["hashes"]["data"] = {**data["hashes"]["data"], **datum}
+						data["hashes"]["used"] = True
+					elif isinstance(datum, list) :
+						data["lists"]["data"].extend(datum)
+						data["lists"]["used"] = True
+				else :
+					data["splat"]["used"] = True
+					data["splat"]["data"].extend( [ datum ] )
 			
 		splat = [ self.splatted(data[glob]["data"]) for glob in data.keys() if data[glob]["used"] ]
-		return self.splatted(splat, force=True)
-	
+		return self.splatted(splat)
+
+	def select_where (self, condition=None) :
+		self._where = condition if condition is not None else lambda x: True
+		
 	def splatted (self, data, force=False) :
 		splat = data
 		if force or self.splat :
 			if isinstance(data, list) :
-				splat = data[0] if len(data)==1 else data
+				if len(data) == 0 :
+					splat = None
+				elif len(data) == 1 :
+					splat = data[0]
+				else :
+					splat = data
+
 		return splat
 		
 	def accept (self, jsonSource) :
