@@ -121,6 +121,22 @@ function echo_header() {
 	echo "${UNDERLINE}"
 }
 
+export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
+
+function adpn_get_json_packet() {
+	local file="${1}"
+	local packet=""
+	
+	if [[ -z "${file}" ]] ; then 
+		file="-"
+	fi
+	
+	packet=$( grep -P $ADPN_JSON_PACKET_REGEX "${file}" )
+	if [[ -n "${packet}" ]] ; then
+		printf "%s\n" "${packet}"
+	fi
+}
+
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
 # example: FOOBAR=$( rawurlencode "${DATA}" )
 # uses code from @Orwellophile at https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command

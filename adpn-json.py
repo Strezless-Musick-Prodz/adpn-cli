@@ -188,14 +188,26 @@ Exit code:
 			self.display_data_list(table, context, parse, depth=depth+1)
 		elif ( ( table is not None ) or ( depth > 1 ) ) :
 			self.add_output(table, table=table, context=context)
-			
+
+	def display_regex (self) :
+		jsonTest = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
+		# Replace non-capturing (?: ... ) with widely supported, grep -E compliant ( ... )
+		print(re.sub(r'[(][?][:]', '(', jsonTest.prolog), end="")
+					
 	def execute (self) :
 		try :
 			
-			jsonInput = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
-			jsonInput.accept([ line for line in fileinput.input() ])
-			jsonInput.select_where(self.selected)
-			table = jsonInput.allData
+			try :
+				lineInput = [ line for line in fileinput.input() ]
+				jsonInput = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
+				jsonInput.accept( lineInput )
+				jsonInput.select_where(self.selected)
+				table = jsonInput.allData
+			except json.decoder.JSONDecodeError as e :
+				# This might be the full text of a report. Can we find the JSON PACKET:
+				# envelope nestled within it and strip out the other stuff?
+				jsonInput.accept( lineInput, screen=True ) 
+				table = jsonInput.allData
 			
 			self.display_data(table, table, self.switches.get('parse'))
 			if len(self.output) > 0 :
@@ -203,7 +215,7 @@ Exit code:
 				
 		except json.decoder.JSONDecodeError as e :
 	
-			self.add_flag("json_error", "\n".join(jsonInput.text))
+			self.add_flag("json_error", jsonInput.raw)
 		
 		for err in self.flags["json_error"] :
 			print(
@@ -223,6 +235,8 @@ if __name__ == '__main__' :
 	script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
 	if script.switched('help') :
 		script.display_usage()
+	elif script.switched('regex') :
+		script.display_regex()
 	else :
 		script.execute()
 	sys.exit(script.get_exitcode())

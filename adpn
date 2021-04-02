@@ -227,7 +227,7 @@ case "${CMD}" in
 			--au_title="${_PARAM[au_title]}" \
 			"${_ARGV[3]}" > "${ASC_OUTPUT}" ; ASC_ERRCODE="$?"
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
-			JSON_PACKET=$(grep "^JSON PACKET:" "${ASC_OUTPUT}")
+			JSON_PACKET=$( adpn_get_json_packet "${ASC_OUTPUT}" )
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -305,19 +305,18 @@ case "${CMD}" in
 #
 # @version 2021.0318
 
-		if [[ "${_PARAM[pipeline]}" ]] ; then
+		if [[ -n "${_PARAM[pipeline]}" ]] ; then
 			PIPELINE="${_LINESWITCH[pipeline]}"
 			PIPEDFROMTO="${_PARAM[pipeline]}"
-
 		else
 			PIPEDFROMTO="staged:verified"
 			PIPELINE="--pipeline=${PIPEDFROMTO}"
 		fi
-		if [[ -n "${_PARAM[pipeline]}" ]] ; then
+		if [[ -n "${PIPEDFROMTO}" ]] ; then
 			PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
 			PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
 			if [[ "${DBGLEVEL}" -ge 2 ]] ; then
-				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${_PARAM[pipeline]}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
 			fi
 		fi
 		
@@ -355,17 +354,17 @@ case "${CMD}" in
 			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
 			if [[ -z "${GREP}" ]] ; then
 				if [[ -n "${DBG}" ]] ; then
-					printf 'cat "%s" | head -n 1\n' "${AIT_PACKETS}" 1>&2
+					printf 'cat "%s" | adpn_get_json_packet | head -n 1\n' "${AIT_PACKETS}" 1>&2
 				fi
 				
-				GREP=$( cat "${AIT_PACKETS}" | head -n 1 )
+				GREP=$( cat "${AIT_PACKETS}" | adpn_get_json_packet | head -n 1 )
 				if [[ "${GREP}" ]] ; then
 					printf "%s" "${GREP}" > "${AIT_INPUT}"
 				fi
 			fi
 			
 			if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-				printf "* DBG: JSON source = <<<EOF\n%s\nEOF;" "${GREP}" 1>&2
+				printf "* DBG: JSON source (%s) = <<<EOF\n%s\nEOF;\n" "${AIT_INPUT}" "${GREP}" 1>&2
 			fi
 			
 		fi
@@ -378,7 +377,11 @@ case "${CMD}" in
 			PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
 		fi
 
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} > "${AIT_OUTPUT}"
+		if [[ -n "${DBG}" ]] ; then
+			printf '[DBG] $ adpn-ingest-test "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}" 1>&2 
+		fi
+		
+		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
 		EXITCODE="$?"
 
 		cat "${AIT_OUTPUT}" ; echo

@@ -146,6 +146,7 @@ class myPyJSON :
 	def __init__ (self, splat=True, cascade=False, where=None) :
 		"""Initialize the JSON extractor pattern."""
 		self._jsonProlog = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
+		self._jsonRaw = ''
 		self._jsonText = [ ]
 		self._splat = splat
 		self._cascade = cascade
@@ -170,7 +171,11 @@ class myPyJSON :
 	def selected (self) :
 		"""Lambda that filters JSON data objects according to programmatic criteria."""
 		return self._where
-			
+	
+	@property
+	def raw (self) -> str :
+		return self._jsonRaw
+
 	@property
 	def json (self) -> list :
 		"""List of all the JSON representations taken from the accepted input."""
@@ -226,20 +231,31 @@ class myPyJSON :
 
 		return splat
 		
-	def accept (self, jsonSource) :
+	def accept (self, jsonSource, screen=False) :
 		"""Accept the plain-text input containing one or more JSON hash tables within the text.
 		
 		jsonSource can be a string, or an iterable object that spits out lines of text
 		(for example, flieinput.input()).
 		"""
-		if isinstance(jsonSource, str) :
-			src = jsonSource
+		self._jsonRaw = ( jsonSource if isinstance(jsonSource, str) else "\n".join(jsonSource) )
+
+		if screen :
+			if isinstance(jsonSource, str) :
+				split_src = [ jsonSource ]
+			else :
+				split_src = jsonSource
+			self._jsonText = [ bit for bit in split_src if re.match(self.prolog, bit, flags=re.I) ]
 		else :
-			src = "\n".join(jsonSource)
+			self._jsonText = jsonSource
+		
+		if isinstance(self._jsonText, str) :
+			src = self._jsonText
+		else :
+			src = "\n".join(self._jsonText)
 
 		split_src = re.split(self.prolog, src, flags=re.M)
 		self._jsonText = [ bit for bit in split_src if len(bit.strip()) > 0 ]
-
+		
 		if len(self._jsonText) == 0 :
 			self._jsonText = [ "".join(src) ]
 			

@@ -52,9 +52,14 @@ Written to stdout, one switch per line. For example:
 
 	def execute (self) :
 		try :
-			jsonInput = myPyJSON()
-			jsonInput.accept(fileinput.input())
-			table = jsonInput.allData
+			jsonInput = myPyJSON(splat=True, cascade=True)
+			lineinput = [ line for line in fileinput.input() ]
+			jsonInput.accept(lineinput)
+			try :
+				table = jsonInput.allData
+			except json.decoder.JSONDecodeError as e:
+				jsonInput.accept( lineinput, screen=True )
+				table = jsonInput.allData
 	
 			if ('Ingest Title' in table) :
 				print('--au_title=%(name)s' % {"name": table['Ingest Title']})
@@ -141,7 +146,7 @@ Written to stdout, one switch per line. For example:
 			print(
 				("[%(script)s] JSON encoding error. Could not extract key-value pairs from "
 				+ "the provided data:\n\n%(json)s")
-				% {"script": self.scriptname, "json": "\n".join(jsonInput.text)},
+				% {"script": self.scriptname, "json": jsonInput.raw},
 				file=sys.stderr
 			)
 			self.exitcode = 1
