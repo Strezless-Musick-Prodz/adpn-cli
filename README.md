@@ -1,14 +1,37 @@
-Utility scripts for extracting and reporting information about ADPNet (LOCKSS) Publisher
-Plugins, transmitting information about Archival Units (AU) staged for ingest into the
-network, testing the availability of the AU content, and automating the process of
-inserting the AU into the network titles list.
+`adpn` provides a set of command-line tools for the ADPNet LOCKSS digital
+preservation network.
 
-Main tools:
+There are tools to manage the entire process of preparing, staging, accepting,
+and publishing an Archival Unit (AU) for distributed preservation in the
+network:
 
-* `adpn`: master script, command-line interface to common operations including stage, ingest, and publish
-* `adpn-ingest-test`: bash script to coordinate tests when staging content into ADPNet
-* `adpn-ingest-into-titlesdb.py`: Python script to add a staged AU to the titlesdb MySQL database
-* `adpn-titlesdb-diff`: bash script to test before/after state of the titlesdb XML listing
+* `adpn preserve` allows an ADPNet network member to package digital data files
+  for submission to the network as an Archival Unit (AU).
+  
+* `adpn verify` allows the manager of an ADPNet preservation node to verify that
+  a submitted AU is accessible from their preservation node.
+  
+* `adpn ingest` allows the manager of the ADPNet network props server to accept
+  a verified AU and prepare a test node for test crawls of the resource.
+  
+* `adpn publish` allows the manager of the ADPNet network props server to mark
+  an ingested AU as available to the entire preservation network.
+
+There are also tools to manage some labor-intensive systems administration
+tasks when managing a LOCKSS preservation node on ADPNet:
+
+* `adpn rebalance` provides a set of tools for safely rebalancing AUs stored on
+  different volumes of a LOCKSS box's cache. For example: if the /cache0 volume
+  gets too full, this helps move AUs stored on /cache0 to /cache1 or /cache2
+
+* `adpn plugins` provides tools for reviewing and managing properties of LOCKSS
+  plugins used by ADPNet nodes.
+
+There are also tools to manage some common database and management tasks when
+administering the ADPNet props server titlesdb database:
+
+* `adpn publisher` provides a set of tools for listing or adding publishers who
+  may submit AUs for preservation in LOCKSS.
 
 Development started in May 2019 by Charles Johnson, Collections Archivist,
 Alabama Department of Archives and History (<charlesw.johnson@archives.alabama.gov>).
@@ -50,9 +73,193 @@ To use the adpn suite of utility scripts, you need:
 [python3-socks]: https://pypi.org/project/PySocks/
 [mysqlclient]: https://pypi.org/project/mysqlclient/
 
-adpn
-====
+adpn CLI Tools
+=============
 
+adpn preserve
+-------------
+Packages digital data files into a LOCKSS archival format, transmits them to an
+accessible staging location, and provides structured data for the ingest manager
+to accept and verify the AU for ingest.
+
+Usage:
+
+	(Under construction!)
+	
+adpn verify
+-----------
+Verify that the start URL for an AU submitted by a publisher is valid and can be
+successfully crawled from the current preservation node. Also prepares data to
+be piped in to `adpn ingest` or `adpn publish` on the ADPNet props server.
+
+Usage:
+
+	adpn verify gitlab:<ISSUEREFERENCE>
+	adpn verify [<FILE>]
+	cat <FILE> | adpn verify -
+
+For example:
+
+	adpn verify 'gitlab:adpnet/adpn---general#77'
+	
+Verifies the AU referenced in Gitlab repository adpnet/adpn---general, issue #77.
+
+Sample output (to be pasted into the Gitlab Issue, or otherwise sent back to the ingest manager):
+
+~~~
+[charlesw.johnson@adpnadah adpn-cli]$ adpn --version
+adpn version 2021.0402
+[charlesw.johnson@adpnadah adpn-cli]$ adpn verify 'gitlab:adpnet/adpn---general#77'
+
+INGEST INFORMATION AND PARAMETERS:
+----------------------------------
+INGEST TITLE:   Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m
+FILE SIZE:      49.91 GiB (53,590,679,164 bytes, 515 files)
+PLUGIN JAR:     http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar
+PLUGIN ID:      edu.auburn.adpn.directory.AuburnDirectoryPlugin
+PLUGIN NAME:    Auburn Directory Plugin
+PLUGIN VERSION: 6
+INGEST REPORT:  http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m.au.txt
+INGEST STEP:    verified
+BASE URL:       base_url="http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/"
+DIRECTORY NAME: directory="Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m"
+
+JSON PACKET:    {"Ingest Title": "Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m", "File Size": "49.91 GiB (53,590,679,164 bytes, 515 files)", "From Peer": "ADAH", "To Peer": "ADAH", "Ingest Report": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m.au.txt", "Ingest Step": "verified", "Plugin JAR": "http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar", "Plugin ID": "edu.auburn.adpn.directory.AuburnDirectoryPlugin", "Plugin Name": "Auburn Directory Plugin", "Plugin Version": "6", "Start URL": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html", "Base URL": "base_url=\"http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/\"", "Directory name": "directory=\"Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m\"", "au_name": "Auburn Directory Plugin, Base URL http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/, Directory Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m", "au_start_url": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html", "parameters": [["base_url", "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/"], ["directory", "Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m"]]}
+
+URL RETRIEVAL TESTS:
+--------------------
+200     OK      au_start_url    http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html     "%s%s/manifest.html", base_url, directory
+~~~
+	
+adpn ingest
+-----------
+Accept an AU that has been verified by a node manager and add the AU to that node's live
+feed of AUs for ingest and preservation (titlesdb). This step sets up the 1st and 2nd
+test crawls of an AU that has been staged for ingest.
+
+Usage:
+
+	adpn ingest gitlab:<ISSUEREFERENCE> [--to=<PEER>] [--dry-run]
+	adpn ingest [<FILE>] [--to=<PEER>] [--dry-run]
+	cat <FILE> | adpn verify - [--to=<PEER>] [--dry-run]
+
+Options:
+--to=<PEER>		make AU visible to this peer (AUB, ADAH, ...; ALL=whole network)
+--dry-run   	display SQL script to insert AU into titlesdb but do not execute
+
+For example:
+
+	adpn ingest 'gitlab:adpnet/adpn---general#77'
+	
+Sample output (to be pasted back into the Gitlab issue, or otherwise sent back to the ingest manager):
+
+~~~
+INGEST INFORMATION AND PARAMETERS:
+----------------------------------
+INGEST TITLE:   Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m
+FILE SIZE:      49.91 GiB (53,590,679,164 bytes, 515 files)
+PLUGIN JAR:     http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar
+PLUGIN ID:      edu.auburn.adpn.directory.AuburnDirectoryPlugin
+PLUGIN NAME:    Auburn Directory Plugin
+PLUGIN VERSION: 6
+INGEST REPORT:  http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m.au.txt
+INGEST STEP:    ingested
+BASE URL:       base_url="http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/"
+DIRECTORY NAME: directory="Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m"
+
+JSON PACKET:    {"Ingest Title": "Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m", "File Size": "49.91 GiB (53,590,679,164 bytes, 515 files)", "From Peer": "ADAH", "To Peer": "ADAH", "Ingest Report": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m.au.txt", "Ingest Step": "ingested", "Plugin JAR": "http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar", "Plugin ID": "edu.auburn.adpn.directory.AuburnDirectoryPlugin", "Plugin Name": "Auburn Directory Plugin", "Plugin Version": "6", "Start URL": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html", "Base URL": "base_url=\"http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/\"", "Directory name": "directory=\"Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m\"", "au_name": "Auburn Directory Plugin, Base URL http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/, Directory Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m", "au_start_url": "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html", "parameters": [["base_url", "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/"], ["directory", "Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m"]]}
+
+URL RETRIEVAL TESTS:
+--------------------
+200     OK      au_start_url    http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html     "%s%s/manifest.html", base_url, directory
+
+
+* Writing table [au_titlelist] rows to /tmp/snapshot-adpn-au_titlelist-20210402135826.csv ... (ok)
+* Writing table [au_titlelist_params] rows to /tmp/snapshot-adpn-au_titlelist_params-20210402135826.csv ... (ok)
+* Writing table [adpn_peer_titles] rows to /tmp/snapshot-adpn-adpn_peer_titles-20210402135826.csv ... (ok)
+--- /home/cjohnson/titlesdb-xml/titlesdb.ADAH-0.0.xml   2021-04-02 13:58:26.229566201 -0500
++++ /home/cjohnson/titlesdb-xml/titlesdb.ADAH-0.1.xml   2021-04-02 13:58:27.545559109 -0500
+@@ -5386,6 +5386,30 @@
+             </property></property></property>
+ <property name="org.lockss.titleSet">
+
++  <property name="Alabama Department of Archives and History">
++   <property name="name" value="All Alabama Department of Archives and History AUs" />
++   <property name="class" value="xpath" />
++   <property name="xpath" value="[attributes/publisher='Alabama Department of Archives and History']" />
++  </property>
++
++ </property> <property name="org.lockss.title">
++   <property name="AlabamaDepartmentofArchivesandHistoryQNumbersMastersQ0000106501Q0000107000m">
++    <property name="attributes.publisher" value="Alabama Department of Archives and History" />
++    <property name="journalTitle" value="Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m" />
++    <property name="type" value="journal" />
++    <property name="title" value="Alabama Department of Archives and History: Q-Numbers Masters: Q0000106501-Q0000107000m" />
++    <property name="plugin" value="edu.auburn.adpn.directory.AuburnDirectoryPlugin" />
++
++            <property name="param.1">
++                <property name="key" value="base_url" />
++                <property name="value" value="http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/" />
++            </property>
++            <property name="param.2">
++                <property name="key" value="directory" />
++                <property name="value" value="Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m" />
++            </property></property></property>
++<property name="org.lockss.titleSet">
++
+   <property name="Alabama Digital Preservation Network">
+    <property name="name" value="All Alabama Digital Preservation Network AUs" />
+    <property name="class" value="xpath" />
+
+[adpn ingest] DONE: Archival Unit ingested into ADAH titlesdb.
+cjohnson@lockss-adpn-con:/home/cjohnson/bin/adpn-cli$
+~~~
+
+adpn publish
+------------
+Given an AU that has been submitted, verified, and accepted, publish it to the entire
+preservation network. This step adds the AU to the whole-network titlesdb database and
+notifies the nodes on the preservation network that it is ready to be ingested for
+preservation.
+
+Usage:
+
+	adpn publish gitlab:<ISSUEREFERENCE> [--dry-run]
+	adpn publish [<FILE>] [--dry-run]
+	cat <FILE> | adpn publish - [--dry-run]
+
+Options:
+--dry-run   	display SQL script to publish AU to whole network but do not execute
+
+For example:
+
+	adpn publish 'gitlab:adpnet/adpn---general#77'
+	
+adpn publishers
+---------------
+List and manage the available list of publishers who may submit AUs for preservation
+in ADPNet. (These may be ADPNet Members or they may be ADPNet Hosts.)
+
+adpn publisher list
+-------------------
+Provide a list of current publishers and alphanumeric codes used to refer to them.
+
+Usage:
+
+	adpn publisher list
+	
+adpn publisher add
+------------------
+Add a new publisher code to the list of publishers on the ADPNet props server.
+
+Usage:
+
+	adpn publisher add [<AU_PUB_ID>] [<PUBLISHER_NAME>]
+	
+For example:
+
+	adpn publisher add TSK "Tuskegee University Archives"
+	
 adpn plugins
 ------------
 List available plugins or provide details on a given plugin and its required parameters.
