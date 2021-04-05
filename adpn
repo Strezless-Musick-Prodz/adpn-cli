@@ -627,8 +627,38 @@ case "${CMD}" in
 #   adpn publisher add [<AU_PUB_ID>] [<PUBLISHER_NAME>]
 #
 # @version 2021.0302
-	
-		adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		MYSQL_HOST="$( adpnprop 'mysql/host' )"
+		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
+		if [[ -n "${MYSQL_HOST}"  ]] ; then
+			adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		elif [[ -n "${SSH_REMOTE}" ]] ; then
+			
+			SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
+			SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+			
+			if [[ -n "${SSH_HOST}" ]] ; then
+				if [[ -z "${SSH_CMD}" ]] ; then
+					SSH_CMD=bin/adpn-cli/adpn
+				fi
+				SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
+				
+				SSH_CMDLINE="$( printf "%q" "${SSH_CMD}" )"
+				for ARG in "${_CMDLINE[@]:1}" ; do
+					SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
+				done
+
+				if [[ -z "${QQ}" ]] ; then
+					printf "[${SCRIPT} ${CMD}] * Connecting to %s to execute: %s\n" "${SSH_HOST}" "${SSH_CMDLINE}" 1>&2
+				fi
+				
+				ssh "${SSH_HOST}" "${SSH_CMDLINE}"
+			
+				if [[ -z "${QQ}" ]] ; then
+					printf "[${SCRIPT} ${CMD}] * Disconnected from %s\n" "${SSH_HOST}" 1>&2
+				fi
+			fi
+		fi
+		
 		;;
 	
 	"plugins")
