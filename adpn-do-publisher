@@ -174,6 +174,42 @@ case "${CMD}" in
 		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
 		EXITCODE="$?"
 		;;
+
+	"remove")
+# @method adpn publisher remove
+# Remove a publisher from the list of AU publishers on the props server.
+# 
+# Usage: 	adpn publisher remove [<AU_PUB_ID>|--id=<AU_PUB_ID>]
+#
+# AU_PUB_ID is a unique alphanumeric code for the publisher (e.g.: "FOO", "BAR")
+# 
+# If not provided on the command-line, the script will prompt for values
+# interactively from standard input.
+#
+# @version 2021.0405
+
+		declare -a WORDS
+		WORDS=( "${_ARGV[@]:2}" )
+
+		ARG_ID="${_PARAM[id]}"
+		if [[ -z "${ARG_ID}" ]] ; then
+			ARG_ID="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )			
+		fi
+
+		if [[ -z "${ARG_ID}" ]] ; then
+			read -p "Publisher ID code (e.g.: AUB, ADAH): " ARG_ID
+		fi
+
+		SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "DELETE FROM au_publishers WHERE au_pub_id=?" )
+		SQL_SET=$( printf 'SET @V_PUB_ID="%s"' "${ARG_ID}" )
+		SQL_EXECUTE=$( printf 'EXECUTE stmt1 USING @V_PUB_ID' )
+		SQL_DEALLOCATE=$( printf 'DEALLOCATE PREPARE stmt1' )
+
+		SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
+		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
+		EXITCODE="$?"
+		;;
 	
 	"sql")
 		MYSQL_HOST="$( adpn_setting "mysql-host" "mysql/host" )"
