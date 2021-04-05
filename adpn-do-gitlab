@@ -326,6 +326,40 @@ case "${CMD}" in
 			fi
 		fi
 		;;
+	
+	"parse")
+		GITLAB_ISSUE=""
+		for PACKET_SOURCE in "${_ARGV[@]:2}" ; do
+
+			if [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
+				GITLAB_ISSUE="${BASH_REMATCH[1]}"
+			elif [[ "${PACKET_SOURCE}" =~ ^(([A-Za-z0-9/]|-)+)[#]([0-9]+)$ ]] ; then
+				GITLAB_ISSUE="${BASH_REMATCH[0]}"
+			elif [[ "${PACKET_SOURCE}" =~ ^[#]?([0-9]+)$ ]] ; then
+				DEFAULT_REPOSITORY="$( adpnprop gitlab/repository )"
+				GITLAB_ISSUE="$( printf "%s#%d" "${DEFAULT_REPOSITORY}" "${BASH_REMATCH[1]}" )"
+			elif [[ "${PACKET_SOURCE}" =~ ^((https?[:])?//(www[.])?gitlab[.]com/(([a-zA-Z0-9/]|-)+)(/-)(/issues/([0-9]+)))$ ]] ; then
+				GITLAB_ISSUE="$( printf "%s#%d" "${BASH_REMATCH[4]}" "${BASH_REMATCH[8]}" )"
+			fi
+		
+			if [[ -n "${GITLAB_ISSUE}" ]] ; then
+				if [[ "${_PARAM[output]}" == "tsv" ]] ; then
+					PROJECT_ID="$( printf "%s" "${GITLAB_ISSUE}" | cut --field=1 --delimiter="#" )"
+					ISSUE_ID="$( printf "%s" "${GITLAB_ISSUE}" | cut --field=2 --delimiter "#" --only-delimited )"
+					printf "%s\t%s\n" "${PROJECT_ID}" "${ISSUE_ID}"
+				else
+					printf "%s" "${GITLAB_ISSUE}"
+				fi
+				
+			else
+				if [[ "${DBGLEVEL}" -ge 2 ]] ; then
+					printf "[%s] Unable to recognize and parse a Gitlab issue ID from: '%s'\n" "${SCRIPT} ${CMD}" "${PACKET_SOURCE}"
+					EXITCODE=1
+				fi
+			fi
+		
+		done
+		;;
 		
 	"version"|"help")
 		EXITCODE=0

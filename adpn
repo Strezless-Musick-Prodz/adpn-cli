@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0402
+# @version 2021.0405
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -327,17 +327,21 @@ case "${CMD}" in
 		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
 		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 
+		GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" )
+		
 		if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
 			cat - > "${AIT_PACKETS}"
-
-		elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
-			ISSUE="${BASH_REMATCH[1]}"
+		elif [[ -r "${PACKET_SOURCE}" ]] ; then
+			cp "${PACKET_SOURCE}" "${AIT_PACKETS}"		
+		elif [[ -n "${GITLAB_ISSUE}" ]] ; then
 			if [[ -n "${V}" ]] ; then
-				printf "* Retrieving JSON for Gitlab issue: %s\n" "${ISSUE}" 1>&2
+				printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
 			fi		
-			"${ME}" gitlab get packet "${ISSUE}" "${AGGP_SW[@]}" > "${AIT_PACKETS}"
+			"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" > "${AIT_PACKETS}"
+			EXITCODE="$?"
 		else
-			cp "${PACKET_SOURCE}" "${AIT_PACKETS}"
+			printf "[%s] WARNING: Cannot locate any AU data from: '%s'\n" "${SCRIPT} ${CMD}" "${PACKET_SOURCE}" 1>&2
+			EXITCODE=1
 		fi
 		
 		if [[ -r "${AIT_PACKETS}" ]] ; then	
@@ -346,7 +350,7 @@ case "${CMD}" in
 				printf 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIT_PACKETS}" "${PIPEDFROM}" 1>&2
 			fi
 			
-			GREP=$( cat "${AIT_PACKETS}" | adpn-json.py --output=application/json --where="Ingest Step:${PIPEDFROM}" )
+			GREP=$( cat "${AIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
 			if [[ -n "${GREP}" ]] ; then
 				printf "%s" "${GREP}" | head -n 1 > "${AIT_INPUT}"
 			fi
@@ -369,22 +373,25 @@ case "${CMD}" in
 			
 		fi
 		
-		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-		if [[ -z "${PEER_TO}" ]] ; then
-			PEER_TO=$( adpnprop "peer" )
-		fi
-		if [[ -n "${PEER_TO}" ]] ; then
-			PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
-		fi
+		if [[ -r "${AIT_INPUT}" ]] ; then
+			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+			if [[ -z "${PEER_TO}" ]] ; then
+				PEER_TO=$( adpnprop "peer" )
+			fi
+			if [[ -n "${PEER_TO}" ]] ; then
+				PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
+			fi
 
-		if [[ -n "${DBG}" ]] ; then
-			printf '[DBG] $ adpn-ingest-test "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}" 1>&2 
+			if [[ -n "${DBG}" ]] ; then
+				printf '[DBG] $ adpn-ingest-test "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}" 1>&2 
+			fi
+		
+			adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
+			EXITCODE="$?"
+
+			cat "${AIT_OUTPUT}" ; echo
 		fi
 		
-		adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
-		EXITCODE="$?"
-
-		cat "${AIT_OUTPUT}" ; echo
 		for TMP in "${TEMP_CLEANUP[@]}" ; do
 			rm "${TMP}"
 		done
