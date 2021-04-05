@@ -235,8 +235,8 @@ For example:
 
 	adpn publish 'gitlab:adpnet/adpn---general#77'
 	
-adpn publishers
----------------
+adpn publisher
+--------------
 List and manage the available list of publishers who may submit AUs for preservation
 in ADPNet. (These may be ADPNet Members or they may be ADPNet Hosts.)
 
