@@ -178,44 +178,60 @@ case "${CMD}" in
 # @method adpn setup
 # Perform initial setup for adpn script in a new environment.
 #
-# Usage: adpn setup
+# Usage: adpn setup [--for=<CONTEXT>]
 #
+#    --for=preserve 	sets up adpn for use on your workstation to submit AUs
+#    --for=verify   	sets up adpn for use on your preservation node to verify AUs
+#    --for=ingest  		sets up adpn for use on the props server to ingest/publish AUs
+#    --for=publish  	synonym for --for=ingest
+#   
 # @version 2021.0406
 
 		# 1. PATH: Set up a symbolic link to place adpn in the user's private bin dir
 		MY_BINDIR="${HOME}/bin"
+		printf "* PATH: Ensure that ${SCRIPT} is accessible through ${MY_BINDIR}\n" 1>&2
 		if [[ ! -d "${MY_BINDIR}" ]] ; then
+			printf "\n"
 			mkdir -v "${MY_BINDIR}"
+			printf "\n"
 		fi
 		if [[ "${SCRIPTDIR}" != "${MY_BINDIR}" ]] ; then
 			SCRIPTALIAS="${MY_BINDIR}/${SCRIPT}"
 			if [[ ! -x "${MY_BINDIR}/${SCRIPT}" ]] ; then
+				printf "\n"
 				ln --verbose --symbolic --logical --backup "${SCRIPTPATH}" "${SCRIPTALIAS}"
+				printf "\n"
 			fi
 		fi
 		
 		# 2. SETTINGS: Generate an adpnet.json file in the user's home dir, then place a symlink in the bindir
 		MY_CONFDIR="${HOME}/.adpn"
+		JSONFILENAME="$( basename "${JSONCONFFILE}" )"
+		printf "* SETTINGS: Ensure that ${JSONFILENAME} is accessible through ${MY_CONFDIR}\n" 1>&2
 		if [[ ! -d "${MY_CONFDIR}" ]] ; then
+			printf "\n"
 			mkdir -v "${MY_CONFDIR}"
+			printf "\n"
 		fi
 		if [[ ! -r "${JSONCONFFILE}" ]] ; then
-			JSONFILENAME="$( basename "${JSONCONFFILE}" )"
 			MY_CONFFILE="${MY_CONFDIR}/${JSONFILENAME}"
 			if [[ ! -r "${MY_CONFFILE}" ]] ; then
 				echo "{}" >	"${MY_CONFFILE}"
 				declare -A AS_PROPS=()
-				printf "* Let's set up some properties for ${MY_CONFFILE}.\n" 1>&2
+				printf "* SETTINGS: Let's set up some properties for ${MY_CONFFILE}.\n" 1>&2
 				printf "  N.B.: Not all of these settings need to be filled in on all systems.\n" 1>&2
 				printf "\n" 1>&2
-
+				
+				AS_CONTEXT="$( [[ -z "${_PARAM[for]}" ]] && echo "preserve" || echo "${_PARAM[for]}" )"
+				AS_CONTEXT="$( printf "%s" "${AS_CONTEXT}" | tr "[:upper:]" "[:lower:]" )"
+				
 				IFS=""
-				if [[ -z "${_PARAM[node]}" && -z "${_PARAM[props]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(preserve)$ ]] ; then
 					read -ep "Institution: " AS_PROPS[institution]
 					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
 				fi
 				
-				if [[ -z "${_PARAM[props]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(ingest|publish)$  ]] ; then
 				
 					read -ep "LOCKSS Daemon URL: " AS_PROPS[daemon]
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
@@ -228,11 +244,13 @@ case "${CMD}" in
 					
 				fi
 
-				KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
-				read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
-
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify|ingest|publish)$ ]] ; then
+					KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
+					read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
 				DROP_SERVER="drop.adpn.org"
-				if [[ -z "${_PARAM[node]}" && -z "${_PARAM[props]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(preserve)$ ]] ; then
 					DROP_SERVER_USER="$( printf "%s" "${AS_PROPS[publisher]}" | tr '[:upper:]' '[:lower:]' )"
 					
 					KEY="stage/host" DEFAULT="${DROP_SERVER}"
@@ -246,26 +264,27 @@ case "${CMD}" in
 
 				fi
 				
-				KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
-				read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
-				
-				if [[ -n "${_PARAM[node]}" ]] ; then
-					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]
-					
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify|ingest|publish)$ ]] ; then
+					KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
+					read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ -z "${_PARAM[node]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(verify)$ ]] ; then
+					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]					
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|ingest|publish)$ ]] ; then
 					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
 						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
 						DEFAULT="${USER}@${NODE_SERVER}"
 						PROMPT_DEFAULT="[${DEFAULT}]"
 					fi
-					read -ep "Preservation Node Server SSH Identity ${PROMPT_DEFAULT}: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					read -ep "Node Server SSH Identity ${PROMPT_DEFAULT}: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
 				PROPS_SERVER="configuration.adpn.org"
-				if [[ -n "${_PARAM[props]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(ingest|publish)$ ]] ; then
 					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
 					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
@@ -291,38 +310,45 @@ case "${CMD}" in
 
 				fi
 				
-				if [[ -z "${_PARAM[props]}" ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify)$ ]] ; then
 					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
 					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
-				read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
-				KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
-				read -ep "Gitlab Repository [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
-				KEY="gitlab/token" DEFAULT=""
-				read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
-
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify|ingest|publish)$ ]] ; then
+					KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
+					read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
+					read -ep "Gitlab Repository [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="gitlab/token" DEFAULT=""
+					read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
 				declare -a AS_KEYS=()
 				IFS="" printf "%s\n" "${!AS_PROPS[@]}" | sort | while read -r KEY ; do
-					printf "${KEY}\n" 1>&2
-					declare -p AS_PROPS
 					if [[ -n "${AS_PROPS[$KEY]}" ]] ; then
-						"${ME}" property set "${KEY}" "${AS_PROPS[$KEY]}"
+						printf "%s property set %s '%s'\n" "\$ ${SCRIPT}" "${KEY}" "${AS_PROPS[$KEY]}"  1>&2
+						"${ME}" property set "${KEY}" "${AS_PROPS[$KEY]}" --quiet
 					fi
 				done
 			fi
+			printf "\n"
 			ln --verbose --symbolic --logical --backup "${MY_CONFFILE}" "${JSONCONFFILE}"
-			
+			printf "\n"
 		fi
 
+		# 3. PATH: If we are setting up a props node, and we set a work directory for XML diffs, go ahead and create it.
 		xmldir="$(adpnprop xmldir)"
 		if [[ -n "${xmldir}" ]] ; then
+			printf "* XML PATH: Ensure that working directory is available at ${xmldir}\n" 1>&2
 			if [[ ! -d "${xmldir}" ]] ; then
+				printf "\n"
 				mkdir --verbose --parents "${xmldir}"
+				printf "\n"
 			fi
 		fi
 
+		EXITCODE=0
 		;;
 		
 	"property")
@@ -382,7 +408,9 @@ case "${CMD}" in
 					printf "{}\n" > "${JSONBACKUP}"
 				fi
 				mv "${APS_OUTPUT}" "${JSONORIGINAL}"
-				diff -u --color "${JSONBACKUP}" "${JSONORIGINAL}"
+				if [[ -z "${_PARAM[quiet]}" ]] ; then
+					diff -u --color "${JSONBACKUP}" "${JSONORIGINAL}"
+				fi
 				
 				EXITCODE=0
 				;;
