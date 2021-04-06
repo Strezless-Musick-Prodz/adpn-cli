@@ -173,6 +173,157 @@ case "${CMD}" in
 			EXITCODE=255
 		fi
 		;;
+	
+	"setup")
+# @method adpn setup
+# Perform initial setup for adpn script in a new environment.
+#
+# Usage: adpn setup
+#
+# @version 2021.0406
+
+		# 1. PATH: Set up a symbolic link to place adpn in the user's private bin dir
+		MY_BINDIR="${HOME}/bin"
+		if [[ ! -d "${MY_BINDIR}" ]] ; then
+			mkdir -v "${MY_BINDIR}"
+		fi
+		if [[ "${SCRIPTDIR}" != "${MY_BINDIR}" ]] ; then
+			SCRIPTALIAS="${MY_BINDIR}/${SCRIPT}"
+			if [[ ! -x "${MY_BINDIR}/${SCRIPT}" ]] ; then
+				ln --verbose --symbolic --logical --backup "${SCRIPTPATH}" "${SCRIPTALIAS}"
+			fi
+		fi
+		
+		# 2. SETTINGS: Generate an adpnet.json file in the user's home dir, then place a symlink in the bindir
+		MY_CONFDIR="${HOME}/.adpn"
+		if [[ ! -d "${MY_CONFDIR}" ]] ; then
+			mkdir -v "${MY_CONFDIR}"
+		fi
+		if [[ ! -r "${JSONCONFFILE}" ]] ; then
+			JSONFILENAME="$( basename "${JSONCONFFILE}" )"
+			MY_CONFFILE="${MY_CONFDIR}/${JSONFILENAME}"
+			if [[ ! -r "${MY_CONFFILE}" ]] ; then
+				echo "{}" >	"${MY_CONFFILE}"
+				declare -A AS_PROPS=()
+				printf "* Let's set up some properties for ${MY_CONFFILE}.\n" 1>&2
+				printf "  N.B.: Not all of these settings need to be filled in on all systems.\n" 1>&2
+				printf "\n" 1>&2
+
+				IFS=""
+				if [[ -z "${_PARAM[node]}" && -z "${_PARAM[props]}" ]] ; then
+					read -ep "Institution: " AS_PROPS[institution]
+					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
+				fi
+				
+				if [[ -z "${_PARAM[props]}" ]] ; then
+				
+					read -ep "LOCKSS Daemon URL: " AS_PROPS[daemon]
+					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
+						read -ep "LOCKSS Daemon User: " AS_PROPS[daemon/user]
+						if [[ -n "${AS_PROPS[daemon/user]}" ]] ; then
+							read -sep "LOCKSS Daemon Password: " AS_PROPS[daemon/pass]
+							printf "\n"
+						fi
+					fi
+					
+				fi
+
+				KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
+				read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				DROP_SERVER="drop.adpn.org"
+				if [[ -z "${_PARAM[node]}" && -z "${_PARAM[props]}" ]] ; then
+					DROP_SERVER_USER="$( printf "%s" "${AS_PROPS[publisher]}" | tr '[:upper:]' '[:lower:]' )"
+					
+					KEY="stage/host" DEFAULT="${DROP_SERVER}"
+					read -ep "Drop Server [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
+					KEY="stage/user" DEFAULT="${DROP_SERVER_USER}"
+					read -ep "Drop Server Account [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+					KEY="base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/drop_au_content_in_here/"
+					read -ep "Staging Area Base URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				fi
+				
+				KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
+				read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				
+				if [[ -n "${_PARAM[node]}" ]] ; then
+					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]
+					
+				fi
+				
+				if [[ -z "${_PARAM[node]}" ]] ; then
+					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
+					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
+						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
+						DEFAULT="${USER}@${NODE_SERVER}"
+						PROMPT_DEFAULT="[${DEFAULT}]"
+					fi
+					read -ep "Preservation Node Server SSH Identity ${PROMPT_DEFAULT}: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				PROPS_SERVER="configuration.adpn.org"
+				if [[ -n "${_PARAM[props]}" ]] ; then
+					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
+					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+					KEY="mysql/host" DEFAULT="localhost"
+					read -ep "[titlesdb] MySQL Server [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					if [[ -n "${AS_PROPS[mysql/host]}" ]] ; then
+						KEY="mysql/db" DEFAULT="adpn"
+						read -ep "[titlesdb] MySQL Database [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+						if [[ -n "${AS_PROPS[mysql/db]}" ]] ; then
+							KEY="mysql/user" DEFAULT="${USER}"
+							read -ep "[titlesdb] MySQL User [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+							if [[ -n "${AS_PROPS[mysql/user]}" ]] ; then
+								read -sep "[titlesdb] MySQL Password: " AS_PROPS[mysql/password]
+								printf "\n"
+							fi
+						fi
+					fi
+	
+					KEY="props/titlesdb.xml" DEFAULT="/var/www/html/overhead/takeover/lockss/titlesdb.xml"
+					read -ep "[titlesdb] TitlesDB XML Location [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="xmldir" DEFAULT="${HOME}/titlesdb-xml"
+					read -ep "[titlesdb] XML Working Directory [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				fi
+				
+				if [[ -z "${_PARAM[props]}" ]] ; then
+					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
+					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
+				read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
+				read -ep "Gitlab Repository [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				KEY="gitlab/token" DEFAULT=""
+				read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				declare -a AS_KEYS=()
+				IFS="" printf "%s\n" "${!AS_PROPS[@]}" | sort | while read -r KEY ; do
+					printf "${KEY}\n" 1>&2
+					declare -p AS_PROPS
+					if [[ -n "${AS_PROPS[$KEY]}" ]] ; then
+						"${ME}" property set "${KEY}" "${AS_PROPS[$KEY]}"
+					fi
+				done
+			fi
+			ln --verbose --symbolic --logical --backup "${MY_CONFFILE}" "${JSONCONFFILE}"
+			
+		fi
+
+		xmldir="$(adpnprop xmldir)"
+		if [[ -n "${xmldir}" ]] ; then
+			if [[ ! -d "${xmldir}" ]] ; then
+				mkdir --verbose --parents "${xmldir}"
+			fi
+		fi
+
+		;;
 		
 	"property")
 # @method adpn property
