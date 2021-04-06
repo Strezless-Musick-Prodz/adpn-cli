@@ -17,11 +17,34 @@ JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 # @version 2019.0807
 adpnprop() {
 	local key="${1}"
+	local switch=""	
+	local value=""
+	declare -a adpnprop_switches=()
+	declare -A adpnprop_params=()
+	
+	while [[ "$#" -gt 0 && "${1}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; do
+		switch="${BASH_REMATCH[1]}"
+		value="${BASH_REMATCH[3]}"
+		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+			value="${switch}"
+		fi
+		adpnprop_switches+=( "${1}" )
+		adpnprop_params["${switch}"]="${value}"
+		shift
+
+		key="${1}"
+	done
+	
+	JSON="{}"
+	if [[ -r "${JSONCONFFILE}" ]] ; then
+		JSON=$( cat "${JSONCONFFILE}" )
+	fi
+	
 	if [[ -z "${key}" ]] ; then
-		REPLY=$(cat "${JSONCONFFILE}" | adpn-json.py)
+		REPLY=$( echo "${JSON}" | adpn-json.py --output=text/plain "${adpnprop_switches[@]}")
 		JSONEXIT=$?
 	else
-		REPLY=$(cat "${JSONCONFFILE}" | adpn-json.py --key="${key}")
+		REPLY=$( echo "${JSON}" | adpn-json.py --key="${key}" "${adpnprop_switches[@]}")
 		JSONEXIT=$?
 	fi
 	printf "%s" "${REPLY}" 

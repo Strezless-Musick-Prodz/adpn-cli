@@ -146,6 +146,7 @@ class myPyJSON :
 	def __init__ (self, splat=True, cascade=False, where=None) :
 		"""Initialize the JSON extractor pattern."""
 		self._jsonProlog = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
+		self._jsonBraces = r'^\s*([{].*[}]|\[.*\])\s*'
 		self._jsonRaw = ''
 		self._jsonText = [ ]
 		self._splat = splat
@@ -157,6 +158,11 @@ class myPyJSON :
 		"""Regex that matches and parses out the JSON representation from a line of text."""
 		return self._jsonProlog
 	
+	@property
+	def braces (self) :
+		"""Regex that matches and parses out a likely JSON hashtable or array from a line of text."""
+		return self._jsonBraces
+		
 	@property
 	def splat (self) :
 		"""Switch for splatting (or not) single item lists into their first unit."""
@@ -230,6 +236,25 @@ class myPyJSON :
 					splat = data
 
 		return splat
+	
+	def add_prolog (self, line) :
+		if re.match(self.prolog, line, flags=re.I) :
+			output=line
+		else :
+			output=( "JSON: %(line)s" % { "line": line } )
+		return output
+		
+	def is_acceptable (self, line) :
+		is_prologged = re.match(self.prolog, line, flags=re.I)
+		is_braces = False
+		maybe_braces = re.match(self.braces, line, flags=re.I)
+		if maybe_braces :
+			try :
+				json.loads(line)
+				is_braces = True
+			except json.decoder.JSONDecodeError as e :
+				is_braces = False
+		return ( is_prologged or is_braces )
 		
 	def accept (self, jsonSource, screen=False) :
 		"""Accept the plain-text input containing one or more JSON hash tables within the text.
@@ -244,7 +269,7 @@ class myPyJSON :
 				split_src = [ jsonSource ]
 			else :
 				split_src = jsonSource
-			self._jsonText = [ bit for bit in split_src if re.match(self.prolog, bit, flags=re.I) ]
+			self._jsonText = [ self.add_prolog(bit) for bit in split_src if self.is_acceptable(bit) ]
 		else :
 			self._jsonText = jsonSource
 		

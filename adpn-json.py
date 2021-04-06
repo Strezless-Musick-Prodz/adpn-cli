@@ -4,7 +4,7 @@
 # provided on stdin and outputs the value (a printed str or a serialized str equivalent)
 # from a given key-value pair, so that bash scripts can capture values from JSON packets.
 #
-# @version 2021.0402
+# @version 2021.0406
 
 import sys
 import os.path
@@ -35,11 +35,22 @@ Exit code:
 	"""
 	
 	def __init__ (self, scriptname, argv, switches) :
-		self.scriptname = scriptname
+		self.scriptname = scriptname		
 		self._argv = argv
 		self._switches = switches
 		self._output = []
 		self._flags = { "json_error": [], "key_error": [], "nothing_found": [], "output_error": [] }
+		self._default_mime = "text/plain"
+		with open(argv[0], 'r') as f :
+			for line in f.readlines() :
+				ref = re.search(r'^#\s*@version\s*(.*)\s*$', line)
+				if ref :
+					self._version = ref.group(1)
+			f.close()
+
+	@property
+	def version (self) :
+		return self._version
 		
 	@property
 	def switches (self) :
@@ -81,7 +92,10 @@ Exit code:
 		else :
 			exitcode=0
 		return exitcode
-		
+	
+	def display_version (self) :
+		print("%(script)s version %(version)s" % {"script": self.scriptname, "version": self.version})
+	
 	def display_usage (self) :
 		print(self.__doc__)
 
@@ -92,7 +106,9 @@ Exit code:
 		return ( self.switches.get('cascade') is not None )
 		
 	def wants_table(self) :
-		return (( self.switches.get('key') is None ) or ( self.get_output_format(index=1) == "table" ))
+		requested_table = (( self.get_output_format(index=0) == "text/tab-separated-values" ) or ( self.get_output_format(index=1) == "table" ))
+		implies_table = (( self.switches.get('key') is None ) and ( self.get_output_format(index=0) is None )) 
+		return implies_table or requested_table
 
 	def wants_json_output(self) :
 		return (( self.get_output_format() == "json" ) or ( self.get_output_format() == "application/json" ) )
@@ -124,7 +140,7 @@ Exit code:
 		return terminal
 		
 	def get_output_format (self, index=0) :
-		sSpec = self.switches.get('output') if self.switches.get('output') is not None else "text/plain"
+		sSpec = self.switches.get('output') if self.switches.get('output') is not None else self._default_mime
 		aSpec = sSpec.split(";")
 		return aSpec[index] if (index<len(aSpec)) else None
 		
@@ -135,7 +151,26 @@ Exit code:
 			self.output.extend( out )
 		else :
 			self.add_flag("output_error", out )
-			
+	
+	def get_json_indent (self) :
+		indent=None
+		fmt=self.get_output_format(index=1)
+		fmt=fmt if fmt is not None else ''
+		if self.switches.get('indent') is not None :
+			try :
+				indent=int(self.switches.get('indent'))
+			except ValueError as e:
+				indent=str(self.switches.get('indent'))
+		elif self.get_output_format(index=1)=='prettyprint' :
+			indent=0
+		elif re.match(r'^indent=(.*)$', fmt) :
+			m=re.search(r'^indent=(.*)$', fmt)
+			try :
+				indent=int(m.group(1))
+			except ValueError as e:
+				indent=str(m.group(1))
+		return indent
+	
 	def get_output (self, value, key=None, pair=False, table={}, context={}) :
 		lines = []
 		if ( self.get_output_format() == 'urlencode' or self.get_output_format() == "multipart/form-data" ) :
@@ -164,7 +199,7 @@ Exit code:
 			self.add_flag("key_error", key)
 
 		if self.wants_json_output() :
-			self.output.extend([ json.dumps(out) ])
+			self.output.extend([ json.dumps(out,indent=self.get_json_indent()) ])
 		elif self.wants_table() or isinstance(context, list) :
 			line = "\t".join(out)
 			self.output.extend([ line ])
@@ -193,7 +228,16 @@ Exit code:
 		jsonTest = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
 		# Replace non-capturing (?: ... ) with widely supported, grep -E compliant ( ... )
 		print(re.sub(r'[(][?][:]', '(', jsonTest.prolog), end="")
-					
+	
+	def display_keyvalue (self) :
+		self._default_mime = "application/json"
+		table = {}
+		if self.switches.get('key') is not None :
+			table[self.switches.get('key')] = self.switches.get('value')
+		self.display_data(table, table, parse=True, depth=0)
+		if len(self.output) > 0 :
+			print("\n".join(self.output), end=self.get_output_terminator())
+		
 	def execute (self) :
 		try :
 			
@@ -237,6 +281,10 @@ if __name__ == '__main__' :
 		script.display_usage()
 	elif script.switched('regex') :
 		script.display_regex()
+	elif script.switched('version') :
+		script.display_version()
+	elif script.switched('key') and script.switched('value') :
+		script.display_keyvalue()
 	else :
 		script.execute()
 	sys.exit(script.get_exitcode())

@@ -178,23 +178,62 @@ case "${CMD}" in
 # @method adpn property
 # Display property values from the configuration file (adpnet.json)
 #
-# Usage: adpn property [get <KEY>]
+# Usage: adpn property [list|get <KEY>|set <KEY> <VALUE>]
 #
 # Example: adpn property get "peer"
 #
-# Output: prints the value associated with <KEY> in the JSON hash table
+# Output:
+# * adpn property list # lists the available settings from the JSON hash table
+# * adpn property get <KEY> # prints the value associated with <KEY> in the JSON hash table
+# * adpn property set <KEY> <VALUE> # sets the value associated with <KEY> to <VALUE>
 # 
-# 
-# @version 2019.0715
+# @version 2021.0406
 
 		SUBCMD="${_ARGV[2]}"
 		case "${SUBCMD}" in
-			"")
+			""|"list")
 				adpnprop
+				printf "\n"
 				;;
 			"get")
 				adpnprop "${_ARGV[3]}"
 				EXITCODE=$?
+				;;
+			"set")
+				declare -a WORDS
+				WORDS=( "${_ARGV[@]:3}" )
+				if [[ -n "${_PARAM[key]}" ]] ; then
+					KEY="${_PARAM[key]}"
+				elif [[ -n "${WORDS[0]}" ]] ; then
+					KEY="${WORDS[0]}"
+					WORDS=( "${WORDS[@]:1}" )
+				fi
+				
+				if [[ -n "${_PARAM[value]}" ]] ; then
+					VALUE="${_PARAM[value]}"
+				elif [[ -n "${WORDS[0]}" ]] ; then
+					VALUE="${WORDS[0]}"
+					WORDS=( "${WORDS[@]:1}" )
+				fi
+				
+				APS_OUTPUT=$(mktemp)
+
+				JSON_KEYVALUE="$( adpn-json.py --key="${KEY}" --value="${VALUE}" )"
+				JSON_OTHERS="$( adpnprop --output=application/json )"
+				printf "%s\n%s\n" "${JSON_OTHERS}" "${JSON_KEYVALUE}" | adpn-json.py --output="application/json;prettyprint" --cascade > "${APS_OUTPUT}"
+				printf "\n" >> "${APS_OUTPUT}"
+
+				JSONORIGINAL="$( readlink -f "${JSONCONFFILE}" )"
+				JSONBACKUP="$( printf "%s~" "${JSONORIGINAL}" )"
+				if [[ -r "${JSONORIGINAL}" ]] ; then
+					cp "${JSONORIGINAL}" "${JSONBACKUP}"
+				else
+					printf "{}\n" > "${JSONBACKUP}"
+				fi
+				mv "${APS_OUTPUT}" "${JSONORIGINAL}"
+				diff -u --color "${JSONBACKUP}" "${JSONORIGINAL}"
+				
+				EXITCODE=0
 				;;
 			*)
 				echo "[${SCRIPT} ${CMD}] '${SUBCMD}' command not understood." 1>&2
