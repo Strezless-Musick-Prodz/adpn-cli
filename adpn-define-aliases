@@ -219,7 +219,7 @@ function adpn_check_dependency () {
 			fi
 			
 			if [[ "Y" == "${INST_YN}" ]] ; then
-				sudo su -c "${instruction}" ; result="$?"
+				sudo su -c "${instruction}" < /dev/tty ; result="$?"
 			else
 				printf "To resolve this failure, use: %s\n" "${instruction}" 1>&2
 			fi
