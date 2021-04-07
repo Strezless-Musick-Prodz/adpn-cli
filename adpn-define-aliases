@@ -91,6 +91,145 @@ function adpn_command_line() {
 	
 }
 
+# adpn_check_dependency: check a list of dependencies; if at least one fails,
+# maybe output instructions or suggestions about how to resolve the failure
+#
+# @version 2021.0407
+function adpn_check_dependencies () {
+
+	local result=0
+	
+	declare -a acds_argv=("${0}")
+	declare -A acds_switches=()
+	declare -A acds_params=()
+
+	while [[ "$#" -gt 0 ]] ; do
+		local param="${1}" ; shift
+
+		if [[ "${param}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
+			local switch="${BASH_REMATCH[1]}"
+			local value="${BASH_REMATCH[3]}"
+			if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+				value="${switch}"
+			fi
+			acds_switches["${switch}"]="${param}"
+			acds_params["${switch}"]="${value}"
+		else
+			acds_argv+=("${param}")
+		fi
+	done
+	
+	local file="${acds_argv[1]}"
+	if [[ -z "${file}" ]] ; then
+		file=-
+	fi
+	
+	IFS=""
+	shopt -s lastpipe # allow export of variables from the last command in a pipeline
+	
+	cat "${file}" | while read -r LINE ; do
+		local dependency=$( printf "%s\n" "${LINE}" | cut --field=1 )
+		local description=$( printf "%s\n" "${LINE}" | cut --field=2 --only-delimited )
+		local instruction=""
+		
+		local i=3
+		local instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
+		while [[ -n "${instruction_option}" ]] ; do
+			local packman=$( printf "%s\n" "${instruction_option}" | cut --field=1 --delimiter=" " )
+			which "${packman}" > /dev/null && instruction="${instruction_option}"
+			i=$(( i + 1 ))
+			instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
+		done
+
+		local r=0
+		adpn_check_dependency "${dependency}" "${description}" "${instruction}" ${acds_switches[interactive]} ; r="$?"
+		if [[ "${r}" -gt "${result}" ]] ; then
+			result="${r}"
+		fi
+		
+	done
+	return "${result}"
+}
+
+# adpn_check_dependency: check for a dependency; in case of failure, maybe
+# output instructions or suggestions about how to resolve the failure
+#
+# @version 2021.0407
+function adpn_check_dependency () {
+
+	declare -a acd_argv=("${0}")
+	declare -a acd_switches=()
+	declare -A acd_params=()
+	
+	while [[ "$#" -gt 0 ]] ; do
+		local param="${1}" ; shift
+
+		if [[ "${param}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
+			local switch="${BASH_REMATCH[1]}"
+			local value="${BASH_REMATCH[3]}"
+			if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+				value="${switch}"
+			fi
+			acd_switches+=( "${param}" )
+			acd_params["${switch}"]="${value}"
+		else
+			acd_argv+=("${param}")
+		fi
+	done
+
+	local dependency="${acd_argv[1]}"
+	local description="${acd_argv[2]}" ; shift
+	local instruction="${acd_argv[3]}" ; shift
+
+	local result=0
+
+	local dep_type=$( printf "%s" "${dependency}" | cut --field=1 --delimiter=":" --only-delimited )
+	local dep_name=$( printf "%s" "${dependency}" | cut --field=2 --delimiter=":" )
+	
+	if [[ -n "${dependency}" ]] ; then
+	
+		case "${dep_type}" in
+		"")
+			which "${dep_name}" > /dev/null || result="$?"
+			;;
+		"python")
+			local PYTHON_IMPORT=$( printf "import %s" "${dep_name}" )
+			python3 -c "${PYTHON_IMPORT}" 2>/dev/null || result="$?"
+			;;
+		*)
+			;;
+		esac
+	fi
+	
+	if [[ "${result}" -gt 0 ]] ; then
+		printf "Dependency Failure: %s." "${dep_name}" 1>&2
+		if [[ -n "${description}" ]] ; then
+			local s_desc=$( printf "${description}" "${dep_name}" )
+			printf " This script requires the %s." "${s_desc}" 1>&2
+		fi
+		printf "\n" 1>&2
+		
+		if [[ -n "${instruction}" ]] ; then
+			if [[ -n "${acd_params[interactive]}" ]] ; then
+				read -n 1 -p "Install using command (${instruction}) (y/N)? " INST_YN < /dev/tty
+				INST_YN=$( printf "%s" "${INST_YN}" | tr "[:lower:]" "[:upper:]" )
+				printf "\n"
+			else
+				INST_YN="N"
+			fi
+			
+			if [[ "Y" == "${INST_YN}" ]] ; then
+				sudo su -c "${instruction}" ; result="$?"
+			else
+				printf "To resolve this failure, use: %s\n" "${instruction}" 1>&2
+			fi
+		fi
+		
+	fi
+
+	return "${result}"
+}
+
 # adpn_help_notes: get help or usage notes included in the script comments,
 # marked off with a @package or @method docblock directive
 #
