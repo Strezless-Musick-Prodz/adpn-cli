@@ -14,7 +14,7 @@ JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 # @param string key name to retrieve from JSON config file
 # @return int exit code from adpn-json.py (0=success, 1=key not found)
 #
-# @version 2019.0807
+# @version 2021.0406
 adpnprop() {
 	local key="${1}"
 	local switch=""	
@@ -91,23 +91,38 @@ function adpn_command_line() {
 	
 }
 
+# adpn_help_notes: get help or usage notes included in the script comments,
+# marked off with a @package or @method docblock directive
+#
+# @param string path to the script file; packages should be named the same
+#               as the command base name (e.g. script adpn = @package adpn)
+# @param string optional, method name
+# @param string optional, context of call, used in error messages
+# @return int exit code, 0=success; 255=no help notes for package or method
+#
+# @version 2021.0407
+
 function adpn_help_notes () {
 	local scriptpath="${1}" ; shift
 	local method="${1}" ; shift
 	local context="${1}" ; shift
 
+	if [[ -n "${context}" ]] ; then
+		context=" ${context}"
+	fi
+	
 	local package=$(basename "${scriptpath}")
-	local directive="[@]package ${package}"
+	local directive="[@]package ${package}\b"
 	local HELPNOTES=""
 	
 	if [[ ! -z "${method}" ]] ; then
-		directive="[@]method ${package} ${method}"
+		directive="[@]method ${package} ${method}\b"
 	fi
 	
 	HELPNOTES=$( sed --quiet "/^[#] ${directive}/,/^[#] @version/p" ${scriptpath} )
 	
 	if [ -z "${HELPNOTES}" ] ; then
-		echo "[${package} ${context}] '${method}' help notes not yet implemented." 1>&2
+		echo "[${package}${context}] '${method}' help notes not yet implemented." 1>&2
 		EXITCODE=255
 	else 
 		echo "${HELPNOTES}" | grep "^[#]" | grep -v "^[#] [@]" | sed "s/^[#] *//"
@@ -146,18 +161,30 @@ function echo_header() {
 
 export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
 
+# adpn_get_json_packet: filter an input stream for JSON packets, based on regex
+# for a JSON packet or prolog from adpn-json.py 
+# example: FOOBAR=$( adpnprop "${KEY}" )
+#
+# @param string file name of input to filter for JSON packets; "-" for stdin/pipeline
+# @return int exit code from grep (0=success, 1=nothing found)
+#
+# @version 2021.0407
+
 function adpn_get_json_packet() {
 	local file="${1}"
 	local packet=""
-	
+	local result=0
+
 	if [[ -z "${file}" ]] ; then 
 		file="-"
 	fi
 	
 	packet=$( grep -P $ADPN_JSON_PACKET_REGEX "${file}" )
+	result="$?"
 	if [[ -n "${packet}" ]] ; then
 		printf "%s\n" "${packet}"
 	fi
+	return "${result}"
 }
 
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
