@@ -136,7 +136,7 @@ function adpn_check_dependencies () {
 		local instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
 		while [[ -n "${instruction_option}" ]] ; do
 			local packman=$( printf "%s\n" "${instruction_option}" | cut --field=1 --delimiter=" " )
-			which "${packman}" > /dev/null && instruction="${instruction_option}"
+			which "${packman}" 2>/dev/null >/dev/null && instruction="${instruction_option}"
 			i=$(( i + 1 ))
 			instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
 		done
