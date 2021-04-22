@@ -192,6 +192,16 @@ function adpn_check_dependency () {
 		"")
 			which "${dep_name}" > /dev/null || result="$?"
 			;;
+		"apt")
+			which "${dep_type}" &>/dev/null && if [[ -n "${dep_name}" ]] ; then
+				dpkg -s "${dep_name}" &> /dev/null ; result="$?"
+			fi
+			;;
+		"yum")
+			which "${dep_type}" &>/dev/null && if [[ -n "${dep_name}" ]] ; then
+				yum list installed "${dep_name}" &> /dev/null ; result="$?"
+			fi
+			;;
 		"python")
 			local PYTHON_IMPORT=$( printf "import %s" "${dep_name}" )
 			python3 -c "${PYTHON_IMPORT}" 2>/dev/null || result="$?"

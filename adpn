@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0422
+# @version 2021.0422-1315
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -215,9 +215,13 @@ case "${CMD}" in
 curl	%s command-line tool	apt install curl	yum install curl
 unzip	%s command-line tool	apt install unzip	yum install unzip
 python3	%s scripting environment	apt install python3	yum install python3
-python:bs4	%s Python module	apt install python3-bs4	yum install python-beautifulsoup4
-python:socks	%s Python module	apt install python3-socks	yum install python3-pysocks
-python:MySQLdb	%s Python module	pip3 install mysqlclient
+apt:python3-dev	%s system module	apt install python3-dev
+yum:python3-devel	%s system module	yum install python3-devel
+python3	%s scripting environment	apt install python3	yum install python3
+python:bs4	%s Python module	apt install python3-bs4	python3 -m pip install bs4
+python:socks	%s Python module	apt install python3-socks	python3 -m pip install pysocks
+mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysql-devel
+python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 """
 
 		printf "* DEPENDENCIES: checking for dependencies.\n"
