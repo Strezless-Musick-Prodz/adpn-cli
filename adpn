@@ -21,7 +21,7 @@ __DOC__="""${__USAGE__}
 
 The most commonly used ${SCRIPT} commands are:
   preserve  	ADPNet Member: prepare an AU for preservation and notify config manager
-  verify	Node Manager: accept an AU from Member, test, and confirm accessibility from your node
+  verify    	Node Manager: accept an AU from Member, test, and confirm accessibility from your node
   ingest    	Config Manager: accept a verified AU from Node, test, and insert into titlesdb
   publish   	Config Manager: publish an accepted Member's AU to the entire network
   help      	Display usage notes for the ${SCRIPT} script or for a given command
@@ -659,13 +659,13 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		fi
 		;;
 		
-	"ingest")
-# @method adpn ingest
+	"post"|"ingest")
+# @method adpn post
 # Config Manager: accept JSON data specifying a new AU for ingest,
 # test connection to the staging server and verify parameters; then
 # insert into local titlesdb and confirm insertion.
 #
-# Usage: adpn ingest [-|<JSONFILE>] [<OPTIONS>]...
+# Usage: adpn post [-|<JSONFILE>] [<OPTIONS>]...
 #
 # Options:
 #   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
@@ -673,7 +673,12 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2021.0330
+# @version 2021.0420
+
+# @method adpn ingest
+# Config Manager: synonym for `adpn post`
+#
+# @version 2021.0420
 
 		AV_OUTPUT="$(mktemp)"
 		
@@ -735,13 +740,13 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 					EXITCODE="${ATD_ERRCODE}"
 				elif [[ -z "${_PARAM[context]}" ]] ; then
 					echo "" 1>&2
-					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit ingested into ${INGEST_FROM} titlesdb." 1>&2
+					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit posted to ${INGEST_TO} titlesdb." 1>&2
 				fi
 			fi
 		fi
 		;;
 		
-	"publish")
+	"promote"|"publish")
 # @method adpn publish
 # Config Manager: accept JSON data specifying a new AU for ingest,
 # test connection to the staging server and verify parameters; then
@@ -754,7 +759,13 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2021.0330
+# @version 2021.0420
+
+# @method adpn publish
+# Config Manager: synonym for `adpn promote`
+#
+# @version 2021.0420
+
 
 		AI_OUTPUT="$(mktemp)"
 		"${ME}" ingest "${_CMDLINE[@]:2}" --to=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
@@ -771,7 +782,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		
 		else
 			printf "\n" 1>&2
-			printf "[${SCRIPT} ${CMD}] DONE: Archival Unit published to ${INGEST_FROM} titlesdb.\n" 1>&2
+			printf "[${SCRIPT} ${CMD}] DONE: Archival Unit published to titlesdb.\n" 1>&2
 
 			TDB_XML=$( adpnprop "props/titlesdb.xml" )
 			if [[ -r "${TDB_XML}" ]] ; then
