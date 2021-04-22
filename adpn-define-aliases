@@ -224,6 +224,10 @@ function adpn_check_dependency () {
 				printf "To resolve this failure, use: %s\n" "${instruction}" 1>&2
 			fi
 		fi
+
+		if [[ -n "${acd_params[or-die]}" ]] ; then
+			exit 255
+		fi
 		
 	fi
 
@@ -298,7 +302,7 @@ function echo_header() {
 	echo "${UNDERLINE}"
 }
 
-export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
+( which python3 2>/dev/null >/dev/null ) && export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
 
 # adpn_get_json_packet: filter an input stream for JSON packets, based on regex
 # for a JSON packet or prolog from adpn-json.py 

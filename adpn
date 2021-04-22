@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0407
+# @version 2021.0422
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -65,50 +65,24 @@ rm "${CMDLINETXT}"
 ### DEPENDENCIES: check for required command-line tools and Python scripts ###############
 ##########################################################################################
 
-declare -A DEPENDENCIES ; DEPENDENCIES=(
-	[mktemp]="command-line %s tool"
-	[grep]="command-line %s tool"
-	[unzip]="command-line %s tool"
-	[tr]="command-line %s tool"
-	[cut]="command-line %s tool"
-	[curl]="command-line %s tool"
-	[adpn-ingest-test]="%s Bash script"
-	[adpn-do-preserve-email]="%s Bash script"
-	[adpn-do-gitlab]="%s Bash script"
-	[adpn-do-rebalance]="%s Bash script"
-	[adpn-do-publisher]="%s Bash script"
-	[adpn-do-plugins]="%s Bash script"
-	[python3]="%s scripting environment"
-	[adpn-json.py]="%s Python script"
-	[adpn-stage-content.py]="%s Python script"
-	[adpn-ingest-into-titlesdb.py]="%s Python script"
-)
-
-DEPENDENCY_FAILURE=""
-for CMD in "${!DEPENDENCIES[@]}" ; do
-	DESC=$(printf "${DEPENDENCIES[$CMD]}" "${CMD}")
-	
-	DEP_TYPE="$( printf "%s" "${CMD}" | cut --field=1 --delimiter=":" --only-delimited )"
-	DEP="$( printf "%s" "${CMD}" | cut --field=2 --delimiter=":" )"
-	
-	FAILED=""
-	if [[ "${DEP_TYPE}" == "python" ]] ; then
-		PYTHON_IMPORT=$( printf "import %s" "${DEP}" )
-		python3 -c "${PYTHON_IMPORT}" 2>/dev/null || FAILED="${DEP}"
-	else
-		which "${DEP}" > /dev/null || FAILED="${DEP}"
-	fi
-	
-	if [[ -n "${FAILED}" ]] ; then
-		echo 1>&2
-		echo Dependency Failure: ${CMD}. This script requires the ${DESC}. 1>&2
-		DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+${FAILED}"
-	fi
-done
-
-if [[ ! -z "${DEPENDENCY_FAILURE}" ]] ; then
-	exit 255
-fi
+#declare -A DEPENDENCIES ; DEPENDENCIES=(
+#	[mktemp]="command-line %s tool"
+#	[grep]="command-line %s tool"
+#	[unzip]="command-line %s tool"
+#	[tr]="command-line %s tool"
+#	[cut]="command-line %s tool"
+#	[curl]="command-line %s tool"
+#	[adpn-ingest-test]="%s Bash script"
+#	[adpn-do-preserve-email]="%s Bash script"
+#	[adpn-do-gitlab]="%s Bash script"
+#	[adpn-do-rebalance]="%s Bash script"
+#	[adpn-do-publisher]="%s Bash script"
+#	[adpn-do-plugins]="%s Bash script"
+#	[python3]="%s scripting environment"
+#	[adpn-json.py]="%s Python script"
+#	[adpn-stage-content.py]="%s Python script"
+#	[adpn-ingest-into-titlesdb.py]="%s Python script"
+#)
 
 ##########################################################################################
 ### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
