@@ -3,7 +3,7 @@
 # lockss-plugin-url.py: Extract and report URL(s) for one or more LOCKSS Plugin JAR packages.
 #
 # @see LockssPluginDetails.__doc__ for usage notes
-# @version 2019.0610
+# @version 2021.0428
 
 import sys, fileinput, re, json, os.path
 import urllib.request, urllib.parse, socket, html
