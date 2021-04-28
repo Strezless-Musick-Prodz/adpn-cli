@@ -801,20 +801,16 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 
 				printf "* Comparing new %s to prior revision...\n\n"
 				
-				git --no-pager diff --exit-code && printf "%s\n" "[no difference]"
-				
-				AU_TITLE=$(echo "${JSON_PACKET}" | adpn-json.py --key="Ingest Title")
+				if [[ -z "${_PARAM[batch]}" ]] ; then
+					git add --patch < /dev/tty
+				else
+					git add "${TDB_FILE}"
+				fi
 
-				printf "%s\n"
-				printf "%s\n" "############################"
-				printf "%s\n" "## NEXT STEPS TO COMPLETE ##"
-				printf "%s\n" "############################"
-				printf "\n"
-				printf "%s\n" '# --- cut here --- #'
-				printf "cd '%s'\n" "${TDB_DIR}"
-				printf "git add '%s'\n" "${TDB_FILE}"
-				printf "git commit --message 'Promoted new AU (%s)'\n" "${AU_TITLE}"
-				printf "%s\n" '# --- cut here --- #'
+				AU_TITLE=$(echo "${JSON_PACKET}" | adpn-json.py --key="Ingest Title")
+				GC_MESSAGE=$( printf "Promoted new AU (%s)" "${AU_TITLE}" )
+
+				git commit --message "${GC_MESSAGE}" 
 
 			else 
 			
