@@ -67,11 +67,19 @@ or password on stderr.
 	
 		url = None
 		if ('daemon' in self.switches and not 'url' in self.switches) :
-			daemonUrl = 'http://%(daemon)s'
-			daemonPath = '/DaemonStatus?table=%(table)s&key=%(key)s&output=%(output)s'
+            if len(self.switches['daemon']) > 0 :
+                daemonHost = urllib.parse.urlparse(self.switches['daemon'])
+            else :
+                daemonHost = urllib.parse.urlparse("http://localhost:8081")
+            
+            if ( daemonHost.netloc ) :
+                daemonUrl = ( daemonHost.geturl() )
+            else :
+                daemonUrl = ( "http://%(daemon)s/" % self.switches )
+            daemonPath = 'DaemonStatus?table=%(table)s&key=%(key)s&output=%(output)s'
 			
 			url = urllib.parse.urljoin(
-				daemonUrl % {'daemon': self.switches['daemon']},
+                daemonUrl,
 				(daemonPath % {'table': 'Plugins', 'key': '', 'output': 'xml'})
 			)
 		elif 'url' in self.switches :
