@@ -768,7 +768,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 
 
 		AI_OUTPUT="$(mktemp)"
-		"${ME}" ingest "${_CMDLINE[@]:2}" --to=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
+		"${ME}" post "${_CMDLINE[@]:2}" --to=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -777,7 +777,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		rm "${AI_OUTPUT}"
 
 		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] ${SCRIPT} ingest failed." 1>&2
+			echo "[${SCRIPT} ${CMD}] ${SCRIPT} post failed." 1>&2
 			EXITCODE="${AI_ERRCODE}"
 		
 		else
