@@ -802,7 +802,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 				printf "* Comparing new %s to prior revision...\n\n"
 				
 				if [[ -z "${_PARAM[batch]}" ]] ; then
-					git add --patch < /dev/tty
+					git add --patch "${TDB_FILE}" < /dev/tty
 				else
 					git add "${TDB_FILE}"
 				fi
