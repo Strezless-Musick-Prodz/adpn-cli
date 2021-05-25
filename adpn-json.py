@@ -4,7 +4,7 @@
 # provided on stdin and outputs the value (a printed str or a serialized str equivalent)
 # from a given key-value pair, so that bash scripts can capture values from JSON packets.
 #
-# @version 2021.0406
+# @version 2021.0525
 
 import sys
 import os.path
@@ -174,7 +174,8 @@ Exit code:
 	def get_output (self, value, key=None, pair=False, table={}, context={}) :
 		lines = []
 		if ( self.get_output_format() == 'urlencode' or self.get_output_format() == "multipart/form-data" ) :
-			display_value = urllib.parse.quote(str(value))
+			sValue = str(value)
+			display_value = urllib.parse.quote(sValue.encode("utf-8", "surrogatepass"))
 		else :
 			display_value = str(value)
 			
