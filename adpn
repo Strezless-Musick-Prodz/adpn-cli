@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0525
+# @version 2021.0526
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -485,7 +485,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 			--au_title="${_PARAM[au_title]}" \
 			"${_ARGV[3]}" > "${ASC_OUTPUT}" ; ASC_ERRCODE="$?"
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
-			JSON_PACKET=$( adpn_get_json_packet "${ASC_OUTPUT}" )
+			JSON_PACKET=$( adpn_select_json_packet "${ASC_OUTPUT}" )
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -594,7 +594,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		elif [[ -n "${GITLAB_ISSUE}" ]] ; then
 			if [[ -n "${V}" ]] ; then
 				printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
-			fi		
+			fi
 			"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" > "${AIT_PACKETS}"
 			EXITCODE="$?"
 		else
@@ -616,10 +616,10 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
 			if [[ -z "${GREP}" ]] ; then
 				if [[ -n "${DBG}" ]] ; then
-					printf 'cat "%s" | adpn_get_json_packet | head -n 1\n' "${AIT_PACKETS}" 1>&2
+					printf 'cat "%s" | adpn_select_json_packet | head -n 1\n' "${AIT_PACKETS}" 1>&2
 				fi
 				
-				GREP=$( cat "${AIT_PACKETS}" | adpn_get_json_packet | head -n 1 )
+				GREP=$( cat "${AIT_PACKETS}" | adpn_select_json_packet | head -n 1 )
 				if [[ "${GREP}" ]] ; then
 					printf "%s" "${GREP}" > "${AIT_INPUT}"
 				fi
@@ -733,7 +733,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
 				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
 				EXITCODE="${AIIT_ERRCODE}"
-			else			
+			else
 				adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; ATD_ERRCODE="$?"
 				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${INGEST_DRY_RUN}"  ]] ; then
 					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
@@ -821,6 +821,140 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		fi
 		;;
 
+	"flag")
+# @method adpn flag
+# Config Manager: add or remove a parameter to an AU in titlesdb.
+#
+# Usage: adpn flag [-|<JSONFILE>] [<OPTIONS>]...
+#
+# Options:
+#   --to=<PEER>     	code for destination feed (AUB, ADAH, etc.); overrides JSON data
+#   --key=<KEY>     	key name for the parameter (crawl_proxy, pub_down, ...)
+#   --value=<VALUE> 	value to set on the parameter (localhost:8080, true, ...)
+#   --delete        	remove the parameter with this name
+#   --dry-run       	output SQL script for titlesdb insert but do not execute
+#
+# @version 2021.0526
+
+		if [[ -n "${_PARAM[pipeline]}" ]] ; then
+			PIPELINE="${_LINESWITCH[pipeline]}"
+			PIPEDFROMTO="${_PARAM[pipeline]}"
+		else
+			PIPEDFROMTO="published:flagged"
+			PIPELINE="--pipeline=${PIPEDFROMTO}"
+		fi
+		if [[ -n "${PIPEDFROMTO}" ]] ; then
+			PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
+			PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
+			if [[ "${DBGLEVEL}" -ge 2 ]] ; then
+				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+			fi
+		fi
+		
+		declare -a TEMP_CLEANUP=()
+
+		AIIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_PACKETS}" )
+		AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
+		
+		adpn_get_json_packets "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_select_json_packet > "${AIIT_PACKETS}"
+		EXITCODE="$?"
+		
+		declare -a AF_PARAMS=( "${_ARGV[@]:3}" )
+		if [[ -n "${_PARAM[key]}" ]] ; then
+			AIIT_PARAM_KEY="${_PARAM[key]}"
+		else
+			AIIT_PARAM_KEY="${AF_PARAMS[0]}"
+			AF_PARAMS=( "${AF_PARAMS[@]:1}" )
+		fi
+		if [[ -n "${_PARAM[value]}" ]] ; then
+			AIIT_PARAM_VALUE="${_PARAM[value]}"
+		else
+			AIIT_PARAM_VALUE="${AF_PARAMS[0]}"
+			AF_PARAMS=( "${AF_PARAMS[@]:1}" )
+		fi
+		AIIT_PARAM_OP="+"
+		if [[ -n "${_PARAM[delete]}" ]] ; then
+			AIIT_PARAM_OP="-"
+		fi
+		
+		if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_PACKETS}" ]] ; then
+			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
+			if [[ -n "${DBG}" ]] ; then
+				printf 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIIT_PACKETS}" "${PIPEDFROM}" 1>&2
+			fi
+			
+			GREP=$( cat "${AIIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
+			if [[ -n "${GREP}" ]] ; then
+				printf "%s" "${GREP}" | tail -n 1 > "${AIIT_INPUT}"
+			fi
+			
+			# 2. If not, let's take the LAST packet that seems to be available. (flag=late)
+			if [[ -z "${GREP}" ]] ; then
+				if [[ -n "${DBG}" ]] ; then
+					printf 'cat "%s" | adpn_select_json_packet | tail -n 1\n' "${AIIT_PACKETS}" 1>&2
+				fi
+				
+				GREP=$( cat "${AIIT_PACKETS}" | adpn_select_json_packet | tail -n 1 )
+				if [[ "${GREP}" ]] ; then
+					printf "%s" "${GREP}" > "${AIIT_INPUT}"
+				fi
+			fi
+			
+			if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+				printf "* DBG: JSON source (%s) = <<<EOF\n%s\nEOF;\n" "${AIIT_INPUT}" "${GREP}" 1>&2
+			fi
+			
+		fi
+		
+		if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_INPUT}" ]] ; then
+			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+			FLAG_TO="${PEER_TO}"
+			if [[ -z "${PEER_TO}" ]] ; then
+				PEER_TO=$( adpnprop "peer" )
+			fi
+			if [[ -n "${PEER_TO}" ]] ; then
+				PEER_TO=$( printf "%s--to=%s" "" "${PEER_TO}" )
+			fi
+
+			if [[ -n "${DBG}" ]] ; then
+				printf '[DBG] $ adpn-ingest-into-titlesdb.py "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIIT_OUTPUT}" 1>&2 
+			fi
+
+			AIIT_OUTPUT="${_PARAM[sqldump]}"
+			if [[ -z "${AIIT_OUTPUT}" ]] ; then
+				[[ -z "${_LINESWITCH[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+			fi
+
+			adpn-titlesdb-diff --before "${FLAG_TO}" ${V}
+
+			adpn-ingest-into-titlesdb.py "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" --parameter="${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" ${_LINESWITCH[dry-run]} ${V} ${DDBG} > "${AIIT_OUTPUT}"
+			AIIT_ERRCODE="$?"
+			
+			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
+				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
+				EXITCODE="${AIIT_ERRCODE}"
+			else
+				adpn-titlesdb-diff --after "${FLAG_TO}" ${V} ; ATD_ERRCODE="$?"
+				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_LINESWITCH[dry-run]}"  ]] ; then
+					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
+					EXITCODE="${ATD_ERRCODE}"
+				elif [[ -z "${_PARAM[context]}" ]] ; then
+					echo "" 1>&2
+					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit flagged with ${AIIT_PARAM_KEY}='${AIIT_PARAM_VALUE}' on ${FLAG_TO} titlesdb." 1>&2
+				fi
+			fi
+
+		fi
+		
+		for TMP in "${TEMP_CLEANUP[@]}" ; do
+			rm "${TMP}"
+		done
+
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
+		fi
+		;;
+		
 	"gitlab")
 		adpn-do-gitlab "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
 		;;

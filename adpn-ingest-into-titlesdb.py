@@ -122,7 +122,7 @@ Returns exit code 0 on success.
 				jsonInput.accept(jsonLines, screen=rescan)
 				jsonData = jsonInput.allData
 			except json.decoder.JSONDecodeError as e:
-				jsonData = []
+				jsonData = {}
 		
 		self._data = jsonData
 
@@ -172,7 +172,7 @@ DELETE FROM au_titlelist_params WHERE au_id=%(au_id)s AND au_param=%(au_param)s;
 			""" % au_titlelist_params_values
 		elif "UPDATE" == op :
 			sql = """
-UPDATE au_titlelist_params SET au_param_key=%(au_param_key)s, value=%(au_param_value)s WHERE au_id=%(au_id)s AND au_param=%(au_param)s AND peer_au_limit=%(peer_au_limit)s;
+UPDATE au_titlelist_params SET au_param_key=%(au_param_key)s, au_param_value=%(au_param_value)s WHERE au_id=%(au_id)s AND au_param=%(au_param)s AND peer_au_limit=%(peer_au_limit)s;
 			""" % au_titlelist_params_values
 		else :
 			sql = """
@@ -389,14 +389,19 @@ USE adpn;
 		"peer_id": peer_to
 		}
 		au_titlelist_values['au_journal_title'] = au_titlelist_values['au_title']
-		au_titlelist_values['au_name'] = self.au_name(au_titlelist_values['au_title'])
-		
+		au_titlelist_values['au_name'] = self.au_name(au_titlelist_values['au_title'] if au_titlelist_values['au_title'] else "")
+		raw_au_titlelist_values = au_titlelist_values
+        
 		au_titlelist_values = [(key, au_titlelist_values[key]) for key in au_titlelist_values.keys()]
 		au_titlelist_values = map(lambda kv: (kv[0], json.dumps(kv[1])), au_titlelist_values)
 		au_titlelist_values = dict(au_titlelist_values)
 		
 		if 'au' == self.switches['test'] :
 			print(au_titlelist_values)
+		elif raw_au_titlelist_values["au_title"] is None :
+			script.display_error("Parameter Required: Ingest Title")
+		elif raw_au_titlelist_values["au_plugin"] is None :
+			script.display_error("Parameter Required: Plugin ID")
 		else :
 			if self.switches['insert_title'] :
 				self.initial_ingest(au_titlelist_values)

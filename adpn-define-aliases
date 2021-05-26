@@ -312,9 +312,44 @@ function echo_header() {
 	echo "${UNDERLINE}"
 }
 
+function adpn_get_json_packets() {
+	local PACKET_SOURCE="${1}"
+	local ME="${2}"
+	local CONTEXT="${3}"
+	local V="${4}"
+	local result=0
+	
+	declare -a AGGP_SW=()
+
+	AGJP_PACKETS="$(mktemp)"
+	GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" )
+	
+	if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
+		cat - > "${AGJP_PACKETS}"
+	elif [[ -r "${PACKET_SOURCE}" ]] ; then
+		cp "${PACKET_SOURCE}" "${AGJP_PACKETS}"
+	elif [[ -n "${GITLAB_ISSUE}" ]] ; then
+		if [[ -n "${V}" ]] ; then
+			printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
+		fi
+		"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" > "${AGJP_PACKETS}"
+		result="$?"
+	else
+		printf "[%s] WARNING: Cannot locate any AU data from: '%s'\n" "${CONTEXT}" "${PACKET_SOURCE}" 1>&2
+		result=1
+	fi
+	
+	if [[ "${result}" -eq 0 ]] ; then
+		cat "${AGJP_PACKETS}"
+	fi
+	rm "${AGJP_PACKETS}"
+	return "${result}"
+	
+}
+
 ( which python3 2>/dev/null >/dev/null ) && export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
 
-# adpn_get_json_packet: filter an input stream for JSON packets, based on regex
+# adpn_select_json_packet: filter an input stream for JSON packets, based on regex
 # for a JSON packet or prolog from adpn-json.py 
 # example: FOOBAR=$( adpnprop "${KEY}" )
 #
@@ -323,7 +358,7 @@ function echo_header() {
 #
 # @version 2021.0407
 
-function adpn_get_json_packet() {
+function adpn_select_json_packet() {
 	local file="${1}"
 	local packet=""
 	local result=0
