@@ -55,6 +55,7 @@ Returns exit code 0 on success.
 		self.scriptname = scriptname
 		self._switches = switches
 		self._jsonText = jsonText
+		self._records = None
 		
 		self._db = None
 		self._cur = None
@@ -88,7 +89,15 @@ Returns exit code 0 on success.
 	@cur.setter
 	def cur (self, cur) :
 		self._cur = cur
-
+	
+	@property
+	def records (self) :
+		return self._records
+	
+	@records.setter
+	def records (self, records) :
+		self._records = records
+	
 	def wants_json (self) -> bool :
 		noJson = False
 		for switch in ['help', 'list-peers', 'snapshot'] :
@@ -266,8 +275,14 @@ USE adpn;
 		if 'au_id' in self.switches :
 			au_ids = [ self.switches['au_id'] ]
 		
+		# FALL BACK: can we get the au_id from a unique au_name?
+		if len(au_ids) == 0 and 'AU Name' in self.data :
+			au_name = json.dumps(self.data['AU Name'])
+			self.cur.execute("SELECT au_id FROM au_titlelist WHERE au_name=%(au_name)s" % {"au_name": au_name})
+			au_ids = [ row[0] for row in self.cur.fetchall() ]
+		
 		# FALL BACK: can we get the au_id by filtering Ingest Title into a unique au_name?
-		if len(au_ids) == 0 :
+		if len(au_ids) == 0 and 'Ingest Title' in self.data :
 			au_name = json.dumps(self.au_name(self.data['Ingest Title']))
 			self.cur.execute("SELECT au_id FROM au_titlelist WHERE au_name=%(au_name)s" % {"au_name": au_name})
 			au_ids = [ row[0] for row in self.cur.fetchall() ]
@@ -322,6 +337,37 @@ USE adpn;
 
 		return [ row for row in self.cur.fetchall() ]
 		
+	def get_data_from_db (self, field, multiple=False) :
+		rex = None
+		if self.records is None :
+			sql = ( "SELECT * FROM au_titlelist WHERE au_id=%(au_id)s" % { "au_id": json.dumps(self.switches['au_id']) } )
+			self.cur.execute(sql)
+			records = [ record for record in self.cur.fetchall() ]
+			columns = [ column[0] for column in self.cur.description ]
+			self.records = [ [ ( columns[idx], data ) for idx, data in enumerate(record) ] for record in records ]
+		
+		rex = [ [ col[1] for col in record if col[0]==field ][0] for record in self.records ]
+		if not multiple :
+			rex = ( rex[0] if len(rex) > 0 else None )
+		
+		return rex
+	
+	def get_ingest_title (self) :
+		title = None
+		if 'Ingest Title' in self.data :
+			title = self.data['Ingest Title']
+		elif self.switches['au_id'] :
+			title = self.get_data_from_db('au_title')
+		return title
+		
+	def get_plugin_id (self) :
+		plugin = None
+		if 'Plugin ID' in self.data :
+			plugin = self.data['Plugin ID']
+		elif self.switches['au_id'] :
+			plugin = self.get_data_from_db('au_plugin')
+		return plugin
+	
 	def display (self) :
 		self.do_connect_to_db()
 		
@@ -335,33 +381,37 @@ USE adpn;
 		"au_id": int(self.switches['au_id']),
 		"au_pub_id": self.get_peer('from'),
 		"au_type": "journal",
-		"au_title": self.data['Ingest Title'],
-		"au_plugin": self.data['Plugin ID'],
+		"au_title": self.get_ingest_title(),
+		"au_plugin": self.get_plugin_id(),
 		"au_approved_for_removal": "n",
 		"au_content_size": 0,
 		"au_disk_cost": 0,
 		"peer_id": peer_to
 		}
 		au_titlelist_values['au_journal_title'] = au_titlelist_values['au_title']
-		au_titlelist_values['au_name'] = self.au_name(self.data['Ingest Title'])
+		au_titlelist_values['au_name'] = self.au_name(au_titlelist_values['au_title'])
 		
 		au_titlelist_values = [(key, au_titlelist_values[key]) for key in au_titlelist_values.keys()]
 		au_titlelist_values = map(lambda kv: (kv[0], json.dumps(kv[1])), au_titlelist_values)
 		au_titlelist_values = dict(au_titlelist_values)
 		
-		if self.switches['insert_title'] :
-			self.initial_ingest(au_titlelist_values)
-		self.publish_ingest(peer_to, au_titlelist_values)
-		
-		if 'parameter' in self.switches :
-			param_parts = re.match(string=self.switches['parameter'], pattern='^([+\-]?)(.*)$')
-			param_op = ( param_parts[1] if param_parts[1] else "+" )
-			param_pair = param_parts[2]
-			param_pair = re.split(string=param_pair, pattern="[:]", maxsplit=1)
-			self.parameter_ingest(peer_to, param_op, param_pair, au_titlelist_values)
-		
-		self.db.commit()
-		self.db.close()
+		if 'au' == self.switches['test'] :
+			print(au_titlelist_values)
+		else :
+			if self.switches['insert_title'] :
+				self.initial_ingest(au_titlelist_values)
+			if self.switches['insert_peer_title'] :
+				self.publish_ingest(peer_to, au_titlelist_values)
+			
+			if 'parameter' in self.switches :
+				param_parts = re.match(string=self.switches['parameter'], pattern='^([+\-]?)(.*)$')
+				param_op = ( param_parts[1] if param_parts[1] else "+" )
+				param_pair = param_parts[2]
+				param_pair = ( re.split(string=param_pair, pattern="[:]", maxsplit=1) + [ "" ] )[0:2]
+				self.parameter_ingest(peer_to, param_op, param_pair, au_titlelist_values)
+			
+			self.db.commit()
+			self.db.close()
 	
 	def display_peers (self) :
 		self.do_connect_to_db()
@@ -437,7 +487,16 @@ if __name__ == '__main__' :
 		defaultArgv = sys.argv[0:0] + []
 	
 	(defaultArgv, defaultSwitches) = myPyCommandLine(defaultArgv).parse()
-	defaultSwitches = {**{"dry-run": "", "help": "", "list-peers": "", "snapshot": "", "output": tempfile.gettempdir(), "insert_title": False}, **defaultSwitches}
+	defaultSwitches = {**{
+		"dry-run": "",
+		"help": "",
+		"list-peers": "",
+		"snapshot": "",
+		"output": tempfile.gettempdir(),
+		"insert_title": False,
+		"insert_peer_title": True,
+		"test": ""
+	}, **defaultSwitches}
 
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
 	
