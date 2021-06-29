@@ -1,14 +1,7 @@
-import io, os, sys
-import fileinput, stat
+import io, os, sys, stat
 import subprocess
-import re, json
-import urllib, ftplib, pysftp
-import math
-from datetime import datetime
-from io import BytesIO
-from ftplib import FTP
-from getpass import getpass
-from myLockssScripts import myPyCommandLine, myPyJSON
+import json
+import urllib
 
 class myLockssPlugin :
     
