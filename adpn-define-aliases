@@ -326,14 +326,20 @@ function adpn_get_json_packets() {
 	
 	if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
 		cat - > "${AGJP_PACKETS}"
-	elif [[ -r "${PACKET_SOURCE}" ]] ; then
-		cp "${PACKET_SOURCE}" "${AGJP_PACKETS}"
 	elif [[ -n "${GITLAB_ISSUE}" ]] ; then
 		if [[ -n "${V}" ]] ; then
 			printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
 		fi
 		"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" > "${AGJP_PACKETS}"
 		result="$?"
+	elif [[ "${PACKET_SOURCE}" =~ ^https?:// ]] ; then
+		if [[ -n "${V}" ]] ; then
+			printf "* Retrieving manifest HTML for URL: %s\n" "${PACKET_SOURCE}" 1>&2
+		fi
+		curl --silent --fail "${PACKET_SOURCE}" > "${AGJP_PACKETS}"
+		result="$?"
+	elif [[ -r "${PACKET_SOURCE}" ]] ; then
+		cp "${PACKET_SOURCE}" "${AGJP_PACKETS}"
 	else
 		printf "[%s] WARNING: Cannot locate any AU data from: '%s'\n" "${CONTEXT}" "${PACKET_SOURCE}" 1>&2
 		result=1
