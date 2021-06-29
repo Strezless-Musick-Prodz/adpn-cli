@@ -41,6 +41,13 @@ class myFTPStaging :
         
         return size
     
+    def is_directory (self, file) :
+        if self.is_sftp() :
+            test_directory = self.ftp.isdir(file)
+        else :
+            test_directory = ( '.' == file or self.get_file_size(file) is None )
+        return test_directory
+        
     def url_host (self) :
         return ("%(user)s@%(host)s" if self.user else "%(host)s") % {"user": self.user, "host": self.host}
     
@@ -126,19 +133,16 @@ class myFTPStaging :
     def download (self, file = None, exclude = None, notification = None) :
         out = notification if notification is not None else lambda level, type, arg: (level, type, arg) # NOOP
         
-        if '.' == file or self.get_file_size(file) is None :
+        if self.is_directory(file) :
             
             if '.' != file :
-                fileparent = os.path.realpath(file)
-                out(2, "realpath", fileparent)
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
-                out(2, "set_location", (os.getcwd(), self.pwd()))
+                out(2, "set_location", (os.getcwd(), self.get_location()))
 
             for subfile in self.get_childitem() :
                 exclude_this = exclude(subfile) if exclude is not None else False
                 if not exclude_this :
                     (level, type) = (1, "downloaded")
-
                     self.download(file=subfile, exclude=exclude, notification=notification)
                         
                 else :
@@ -182,8 +186,6 @@ class myFTPStaging :
         elif '.' == file or os.path.isdir(file) :
             
             if '.' != file :
-                fileparent = os.path.realpath(file)
-                out(2, "realpath", fileparent)
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
                 out(2, "set_location", (os.getcwd(), self.get_location()))
 
