@@ -561,7 +561,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 #    --to=<PEER>   	node to publish to (AUB1, AUB2, ADAH, ...; ALL=entire network)
 #    --peer=<PEER> 	synonym for --to=<PEER>
 #
-# @version 2021.0318
+# @version 2021.0608
 
 		if [[ -n "${_PARAM[pipeline]}" ]] ; then
 			PIPELINE="${_LINESWITCH[pipeline]}"
@@ -580,27 +580,12 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 		
 		declare -a TEMP_CLEANUP=()
 
-		PACKET_SOURCE="${_ARGV[2]}"
 		AIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_PACKETS}" )
 		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
 		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 
-		GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" )
-		
-		if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
-			cat - > "${AIT_PACKETS}"
-		elif [[ -r "${PACKET_SOURCE}" ]] ; then
-			cp "${PACKET_SOURCE}" "${AIT_PACKETS}"		
-		elif [[ -n "${GITLAB_ISSUE}" ]] ; then
-			if [[ -n "${V}" ]] ; then
-				printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
-			fi
-			"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" > "${AIT_PACKETS}"
-			EXITCODE="$?"
-		else
-			printf "[%s] WARNING: Cannot locate any AU data from: '%s'\n" "${SCRIPT} ${CMD}" "${PACKET_SOURCE}" 1>&2
-			EXITCODE=1
-		fi
+		adpn_get_json_packets "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_select_json_packet > "${AIT_PACKETS}"
+		EXITCODE="$?"
 		
 		if [[ -r "${AIT_PACKETS}" ]] ; then	
 			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
