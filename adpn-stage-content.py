@@ -112,6 +112,8 @@ command line with explicit switches.
         self.base_dir=switches.get('base_dir') if switches.get('base_dir') is not None else self.base_dir
         self.subdirectory=switches.get('directory') if switches.get('directory') is not None else self.subdirectory
         self.subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else self.subdirectory
+        
+        self.manifest["institution_code"] = self.user
     
     def switched (self, key) :
         got = not not self.switches.get(key, None)
@@ -290,7 +292,6 @@ command line with explicit switches.
                 self.output_status(2, "set_location", (os.getcwd(), self.ftp.get_location()))
                 
                 package = ADPNPreservationPackage(self.switches['local'], self.manifest, self.switches)
-                fileparent = self.get_itemparent(package.get_path())
                 if not package.has_manifest() :
                     package.make_manifest()
                 
@@ -355,8 +356,13 @@ if __name__ == '__main__':
     align_switches("identity", "stage/identity", switches)
     align_switches("directory", "subdirectory", switches)
     
+    institution = switches["institution"]
+    if switches["peer"] is not None :
+        institution = "%(institution)s (%(code)s)" % { "institution": institution, "code": switches["peer"].upper() }
+    institution_code = switches['stage/user']
+    
     manifest = {
-        "institution_name": switches['institution'],
+        "institution_name": institution,
         "institution_code": switches['stage/user'],
         "au_title": switches['au_title'],
         "au_directory": switches['directory'] if switches['directory'] is not None else switches['subdirectory'],
