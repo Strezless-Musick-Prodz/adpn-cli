@@ -8,7 +8,7 @@
 # or redirect the binary output.
 #
 # Usage: lockss-retrieve-jar.py --url=<URL> [--proxy=<HOST>] [--port=<NUMBER>]
-# 			[--tunnel=<HOST>] [--tunnel-port=<NUMBER>]
+#        	[--tunnel=<HOST>] [--tunnel-port=<NUMBER>]
 #
 # 	--url=<URL>		the URL of the JAR package to retrieve
 #
@@ -46,7 +46,10 @@ if __name__ == '__main__':
 		"tunnel": "", "tunnel-port": 22
 	}).parse()
 
-	if len(switches['proxy']) > 0 :
+	url = switches['url'];
+	if ( len(switches['proxy']) == 1 and "-" == switches['proxy'] ) :
+		url = ('https://archives.alabama.gov/Services/ADPNet/MakeManifest/?%(q)s' % {"q": urllib.parse.urlencode({"plugin": switches['url']}) } );
+	elif len(switches['proxy']) > 0 :
 		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))
 		socket.socket = socks.socksocket
 
@@ -61,7 +64,7 @@ if __name__ == '__main__':
 		retry = False
 
 		try :
-			blob = urllib.request.urlopen(switches['url']).read()
+			blob = urllib.request.urlopen(url).read()
 		except urllib.request.HTTPError as e :
 			errmesg = "HTTP ERROR " + str(e.code) + " " + e.reason
 			if 403 == e.code :
