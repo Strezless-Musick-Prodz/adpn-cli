@@ -166,61 +166,61 @@ def align_switches (left, right, switches, override=True) :
             switches[right] = switches[left]
 
 if __name__ == '__main__' :
-	
-	scriptpath = os.path.realpath(__file__)
-	scriptname = os.path.basename(scriptpath)
-	scriptdir = os.path.dirname(scriptpath)
-	configjson = os.path.join(scriptdir, "adpnet.json")
-	
-	(argv, switches) = myPyCommandLine(sys.argv, defaults={
-		"parameters": "{}", "local": None, "api": None, "api/makemanifest": None, "jar": None, "stage/jar": None
-	}, configfile=configjson).parse()
-	
-	align_switches("api", "api/makemanifest", switches)
-	align_switches("jar", "stage/jar", switches)
-	
-	os.environ["PATH"] = ":".join([scriptdir, os.environ["PATH"]])
-	
-	scriptLine = ['adpn-plugin-details.py', '--output=text/tab-separated-values']
-	if switches["jar"] is not None :
-		scriptLine.append("--jar=%(jar)s" % switches )
+    
+    scriptpath = os.path.realpath(__file__)
+    scriptname = os.path.basename(scriptpath)
+    scriptdir = os.path.dirname(scriptpath)
+    configjson = os.path.join(scriptdir, "adpnet.json")
+    
+    (argv, switches) = myPyCommandLine(sys.argv, defaults={
+        "parameters": "{}", "local": None, "api": None, "api/makemanifest": None, "jar": None, "stage/jar": None
+    }, configfile=configjson).parse()
+    
+    align_switches("api", "api/makemanifest", switches)
+    align_switches("jar", "stage/jar", switches)
+    
+    os.environ["PATH"] = ":".join([scriptdir, os.environ["PATH"]])
+    
+    scriptLine = ['adpn-plugin-details.py', '--output=text/tab-separated-values']
+    if switches["jar"] is not None :
+        scriptLine.append("--jar=%(jar)s" % switches )
 
-	detailsScript = myPyPipeline([ scriptLine + sys.argv[1:] ])
-	(buff, errbuf, exits) = detailsScript.siphon()
-	
-	settings = [ line.rstrip().split("\t") for line in filter(lambda text: len(text.rstrip())>0, buff.split("\n")) ]
-	settings = [ (line[1], line[2]) for line in settings if line[0] == 'setting' ]
-	
-	urlpaths = [ urllib.parse.urlparse(value) for setting, value in settings if setting == 'au_manifest' ]
-	if len(urlpaths) == 0 :
-		urlpaths = [ urllib.parse.urlparse(value) for setting, value in settings if setting == 'au_start_url' ]
+    detailsScript = myPyPipeline([ scriptLine + sys.argv[1:] ])
+    (buff, errbuf, exits) = detailsScript.siphon()
+    
+    settings = [ line.rstrip().split("\t") for line in filter(lambda text: len(text.rstrip())>0, buff.split("\n")) ]
+    settings = [ (line[1], line[2]) for line in settings if line[0] == 'setting' ]
+    
+    urlpaths = [ urllib.parse.urlparse(value) for setting, value in settings if setting == 'au_manifest' ]
+    if len(urlpaths) == 0 :
+        urlpaths = [ urllib.parse.urlparse(value) for setting, value in settings if setting == 'au_start_url' ]
 
-	basenames = [ os.path.basename(url.path) for url in urlpaths ]
+    basenames = [ os.path.basename(url.path) for url in urlpaths ]
 
-	parameters = json.loads(switches['parameters'])
-	parameters = {**dict(settings), **parameters}
+    parameters = json.loads(switches['parameters'])
+    parameters = {**dict(settings), **parameters}
 
-	for file in basenames :
-		outdir = get_filesystemlocation(switches['local']) if switches['local'] is not None else "."
-		outfile = "%(path)s/%(file)s" % {"path": outdir, "file": file}
-		
-		html_resource = MakeManifestHTMLWebAPI(switches['api'], parameters, file) if switches['api'] else MakeManifestHTMLLocalTemplate(parameters, file)
-		try :
-			out_html = html_resource.read()
-		except :
-			if html_resource.errmesg is not None :
-				print("[%(cmd)s] Error generating HTML content: %(mesg)s" % { "cmd": scriptname, "mesg": html_resource.errmesg }, file=sys.stderr)
-			else :
-				raise
-		
-		if "-" == switches['local'] :
-			hOut = sys.stdout
-		else :
-			hOut = open(outfile, "w")
-		
-		if out_html is not None :
-			print(out_html, file=hOut)
-		
-		if "-" != switches['local'] :
-			hOut.close()
-			print("%(filename)s\t%(size)d\t%(source)s:%(source_object)s" % {"filename": outfile, "size": os.stat(outfile).st_size, "source": html_resource.__class__.__name__, "source_object": html_resource.source_object})
+    for file in basenames :
+        outdir = get_filesystemlocation(switches['local']) if switches['local'] is not None else "."
+        outfile = "%(path)s/%(file)s" % {"path": outdir, "file": file}
+        
+        html_resource = MakeManifestHTMLWebAPI(switches['api'], parameters, file) if switches['api'] else MakeManifestHTMLLocalTemplate(parameters, file)
+        try :
+            out_html = html_resource.read()
+        except :
+            if html_resource.errmesg is not None :
+                print("[%(cmd)s] Error generating HTML content: %(mesg)s" % { "cmd": scriptname, "mesg": html_resource.errmesg }, file=sys.stderr)
+            else :
+                raise
+        
+        if "-" == switches['local'] :
+            hOut = sys.stdout
+        else :
+            hOut = open(outfile, "w")
+        
+        if out_html is not None :
+            print(out_html, file=hOut)
+        
+        if "-" != switches['local'] :
+            hOut.close()
+            print("%(filename)s\t%(size)d\t%(source)s:%(source_object)s" % {"filename": outfile, "size": os.stat(outfile).st_size, "source": html_resource.__class__.__name__, "source_object": html_resource.source_object})
