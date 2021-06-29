@@ -362,6 +362,7 @@ if __name__ == '__main__':
     institution_code = switches['stage/user']
     
     manifest = {
+        "institution": switches["institution"],
         "institution_name": institution,
         "institution_code": switches['stage/user'],
         "au_title": switches['au_title'],
