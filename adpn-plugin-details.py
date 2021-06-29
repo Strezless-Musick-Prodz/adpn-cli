@@ -127,7 +127,7 @@ Usage:
 			if self.switches.get('user') is None or len(self.switches.get('user')) == 0 :
 				self.switches['user'] = input("LOCKSS Daemon Username: ")
 			if self.switches.get('pass') is None or len(self.switches.get('pass')) == 0 :
-				self.switches['pass'] = getpass("--LOCKSS Daemon Password: ")
+				self.switches['pass'] = getpass("LOCKSS Daemon Password: ")
 	
 	def get_jars (self) :
 		code = 0
