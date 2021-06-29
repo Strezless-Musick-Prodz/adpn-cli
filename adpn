@@ -222,6 +222,8 @@ python:bs4	%s Python module	apt install python3-bs4	python3 -m pip install bs4
 python:socks	%s Python module	apt install python3-socks	python3 -m pip install pysocks
 mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysql-devel
 python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
+python:pysftp	%s Python module	python3 -m pip install pysftp
+python:paramiko	%s Python module	python3 -m pip install paramiko
 """
 
 		printf "* DEPENDENCIES: checking for dependencies.\n"
@@ -269,6 +271,9 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 				if [[ "${AS_CONTEXT}" =~ ^(preserve)$ ]] ; then
 					read -ep "Institution: " AS_PROPS[institution]
 					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
+					
+					KEY="api/makemanifest" DEFAULT="https://archives.alabama.gov/Services/ADPNet/MakeManifest/"
+					read -ep "MakeManifest API Endpoint [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
 				if [[ "${AS_CONTEXT}" =~ ^(ingest|publish)$  ]] ; then
