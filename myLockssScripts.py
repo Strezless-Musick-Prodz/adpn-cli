@@ -6,6 +6,7 @@
 # @version 2019.0624
 
 import sys
+import os.path
 import re
 import json
 import fileinput
@@ -283,7 +284,26 @@ class myPyJSON :
 		
 		if len(self._jsonText) == 0 :
 			self._jsonText = [ "".join(src) ]
-			
+
+class myADPNScriptSuite :
+
+    def __init__ (self, script=None) :
+        path = (script if script is not None else __file__)
+        self._modpath = os.path.realpath(path)
+        self._modname = os.path.basename(self._modpath)
+        self._moddir = os.path.dirname(self._modpath)
+    
+    @property 
+    def directory (self) :
+        return self._moddir
+    
+    @property
+    def name (self) :
+        return self._modname
+    
+    def path (self, filename) :
+        return os.path.join(self.directory, filename)
+    
 if __name__ == '__main__':
 
 	defaults = {"foo": "bar"}

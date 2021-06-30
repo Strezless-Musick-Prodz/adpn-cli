@@ -276,6 +276,21 @@ command line with explicit switches.
             if self.subdirectory is None or len(self.subdirectory) == 0 :
                 self.subdirectory = input("Subdirectory: ")
             
+            # First, let's check the packaging
+            package = ADPNPreservationPackage(self.switches['local'], self.manifest, self.switches)
+            if not package.has_bagit_enclosure() :
+                self.output_status(2, "package.make_bagit_enclosure", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                package.make_bagit_enclosure()
+
+            self.output_status(2, "package.check_bagit_validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+            validates = package.check_bagit_validation()
+            if validates :
+                if not package.has_manifest() :
+                    self.output_status(2, "package.make_manifest", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                    package.make_manifest()
+            else :
+                raise OSError(package._bagit_exitcode, "BagIt validation FAILED", os.path.realpath(package.get_path()), package._bagit_output)
+            
             # Let's log in to the host
             self.ftp = self.establish_connection()
 
@@ -290,10 +305,6 @@ command line with explicit switches.
                 self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
                 (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.subdirectory, make=True)
                 self.output_status(2, "set_location", (os.getcwd(), self.ftp.get_location()))
-                
-                package = ADPNPreservationPackage(self.switches['local'], self.manifest, self.switches)
-                if not package.has_manifest() :
-                    package.make_manifest()
                 
                 # upload the present directory recursively
                 self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
