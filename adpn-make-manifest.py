@@ -173,7 +173,7 @@ if __name__ == '__main__' :
     configjson = os.path.join(scriptdir, "adpnet.json")
     
     (argv, switches) = myPyCommandLine(sys.argv, defaults={
-        "parameters": "{}", "local": None, "api": None, "api/makemanifest": None, "jar": None, "stage/jar": None
+        "parameters": "{}", "local": None, "api": None, "api/makemanifest": None, "jar": None, "stage/jar": None, "dry-run": False
     }, configfile=configjson).parse()
     
     align_switches("api", "api/makemanifest", switches)
@@ -205,22 +205,28 @@ if __name__ == '__main__' :
         outfile = "%(path)s/%(file)s" % {"path": outdir, "file": file}
         
         html_resource = MakeManifestHTMLWebAPI(switches['api'], parameters, file) if switches['api'] else MakeManifestHTMLLocalTemplate(parameters, file)
-        try :
-            out_html = html_resource.read()
-        except :
-            if html_resource.errmesg is not None :
-                print("[%(cmd)s] Error generating HTML content: %(mesg)s" % { "cmd": scriptname, "mesg": html_resource.errmesg }, file=sys.stderr)
+        if not switches['dry-run'] : 
+            try :
+                out_html = html_resource.read()
+            except :
+                if html_resource.errmesg is not None :
+                    print("[%(cmd)s] Error generating HTML content: %(mesg)s" % { "cmd": scriptname, "mesg": html_resource.errmesg }, file=sys.stderr)
+                else :
+                    raise
+        
+            if "-" == switches['local'] :
+                hOut = sys.stdout
             else :
-                raise
+                hOut = open(outfile, "w")
         
-        if "-" == switches['local'] :
-            hOut = sys.stdout
+            if out_html is not None :
+                print(out_html, file=hOut)
+        
+            if "-" != switches['local'] :
+                hOut.close()
+                file_size=os.stat(outfile).st_size
         else :
-            hOut = open(outfile, "w")
-        
-        if out_html is not None :
-            print(out_html, file=hOut)
+            file_size = 1
         
         if "-" != switches['local'] :
-            hOut.close()
-            print("%(filename)s\t%(size)d\t%(source)s:%(source_object)s" % {"filename": outfile, "size": os.stat(outfile).st_size, "source": html_resource.__class__.__name__, "source_object": html_resource.source_object})
+            print("%(filename)s\t%(size)d\t%(source)s:%(source_object)s" % {"filename": outfile, "size": file_size, "source": html_resource.__class__.__name__, "source_object": html_resource.source_object})
