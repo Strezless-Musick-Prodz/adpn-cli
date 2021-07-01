@@ -26,29 +26,61 @@
 # 		If --tunnel is omitted, the host assumes no tunneling
 # 		If --tunnel-port is omitted, it defaults to port 22
 #
-# @version 2019.1016
+# @version 2021.0701
 
 import sys, os.path, re
 import socks, socket
+import urllib.parse
 import subprocess
 
 import urllib.request
 
 from myLockssScripts import myPyCommandLine
 
+def align_switches (left, right, switches, override=True) :
+    if switches[left] is None :
+        switches[left] = switches[right]
+    if switches[right] is None :
+        switches[right] = switches[left]
+    if override :
+        if switches[right] != switches[left] :
+            switches[right] = switches[left]
+
+def get_plugin_name_strings (url) :
+    table = { "url": None, "encoded": None, "path": None, "file": None }
+    
+    table["url"] = url
+    table["encoded"] = urllib.parse.urlencode({"plugin": url})
+    
+    bits=urllib.parse.urlparse(url)
+    if len(bits.path) > 1 :
+        table["path"] = bits.path
+        table["file"] = os.path.basename(bits.path)
+    
+    return table
+    
 if __name__ == '__main__':
-	script = sys.argv[0]
-	script = os.path.basename(script)
+	
+	scriptpath = os.path.realpath(__file__)
+	script = os.path.basename(scriptpath)
+	scriptdir = os.path.dirname(scriptpath)
+	configjson = os.path.join(scriptdir, "adpnet.json")
 	
 	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
-		"url": "", 
+		"url": "", "jar": None, "stage/jar": None,
 		"proxy": "", "port": 8080,
-		"tunnel": "", "tunnel-port": 22
-	}).parse()
+		"tunnel": "", "tunnel-port": 22,
+		"source": None, "plugins/source": None
+	}, configfile=configjson, settingsgroup=["stage", "plugins"]).parse()
 
+	align_switches("source", "plugins/source", switches)
+	align_switches("url", "jar", switches)
+	align_switches("url", "stage/jar", switches)
+	
 	url = switches['url'];
-	if ( len(switches['proxy']) == 1 and "-" == switches['proxy'] ) :
-		url = ('https://archives.alabama.gov/Services/ADPNet/MakeManifest/?%(q)s' % {"q": urllib.parse.urlencode({"plugin": switches['url']}) } );
+	if ( switches.get('source') is not None and len(switches['source']) > 0 ) :
+		parameters = get_plugin_name_strings(switches['url'])
+		url = ( switches.get('source') % parameters )
 	elif len(switches['proxy']) > 0 :
 		socks.set_default_proxy(socks.SOCKS5, switches['proxy'], int(switches['port']))
 		socket.socket = socks.socksocket
