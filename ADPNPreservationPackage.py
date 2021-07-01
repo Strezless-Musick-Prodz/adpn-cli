@@ -33,11 +33,71 @@ class myLockssPlugin :
     def parameters (self) :
         return self._parameters
     
+    def get_parameters (self, mapped=False) :
+        if mapped :
+            params = {}
+            for item in self.parameters :
+                key = item[0]
+                value = item[1]
+                params[key] = value
+        else :
+            params = self.parameters
+        return params
+
+    def get_parameter_keys (self, names=False, descriptions=False) :
+        tsv = self.get_tool_data("adpn-plugin-details.py", parameters={"jar": self.jar})
+        mapped = [ {"name": row[1], "description": row[2]} for row in tsv if row[0]=="parameter" ]
+        bothneither = ( not ( names or descriptions ) or ( names and descriptions ) )
+        justone = "description" if descriptions else "name"
+        return mapped if bothneither else [ param[justone] for param in mapped ]
+    
+    def get_details (self, check_parameters=None) :
+        parameters = {"jar": self.jar, "parameters": json.dumps(self.get_parameters(mapped=True)), "check_parameters": 1 }
+        ok_codes = [ 0 ] if check_parameters else [ 0, 100 ]
+        try :
+            tsv = self.get_tool_data("adpn-plugin-details.py", parameters=parameters, ok=ok_codes)
+        except OSError as e :
+            required_parameters = self.get_parameter_keys(names=True)
+            raise AssertionError("Required plugin parameters: " + json.dumps(required_parameters), required_parameters) from e
+            
+        mapped = [ {"name": row[1], "value": row[2] } for row in tsv if row[0]=="detail" ]
+        return mapped
+    
+    def get_tool_data (self, script, argv=None, parameters=None, ok=[ 0 ], process=None, sep="\t") :
+        cmdline = [
+            scripts.python(),
+            scripts.path(script)
+        ]
+        if argv is not None :
+            cmdline = cmdline + argv
+        if parameters is not None :
+            cmdline = cmdline + [ ( "--%(key)s=%(value)s" % { "key": key, "value": value } ) for (key, value) in parameters.items() ]
+        if len([ output for output in cmdline if re.match("^--output=", output) ]) == 0 :
+            cmdline.append("--output=text/tab-separated-values")
+            
+        pipes = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+        std_out = std_err = pipes.communicate()
+        
+        if not ( pipes.returncode in ok ) :
+            # exit code indicates that an error occurred...
+            raise OSError(pipes.returncode, std_err)
+        elif len(std_err) :
+            # return code is in OK range (no error), but output to stderr
+            # we may want to do something with the information...
+            pass
+        
+        if process is None :
+            process=lambda blob: [ line.split(sep) for line in re.split("[\r\n]+", blob) if len(line.strip()) ]
+        rows = []
+        for block in std_out :
+            rows = rows + process(block)
+        
+        return rows
+        
     def get_manifest_filename (self) :
-        filename = "manifestpage.html"
+        filename = "manifest.html"
 
         try :
-            jsonParams = json.dumps(self.parameters)
             cmdline = [
                 scripts.path("adpn-make-manifest.py"),
                     "--jar="+self.jar,
@@ -68,12 +128,13 @@ class myLockssPlugin :
     
 class ADPNPreservationPackage :
     
-    def __init__ (self, path, parameters, switches) :
+    def __init__ (self, path, plugin_parameters, manifest_parameters, switches) :
         self._path = path
-        self._parameters = parameters
+        self._parameters = plugin_parameters
+        self._manifest = manifest_parameters
         self._switches = switches
-        self._plugin = myLockssPlugin(jar=self.switches["jar"], parameters=parameters, switches=self.switches)
-    
+        self._plugin = myLockssPlugin(jar=self.switches["jar"], parameters=plugin_parameters, switches=self.switches)
+        
     @property
     def path (self) :
         return self._path
@@ -82,6 +143,24 @@ class ADPNPreservationPackage :
     def parameters (self) :
         return self._parameters
     
+    @parameters.setter
+    def parameters (self, rhs) :
+        self._parameters = rhs
+
+    def set_parameter (self, key, new_value) :
+        self._parameters = [ [ cur_key, new_value if key==cur_key else old_value ] for (cur_key, old_value) in self._parameters ]
+
+    @property
+    def manifest (self) :
+        return self._manifest
+    
+    @manifest.setter
+    def manifest (self, rhs) :
+        self._manifest = rhs
+        
+    def set_manifest (self, key, value) :
+        self._manifest[key] = value
+        
     @property
     def switches (self) -> dict :
         return self._switches
@@ -96,6 +175,60 @@ class ADPNPreservationPackage :
             path = os.path.join(path, item)
         return path
     
+    def get_single_file_size (self, file) :
+        size = None
+        try :
+            stat_results = os.stat(file)
+            size = stat_results.st_size if stat.S_ISREG(stat_results.st_mode) else None
+        except FileNotFoundError as e :
+            pass
+        return size
+        
+    def get_step_file_count (self, step) :
+        n_dirs = len(step[1])
+        n_files = len(step[2])
+        return n_dirs + n_files
+    
+    def get_step_file_size (self, step) :
+        s_parent = step[0]
+        a_dirs = step[1]
+        a_files = step[2]
+        a_sizes = [ self.get_single_file_size(os.path.join(s_parent, s_file)) for s_file in a_files ]
+        return sum(a_sizes)
+    
+    def get_file_size_human_readable (self, n_bytes, maximum="TiB") :
+        orders = { "B": 1, "KiB": 1024, "MiB": 1024*1024, "GiB": 1024*1024*1024, "TiB": 1024*1024*1024*1024 }
+        magnitude = n_bytes*1.0
+        order = "B"
+        stopped = False
+        for ( unit, factor ) in orders.items() :
+            if not stopped :
+                if ( ( n_bytes*1.0 ) / ( factor*1.0) ) >= 1.0 :
+                    magnitude = ( ( n_bytes*1.0 ) / ( factor*1.0) )
+                    order = unit
+            stopped = ( stopped or unit == maximum )
+            
+        return ( magnitude, order )
+        
+    def get_au_file_size (self, start=None) :
+        node = self.get_path(start)
+        items = os.listdir(node)
+        walking_path = os.walk(node)
+        levels = [ { "count": self.get_step_file_count(step), "size": self.get_step_file_size(step) } for step in walking_path ]
+        
+        extent = { "files": sum([ level["count"] for level in levels ]), "bytes": sum([ level["size"] for level in levels ]) }
+
+        ( extent["size"], extent["unit"] ) = self.get_file_size_human_readable(extent["bytes"])
+        extent["bplural"] = ( "s" if extent["bytes"] != 1 else "" )
+        extent["fplural"] = ( "s" if extent["files"] != 1 else "" )
+        extent["bytes"] = "{:,}".format(extent["bytes"])
+        
+        return "%(size).1f %(unit)s (%(bytes)s byte%(bplural)s, %(files)s file%(fplural)s)" % extent
+    
+    def reset_au_file_size (self) :
+        self.set_manifest("au_file_size", self.get_au_file_size())
+        return self.manifest.get("au_file_size")
+        
     def has_bagit_enclosure (self) -> bool :
         has_it = False
         try :
@@ -174,11 +307,11 @@ class ADPNPreservationPackage :
     
     def make_manifest (self) :
         try :
-            jsonParams = json.dumps(self.parameters)
+            jsonManifestParams = json.dumps(self.manifest)
             cmdline = [
                 scripts.path("adpn-make-manifest.py"),
                     "--jar="+self.switches['jar'],
-                    "--parameters="+jsonParams,
+                    "--parameters="+jsonManifestParams,
                     "--local="+self.switches['local']
             ]
             if ( 'proxy' in self.switches.keys() ) and ( self.switches['proxy'] is not None ) :

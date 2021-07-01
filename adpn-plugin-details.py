@@ -286,9 +286,9 @@ Usage:
 
 			(buf, errbuf, code) = myPyPipeline([self.pLockssRetrieveJar, self.pADPNPluginInfo]).siphon()
 			
-			if code[1] == 0 or code[1] == 2 : # 0=ok, 2=ok but parameters required
+			if code[1] in [ 0, 2 ] : # 0=ok, 2=ok but parameters required
 				self.display_details(buf)
-				self.exitcode = 0
+				self.exitcode = 0 if not self.switches.get('check_parameters') else (50*code[1])
 			else : # 1=failure to parse plugin JAR/XML; 3...255=???
 				self.exitcode = 2 if code[1]==1 else code[1]
 			
@@ -306,7 +306,7 @@ if __name__ == '__main__':
 	"plugin": None, "plugin-regex": None, "plugin-keywords": None, "plugin-id": None,
 	"daemon": None, "user": None, "pass": None, 
 	"proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
-	"output": "text/plain", "parameters": "null"
+	"output": "text/plain", "parameters": "null", "check_parameters": None,
 	}, configfile=configjson, settingsgroup=[ "plugin", "daemon" ]).parse()
 	
 #			*)

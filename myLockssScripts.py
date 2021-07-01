@@ -301,6 +301,9 @@ class myADPNScriptSuite :
     def name (self) :
         return self._modname
     
+    def python (self) :
+        return sys.executable
+    
     def path (self, filename) :
         return os.path.join(self.directory, filename)
     

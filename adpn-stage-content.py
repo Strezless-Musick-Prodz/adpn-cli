@@ -16,8 +16,104 @@ from io import BytesIO
 from ftplib import FTP
 from getpass import getpass
 from myLockssScripts import myPyCommandLine, myPyJSON
-from ADPNPreservationPackage import ADPNPreservationPackage
+from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 from myFTPStaging import myFTPStaging
+
+class ADPNStagingArea :
+
+    def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None) :
+        self.protocol = protocol
+        self.host = host
+        self.user = user
+        self.passwd = passwd
+        self.identity = identity
+        self.base_dir = base_dir
+        self.subdirectory = subdirectory
+        self.key_protocols = [ "sftp", "scp" ]
+        self.authentication = authentication
+        
+    def accept_url(self, url) :
+        (host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
+        
+        bits=urllib.parse.urlparse(url)
+        if len(bits.scheme) > 0 :
+            self.protocol = bits.scheme
+        
+        if len(bits.netloc) > 0 :
+            netloc = bits.netloc.split('@', 1)
+            netloc.reverse()
+            (host, credentials)=(netloc[0], netloc[1] if len(netloc) > 1 else None)
+            credentials=credentials.split(':', 1) if credentials is not None else [None, None]
+            (user, passwd) = (credentials[0], credentials[1] if len(credentials) > 1 else None)
+        
+            self.host = host
+            self.user = user
+            self.passwd = passwd
+        
+        if len(bits.path) > 1 :
+            base_dir = bits.path
+            subdirectory = '.'
+            
+            self.base_dir = base_dir
+            self.subdirectory = subdirectory
+    
+    def is_sftp (self) :
+        return ( "sftp" == self.protocol )
+
+    def uses_keyfile (self) :
+        return ( self.protocol in self.key_protocols )
+        
+    def get_private_keyfile (self) :
+        keyfile = None
+        
+        if self.uses_keyfile() :
+            
+            # do we have an explicitly specified identity / key file?
+            if self.identity is not None :
+                candidate_paths = [ os.path.realpath(os.path.expanduser(self.identity)) ]
+                
+            # can we figure out an implicit identity / key file based on defaults?
+            else :
+                candidates = [ "id_rsa", "id_dsa", "identity" ]
+                ssh_dir = os.path.expanduser("~/.ssh")
+                candidate_paths = [ os.path.join(os.path.expanduser(ssh_dir), candidate) for candidate in candidates ]
+                
+            keyfiles = [ path for path in candidate_paths if os.path.exists(path) ]
+            
+            if len(keyfiles) > 0 :
+                keyfile = keyfiles[0]
+            
+        return keyfile
+        
+    def has_private_keyfile (self) :
+        return ( self.authentication != "password" ) and ( self.get_private_keyfile() is not None )
+    
+    def get_password_prompt (self) :
+        passwd_prompt=( "%(protocol)s password: " % {"protocol": self.protocol.upper()} )
+        if self.has_private_keyfile() :
+            passwd_prompt = "%(protocol)s private key passphrase (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
+        else :
+            passwd_prompt = "%(protocol)s password (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
+        return passwd_prompt
+        
+    def open_connection (self) :
+        if self.is_sftp() :
+            
+            # check for an id_rsa or identity file
+            if self.has_private_keyfile() :
+                passwd = None
+                private_key = self.get_private_keyfile()
+                private_key_pass = self.passwd
+            else :
+                passwd = self.passwd
+                ( private_key, private_key_pass ) = ( None, None )
+                
+            conn = pysftp.Connection(self.host, username=self.user, password=passwd, private_key=private_key, private_key_pass=private_key_pass)
+                
+        else :
+            conn = FTP(self.host, user=self.user, passwd=self.passwd)
+        
+        return myFTPStaging(conn, user=self.user, host=self.host) if conn is not None else None
 
 class ADPNStageContentScript :
     """
@@ -93,28 +189,56 @@ command line with explicit switches.
         
         # start out with defaults
         self.ftp = None
-        self.protocol = "sftp"
-        self.host = "localhost"
-        self.user = None
-        self.passwd = None
-        self.base_dir = "/"
-        self.subdirectory = None
+        self.stage = ADPNStagingArea()
+        self._package = None
         
-        # now unpack and overlay elements from the FTP URL, if any is provided
-        if len(self.argv) > 1 :
-            self.unpack_ftp_elements(self.argv[1])
+        # now unpack and overlay elements from the SFTP/FTP URL, if any is provided
+        stage_base = self.switches.get('stage/base') if self.switches.get('stage/base') is not None else None
+        if stage_base is not None :
+            self.stage.accept_url(stage_base)
         
         # now overlay any further values from the command-line switches, if provided
-        self.protocol=self.switches.get('protocol') if self.switches.get('protocol') is not None else self.protocol
-        self.host=self.switches.get('host') if self.switches.get('host') is not None else self.host
-        self.user=self.switches.get('user') if self.switches.get('user') is not None else self.user
-        self.passwd=self.switches.get('pass') if self.switches.get('pass') is not None else self.passwd
-        self.base_dir=switches.get('base_dir') if switches.get('base_dir') is not None else self.base_dir
-        self.subdirectory=switches.get('directory') if switches.get('directory') is not None else self.subdirectory
-        self.subdirectory=switches.get('subdirectory') if switches.get('subdirectory') is not None else self.subdirectory
+        self.stage.protocol=self.switches.get('protocol') if self.switches.get('protocol') is not None else self.stage.protocol
+        self.stage.host=self.switches.get('host') if self.switches.get('host') is not None else self.stage.host
+        self.stage.user=self.switches.get('user') if self.switches.get('user') is not None else self.stage.user
+        self.stage.passwd=self.switches.get('pass') if self.switches.get('pass') is not None else self.stage.passwd
+        self.stage.base_dir=self.switches.get('base_dir') if switches.get('base_dir') is not None else self.stage.base_dir
+        self.stage.identity=self.switches.get('identity') if self.switches.get('identity') is not None else self.stage.identity
+        self.stage.subdirectory=self.subdirectory_switch if self.subdirectory_switch is not None else self.stage.subdirectory
+        self.stage.authentication=self.get_authentication_method()
+
+        self.manifest["institution_code"] = self.stage.user
+
+    @property
+    def subdirectory_switch (self) :
+        return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')
         
-        self.manifest["institution_code"] = self.user
+    @subdirectory_switch.setter
+    def subdirectory_switch (self, rhs) :
+        if 'subdirectory' in self.switches.keys() :
+            self.switches['subdirectory'] = rhs
+        else :
+            self.switches['directory'] = rhs
     
+    def get_authentication_method (self) :
+        if not self.stage.uses_keyfile() :
+            method = "password"
+        elif self.switches.get("authentication") is not None :
+            method = self.switches.get("authentication")
+        elif self.switches.get("password") is not None :
+            method = "password"
+        else :
+            method = None
+        return method
+        
+    @property
+    def package (self) :
+        return self._package
+    
+    @package.setter
+    def package (self, rhs) :
+        self._package = rhs
+        
     def switched (self, key) :
         got = not not self.switches.get(key, None)
         return got
@@ -123,31 +247,6 @@ command line with explicit switches.
         canonical = os.path.realpath(file)
         return os.path.dirname(canonical)
 
-    def unpack_ftp_elements(self, url) :
-        (host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
-        
-        bits=urllib.parse.urlparse(url)
-        if len(bits.scheme) > 0 :
-            self.protocol = bits.scheme
-        
-        if len(bits.netloc) > 0 :
-            netloc = bits.netloc.split('@', 1)
-            netloc.reverse()
-            (host, credentials)=(netloc[0], netloc[1] if len(netloc) > 1 else None)
-            credentials=credentials.split(':', 1) if credentials is not None else [None, None]
-            (user, passwd) = (credentials[0], credentials[1] if len(credentials) > 1 else None)
-        
-            self.host = host
-            self.user = user
-            self.passwd = passwd
-        
-        if len(bits.path) > 1 :
-            base_dir = bits.path
-            subdirectory = '.'
-            
-            self.base_dir = base_dir
-            self.subdirectory = subdirectory
-    
     def mkBackupDir (self) :
         backupPath=self.switches['backup']
         
@@ -164,7 +263,7 @@ command line with explicit switches.
         except FileExistsError as e :
             pass
 
-        backupPath="%(backup)s/%(subdirectory)s" % {"backup": backupPath, "subdirectory": self.subdirectory}
+        backupPath="%(backup)s/%(subdirectory)s" % {"backup": backupPath, "subdirectory": self.subdirectory_switch}
         try :
             os.mkdir(backupPath)
         except FileExistsError as e :
@@ -172,70 +271,41 @@ command line with explicit switches.
 
         return backupPath
     
-    def get_private_keyfile (self) :
-        keyfile = None
-        if "sftp" == self.protocol :
-            if self.switches["identity"] is not None :
-                candidate_paths = [ os.path.realpath(os.path.expanduser(self.switches["identity"])) ]
-            else :
-                candidates = [ "id_rsa", "id_dsa", "identity" ]
-                ssh_dir = os.path.expanduser("~/.ssh")
-                candidate_paths = [ os.path.join(os.path.expanduser(ssh_dir), candidate) for candidate in candidates ]
-            keyfiles = [ path for path in candidate_paths if os.path.exists(path) ]
-            if len(keyfiles) > 0 :
-                keyfile = keyfiles[0]
-        return keyfile
+    def exclude_filesystem_artifacts (self, file) :
+        return file.lower() in ['thumbs.db']
         
-    def has_private_keyfile (self) :
-        return ( self.switches['password'] is None ) and ( self.get_private_keyfile() is not None )
-    
     def read_password (self) :
-        if self.has_private_keyfile() :
-            passwd_prompt = "%(protocol)s private key passphrase (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
-        else :
-            passwd_prompt = "%(protocol)s password (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
-        return getpass(passwd_prompt)
+        return getpass(self.stage.get_password_prompt())
 
     def establish_connection (self, interactive=True) :
-        if self.user is None :
-            self.user = input("User: ")
-        if self.passwd is None :
-            self.passwd = self.read_password()
-
-        if "sftp" == self.protocol :
-            # check for an id_rsa or identity file
-            if self.has_private_keyfile() :
-                passwd = None
-                private_key = self.get_private_keyfile()
-                private_key_pass = self.passwd
-            else :
-                passwd = self.passwd
-                private_key = None
-                private_key_pass = None
-                
-            try :
-                o_connection = pysftp.Connection(self.host, username=self.user, password=passwd, private_key=private_key, private_key_pass=private_key_pass)
-            except ValueError as e:
-                o_connection = None
-                print("[%(cmd)s] Invalid passphrase for private key." % { "cmd": self.scriptname },  file=sys.stderr)
-            except ssh_exception.AuthenticationException as e :
-                o_connection = None
-                if private_key is not None :
-                    print("[%(cmd)s] %(protocol)s authentication failure. Did you use the right key file [%(key)s]?" % { "cmd": self.scriptname, "protocol": self.protocol.upper(), "key": private_key }, file=sys.stderr)
-                else :
-                    print("[%(cmd)s] %(protocol)s authentication failure. Did you use the right password?" % { "cmd": self.scriptname, "protocol": self.protocol.upper() },  file=sys.stderr)
-            except ssh_exception.SSHException as e :
-                o_connection = None
-                
-                if private_key is not None :
-                    print("[%(cmd)s] %(protocol)s key decoding failure. Did you use the right passphrase [%(key)s]?" % { "cmd": self.scriptname, "protocol": self.protocol.upper(), "key": private_key, "err": str(e) },  file=sys.stderr)
-                else :
-                    print("[%(cmd)s] %(protocol)s connection failed: %(err)s." % { "cmd": self.scriptname, "protocol": self.protocol.upper(), "err": str(e) },  file=sys.stderr)
-                
-        else :
-            o_connection = FTP(self.host, user=self.user, passwd=self.passwd)
+        if self.stage.user is None :
+            self.stage.user = input("User: ")
+        if self.stage.passwd is None :
+            self.stage.passwd = self.read_password()
         
-        return myFTPStaging(o_connection, user=self.user, host=self.host) if o_connection is not None else None
+        conn = None
+        try :
+            conn = self.stage.open_connection()
+        except ValueError as e :
+            if len(self.stage.passwd) == 0 :
+                settings = { "protocol": self.stage.protocol.upper(), "key": self.stage.get_private_keyfile(), "err": str(e) }
+                self.write_error(1, "%(protocol)s key failure. Did you use the right passphrase for the key [%(key)s]?" % settings)
+            else :
+                raise
+        except ssh_exception.AuthenticationException as e :
+            settings = { "protocol": self.stage.protocol.upper(), "key": self.stage.get_private_keyfile(), "err": str(e) }
+            if self.stage.has_private_keyfile() :
+                self.write_error(1, "%(protocol)s authentication failure. Did you use the right key file [%(key)s]?" % settings )
+            else :
+                self.write_error(1, "%(protocol)s authentication failure. Did you use the right password?" % settings )
+        except ssh_exception.SSHException as e :
+            settings = { "protocol": self.stage.protocol.upper(), "key": self.stage.get_private_keyfile(), "err": str(e) }
+            if self.stage.has_private_keyfile() :
+                self.write_error(1, "%(protocol)s key failure. Did you use the right passphrase for the key [%(key)s]?" % settings)
+            else :
+                self.write_error(1, "%(protocol)s connection failed: %(err)s." % settings)
+
+        return conn
     
     def output_status (self, level, type, arg) :
         (prefix, message) = (type, arg)
@@ -264,6 +334,14 @@ command line with explicit switches.
         if prefix is not None and level <= self.verbose :
             print(prefix, message, file=out)
     
+    @property
+    def still_ok (self) :
+        return self.exitcode == 0
+    
+    def write_error (self, code, message, prefix="") :
+        self.exitcode = code
+        print ( "%(prefix)s[%(cmd)s] %(message)s" % { "prefix": prefix, "cmd": self.scriptname, "message": message }, file=sys.stderr )
+
     def display_usage (self) :
         print(self.__doc__)
         self.exitcode = 0
@@ -271,59 +349,119 @@ command line with explicit switches.
     def execute (self) :
 
         try :
-            if self.base_dir is None or len(self.base_dir) == 0:
-                self.base_dir = input("Base dir: ")
-            if self.subdirectory is None or len(self.subdirectory) == 0 :
-                self.subdirectory = input("Subdirectory: ")
+            if self.stage.base_dir is None or len(self.stage.base_dir) == 0:
+                self.stage.base_dir = input("Base dir: ")
+            if self.stage.subdirectory is None or len(self.stage.subdirectory) == 0 :
+                self.stage.subdirectory = input("Subdirectory: ")
             
-            # First, let's check the packaging
-            package = ADPNPreservationPackage(self.switches['local'], self.manifest, self.switches)
-            if not package.has_bagit_enclosure() :
-                self.output_status(2, "package.make_bagit_enclosure", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                package.make_bagit_enclosure()
+            # Let's determine the plugin and its parameters from the command line switches
+            plugin = myLockssPlugin(jar=self.switches["jar"])
+            plugin_parameters = plugin.get_parameter_keys()
+            plugin_parameter_names = [ parameter["name"] for parameter in plugin_parameters ]
+            plugin_parameter_map = {}
+            for parameter_name in plugin_parameter_names :
+                plugin_parameter_map[parameter_name] = self.switches.get(parameter_name)
+            
+            plugin_parameter_settings = [ [parameter, setting] for (parameter, setting) in self.switches.items() if parameter in plugin_parameter_names ]
+            self.plugin_parameters = plugin_parameter_settings
+            
+            # Now let's plug the parameters for this package in to the package and plugin
+            package = ADPNPreservationPackage(self.switches['local'], self.plugin_parameters, self.manifest, self.switches)
 
-            self.output_status(2, "package.check_bagit_validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-            validates = package.check_bagit_validation()
-            if validates :
-                if not package.has_manifest() :
-                    self.output_status(2, "package.make_manifest", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                    package.make_manifest()
-            else :
-                raise OSError(package._bagit_exitcode, "BagIt validation FAILED", os.path.realpath(package.get_path()), package._bagit_output)
+            au_start_url = None
+            try :
+                details_list = package.plugin.get_details(check_parameters=True) # bolt on missing parameter(s)
+                details = {}
+                for detail in details_list :
+                    details[detail['name']] = detail['value']
+                au_start_url = details['Start URL']
+            except AssertionError as e : # Parameter requirements failure
+                if len(e.args) == 2 :
+                    ( message, req ) = e.args
+                    missing = [ parameter for parameter in req if self.switches.get(parameter) is None ]
+                    self.write_error(2, "Required parameter missing: %(missing)s" % { "missing": ", ".join(missing) })
+                else :
+                    ( message, req ) = ( e.args[0], None )
+                    self.write_error(2, "Requirement failure: %(message)s" % { "message": message })
             
-            # Let's log in to the host
-            self.ftp = self.establish_connection()
+            if self.still_ok : # still OK
+                # Now let's check the packaging
+                if not package.has_bagit_enclosure() :
+                    self.output_status(2, "package.make_bagit_enclosure", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                    package.make_bagit_enclosure()
 
-            if self.ftp is not None :
-                # Let's CWD over to the repository
-                self.ftp.set_remotelocation(self.base_dir)
-                backupDir = self.mkBackupDir()
+                self.output_status(2, "package.check_bagit_validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                validates = package.check_bagit_validation()
+                if validates :
+                    if self.manifest["au_file_size"] is None :
+                        self.manifest["au_file_size"] = package.reset_au_file_size()
+                    if not package.has_manifest() :
+                        self.output_status(2, "package.make_manifest", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                        package.make_manifest()
+                else :
+                    self.write_error((100 + package._bagit_exitcode), "BagIt validation of '%(path)s' FAILED, exit code %(code)d. Output:" % {
+                        "path": os.path.realpath(package.get_path()),
+                        "code": package._bagit_exitcode
+                    })
+                    print ( package._bagit_output, file=sys.stderr)
+
+            if self.still_ok :
+                # Let's log in to the host
+                self.ftp = self.establish_connection()
+
+                if self.ftp is not None :
+                    # Let's CWD over to the repository
+                    try :
+                        self.ftp.set_remotelocation(self.stage.base_dir)
+                    except FileNotFoundError as e :
+                        self.write_error(3, "Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir })
+                        raise
+                    
+                    backupDir = self.mkBackupDir()
             
-                (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.subdirectory, make=True)
-                self.ftp.download(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
+                    (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
+                    self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
                 
-                self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
-                (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.subdirectory, make=True)
-                self.output_status(2, "set_location", (os.getcwd(), self.ftp.get_location()))
+                    self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
+                    (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
+                    self.output_status(2, "set_location", (os.getcwd(), self.ftp.get_location()))
                 
-                # upload the present directory recursively
-                self.ftp.upload(file=".", exclude=lambda file: file == 'Thumbs.db', notification=self.output_status)
-            
-                self.output_status(0, "ok", {
-                    "local": os.getcwd(), "staged": self.ftp.url(),
-                    "jar": self.switches['jar'],
-                    "au_title": self.switches['au_title'],
-                    "parameters": [ [ key, self.manifest[key] ] for key in self.manifest ]
-                })
-            
-            else :
-                self.exitcode = 1
-                print("[%(scriptname)s] Connection failed for %(user)s@%(host)s." % {"scriptname": self.scriptname, "user": self.user, "host": self.host}, file=sys.stderr)
+                    # upload the present directory recursively
+                    self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+                
+                    out_packet = {
+                    "Ingest Title": self.manifest["au_title"],
+                    "File Size": self.manifest["au_file_size"],
+                    "From Peer": self.manifest["institution_publisher_code"],
+                    "Plugin JAR": self.switches["jar"],
+                    "Start URL": au_start_url, # FIXME
+                    "Ingest Step": "staged",
+                    }
+                
+                    for parameter in plugin_parameters :
+                        description = re.sub('\s*[(][^)]+[)]\s*$', '', parameter["description"])
+                        out_packet[description] = plugin_parameter_map[parameter["name"]]
+                
+                    out_packet = { **out_packet, **{ "parameters": self.plugin_parameters } }
+                
+                    #"local": os.getcwd(), "staged": self.ftp.url(),
+                    #"jar": self.switches['jar'],
+                    #"au_title": self.switches['au_title'],
+                    #"parameters": [ [ key, self.manifest[key] ] for key in self.manifest ]
+                    self.output_status(0, "ok", out_packet)
+                
+                else :
+                    self.write_error(1, "Connection failed for %(user)s@%(host)s." % {"user": self.stage.user, "host": self.stage.host})
                 
         except KeyboardInterrupt as e :
-            self.exitcode = 255
-            print("[%(scriptname)s] Keyboard Interrupt." % {"scriptname": self.scriptname}, file=sys.stderr)
-        
+            self.write_error(255, "Keyboard Interrupt.", prefix="^C\n")
+
+        except FileNotFoundError as e :
+            if 3 == self.exitcode :
+                pass
+            else :
+                raise
+
         if self.ftp is not None :
             try :
                 self.ftp.quit()
@@ -352,12 +490,13 @@ if __name__ == '__main__':
     
     (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
             "ftp/host": None, "ftp/user": None, "ftp/pass": None,
-            "stage/host": None, "stage/user": None, "stage/pass": None, "stage/protocol": None,
-            "stage/identity": None, "identity": None, "password": None,
+            "stage/base": None, "stage/host": None, "stage/user": None, "stage/pass": None, "stage/protocol": None,
+            "stage/identity": None, "identity": None,
+            "stage/authentication": None, "authentication": None, "password": None,
             "jar": None,
             "subdirectory": None, "directory": None,
             "base_dir": None, "output": "text/plain",
-            "local": None, "backup": "./backup",
+            "remote": None, "local": None, "backup": "./backup",
             "verbose": 1, "quiet": False,
             "base_url": None, "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
@@ -365,7 +504,17 @@ if __name__ == '__main__':
     }, configfile=configjson, settingsgroup=["stage", "ftp"]).parse()
     
     align_switches("identity", "stage/identity", switches)
+    align_switches("authentication", "stage/authentication", switches)
     align_switches("directory", "subdirectory", switches)
+    
+    # look for positional arguments: first argument goes to --remote=...
+    cmd_args = sys.argv[1:]
+    if switches.get('remote') is None :
+        if len(sys.argv) > 1 :
+            switches['remote'] = cmd_args[0]
+            cmd_args = cmd_args[1:]
+    
+    align_switches("remote", "stage/base", switches)
     
     institution = switches["institution"]
     if switches["peer"] is not None :
@@ -376,6 +525,7 @@ if __name__ == '__main__':
         "institution": switches["institution"],
         "institution_name": institution,
         "institution_code": switches['stage/user'],
+        "institution_publisher_code": switches["peer"].upper(),
         "au_title": switches['au_title'],
         "au_directory": switches['directory'] if switches['directory'] is not None else switches['subdirectory'],
         "au_file_size": switches['au_file_size'],
