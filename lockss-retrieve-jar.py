@@ -76,7 +76,7 @@ if __name__ == '__main__':
 	align_switches("source", "plugins/source", switches)
 	align_switches("url", "jar", switches)
 	align_switches("url", "stage/jar", switches)
-	
+
 	url = switches['url'];
 	if ( switches.get('source') is not None and len(switches['source']) > 0 ) :
 		parameters = get_plugin_name_strings(switches['url'])

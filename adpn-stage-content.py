@@ -435,7 +435,7 @@ command line with explicit switches.
                 
                     self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
                     (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
-                    self.output_status(2, "set_location", (os.getcwd(), self.ftp.get_location()))
+                    self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
                 
                     # upload the present directory recursively
                     self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)

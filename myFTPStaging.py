@@ -137,7 +137,7 @@ class myFTPStaging :
             
             if '.' != file :
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
-                out(2, "set_location", (os.getcwd(), self.get_location()))
+                out(2, "chdir", (os.getcwd(), self.get_location()))
 
             for subfile in self.get_childitem() :
                 exclude_this = exclude(subfile) if exclude is not None else False
@@ -152,15 +152,15 @@ class myFTPStaging :
 
             if '.' != file :
                 self.set_location(dir=lpwd, remote=rpwd, make=False)
-                out(2, "set_location", (lpwd, rpwd))
+                out(2, "chdir", (lpwd, rpwd))
                 self.remove_directoryitem(file)
-                out(1, "remove_directoryitem", file)
+                out(2, "remove_directoryitem", file)
                 
         else :
             self.download_file(file=file)
             if self.get_file_size(file) == os.stat(file).st_size :
                 self.remove_item(file)
-                out(1, "remove_item", file)
+                out(2, "remove_item", file)
     
     def upload_file (self, blob = None, file = None) :
         if isinstance(blob, str) :
@@ -187,7 +187,7 @@ class myFTPStaging :
             
             if '.' != file :
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
-                out(2, "set_location", (os.getcwd(), self.get_location()))
+                out(2, "chdir", (os.getcwd(), self.get_location()))
 
             for subfile in os.listdir() :
                 exclude_this = exclude(subfile) if exclude is not None else False
@@ -200,7 +200,7 @@ class myFTPStaging :
                 out(level, type, subfile)
 
             if '.' != file :
-                out(2, "set_location", (lpwd, rpwd))
+                out(2, "chdir", (lpwd, rpwd))
                 self.set_location(dir=lpwd, remote=rpwd, make=False)
             
     def quit (self) :
