@@ -485,10 +485,24 @@ python:paramiko	%s Python module	python3 -m pip install paramiko
 
 		ASC_OUTPUT="$(mktemp)"
 
-		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json --verbose=1 \
-			--subdirectory="${_PARAM[subdirectory]}" \
-			--au_title="${_PARAM[au_title]}" \
-			"${_ARGV[3]}" > "${ASC_OUTPUT}" ; ASC_ERRCODE="$?"
+		declare -a ASC_ARGV=( "${_ARGV[@]:3}" )
+		declare -A ASC_SWITCHES=( )
+		for SWITCH in "${!_LINESWITCH[@]}" ; do
+			case "${SWITCH}" in 
+				"local"|"output")
+					# DROP IT -- WE'LL SET IT OURSELVES BELOW
+					;;
+				*)
+					ASC_SWITCHES[${SWITCH}]="${_LINESWITCH[$SWITCH]}"
+					;;
+			esac
+		done
+		
+		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json \
+			"${_LINESWITCH[@]}" \
+			"${ASC_ARGV[@]}" ${V} ${Q} > "${ASC_OUTPUT}"
+			ASC_ERRCODE="$?"
+		
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
 			JSON_PACKET=$( adpn_select_json_packet "${ASC_OUTPUT}" )
 			printf "%s" "${JSON_PACKET}"
