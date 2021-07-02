@@ -61,7 +61,7 @@ class ADPNStagingArea :
         
         if len(bits.path) > 1 :
             base_dir = bits.path
-            subdirectory = '.'
+            subdirectory = None
             
             self.base_dir = base_dir
             self.subdirectory = subdirectory
