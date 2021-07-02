@@ -19,6 +19,15 @@ from myLockssScripts import myPyCommandLine, myPyJSON
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 from myFTPStaging import myFTPStaging
 
+python_std_input = input
+def input (*args) :
+    old_stdout = sys.stdout
+    try :
+        sys.stdout = sys.stderr
+        return python_std_input(*args)
+    finally :
+        sys.stdout = old_stdout
+
 class ADPNStagingArea :
 
     def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None) :
