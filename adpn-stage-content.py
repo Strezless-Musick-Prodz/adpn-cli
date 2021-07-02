@@ -227,6 +227,9 @@ command line with explicit switches.
         self.switches['subdirectory'] = rhs
         self.switches['directory'] = rhs
     
+    def get_locallocation (self) :
+        return os.path.realpath(self.switches.get('local'))
+        
     def get_authentication_method (self) :
         if not self.stage.uses_keyfile() :
             method = "password"
@@ -359,7 +362,8 @@ command line with explicit switches.
             if self.stage.base_dir is None or len(self.stage.base_dir) == 0:
                 self.stage.base_dir = input("Base dir: ")
             if self.stage.subdirectory is None or len(self.stage.subdirectory) == 0 :
-                self.stage.subdirectory = input("Subdirectory: ")
+                self.subdirectory_switch = os.path.basename(self.get_locallocation())
+                self.stage.subdirectory = self.subdirectory_switch
             
             # Let's determine the plugin and its parameters from the command line switches
             plugin = myLockssPlugin(jar=self.switches["jar"])
