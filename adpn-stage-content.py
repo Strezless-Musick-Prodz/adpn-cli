@@ -224,10 +224,8 @@ command line with explicit switches.
         
     @subdirectory_switch.setter
     def subdirectory_switch (self, rhs) :
-        if 'subdirectory' in self.switches.keys() :
-            self.switches['subdirectory'] = rhs
-        else :
-            self.switches['directory'] = rhs
+        self.switches['subdirectory'] = rhs
+        self.switches['directory'] = rhs
     
     def get_authentication_method (self) :
         if not self.stage.uses_keyfile() :
