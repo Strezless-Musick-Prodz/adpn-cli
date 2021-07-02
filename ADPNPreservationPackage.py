@@ -45,7 +45,10 @@ class myLockssPlugin :
         return params
 
     def get_parameter_keys (self, names=False, descriptions=False) :
-        tsv = self.get_tool_data("adpn-plugin-details.py", parameters={"jar": self.jar})
+        try :
+            tsv = self.get_tool_data("adpn-plugin-details.py", parameters={"jar": self.jar})
+        except FileNotFoundError as e :
+            tsv = []
         mapped = [ {"name": row[1], "description": row[2]} for row in tsv if row[0]=="parameter" ]
         bothneither = ( not ( names or descriptions ) or ( names and descriptions ) )
         justone = "description" if descriptions else "name"
@@ -58,8 +61,13 @@ class myLockssPlugin :
             tsv = self.get_tool_data("adpn-plugin-details.py", parameters=parameters, ok=ok_codes)
         except OSError as e :
             required_parameters = self.get_parameter_keys(names=True)
-            raise AssertionError("Required plugin parameters: " + json.dumps(required_parameters), required_parameters) from e
-            
+            if len(required_parameters) > 0 :
+                error_message = ( "Required plugin parameters: " + json.dumps(required_parameters) )
+                raise AssertionError(error_message, required_parameters) from e
+            else :
+                error_message = ( "Plugin %(url)s NOT FOUND" % { "url": self.jar } )
+                raise AssertionError(error_message) from e
+
         mapped = [ {"name": row[1], "value": row[2] } for row in tsv if row[0]=="detail" ]
         return mapped
     
