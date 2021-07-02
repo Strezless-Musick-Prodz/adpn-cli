@@ -304,7 +304,7 @@ python:paramiko	%s Python module	python3 -m pip install paramiko
 					KEY="stage/user" DEFAULT="${DROP_SERVER_USER}"
 					read -ep "Drop Server Account [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
-					KEY="base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/drop_au_content_in_here/"
+					KEY="stage/base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/drop_au_content_in_here/"
 					read -ep "Staging Area Base URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
 				fi
