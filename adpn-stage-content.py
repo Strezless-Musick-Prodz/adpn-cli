@@ -507,9 +507,10 @@ if __name__ == '__main__':
             "jar": None,
             "subdirectory": None, "directory": None,
             "base_dir": None, "output": "text/plain",
-            "remote": None, "local": None, "backup": "./backup",
+            "remote": None, "local": None, "backup": os.path.expanduser("~/backup"),
             "verbose": 1, "quiet": False,
-            "base_url": None, "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
+            "base_url": None, "stage/base_url": None,
+            "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
             "dummy": None
     }, configfile=configjson, settingsgroup=["stage", "ftp"]).parse()
@@ -517,6 +518,7 @@ if __name__ == '__main__':
     align_switches("identity", "stage/identity", switches)
     align_switches("authentication", "stage/authentication", switches)
     align_switches("directory", "subdirectory", switches)
+    align_switches("base_url", "stage/base_url", switches)
     
     # look for positional arguments: first argument goes to --remote=...
     cmd_args = sys.argv[1:]
