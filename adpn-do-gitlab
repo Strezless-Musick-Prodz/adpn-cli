@@ -109,6 +109,18 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	CMD="help"
 fi
 
+if [[ "${CMD}" != "token" ]] ; then
+	# Retrieve Gitlab token for ADPN script access to Gitlab
+	# This may produce an interactive prompt for the master password on a kdbx file
+	PRIVATE_TOKEN=$( "${ME}" token ${_LINESWITCH[token]} )
+	
+	# We should only have to retrieve this once, at the outset; pass it down to any child calls
+	if [[ -n "${PRIVATE_TOKEN}" ]] ; then
+		_LINESWITCH[token]="--token=${PRIVATE_TOKEN}"
+		_PARAM[token]="${PRIVATE_TOKEN}"
+	fi
+fi
+
 case "${CMD}" in
 		
 	""|"list"|"project")
@@ -131,9 +143,9 @@ case "${CMD}" in
 				echo "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}" 1>&2
 			fi
 			
-			"${ME}" get "/projects?membership=1" ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
+			"${ME}" get "/projects?membership=1" ${_LINESWITCH[token]} ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
 		else
-			"${ME}" get "/projects?membership=1" ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace
+			"${ME}" get "/projects?membership=1" ${_LINESWITCH[token]} ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace
 		fi
 		EXITCODE="$?"
 		;;
@@ -148,7 +160,7 @@ case "${CMD}" in
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
 		
 		if [[ -n "${PROJECT}" ]] ; then
-			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${DDBG} | cut --field=2 )
+			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${_LINESWITCH[token]} ${DDBG} | cut --field=2 )
 		fi
 		
 		if [[ -n "${_ARGV[3]}" ]] ; then
@@ -177,7 +189,7 @@ case "${CMD}" in
 		fi
 
 		F_JSON_OUT=$(mktemp)
-		"${ME}" get --fail "${API_PATH}" > "${F_JSON_OUT}"
+		"${ME}" get --fail "${API_PATH}" ${_LINESWITCH[token]} > "${F_JSON_OUT}"
 		EXITCODE="$?"
 
 		if [[ "${_PARAM[output]}" =~ ^(application/)?json$ ]] ; then
@@ -190,6 +202,28 @@ case "${CMD}" in
 		rm "${F_JSON_OUT}"
 		;;
 
+	"token")
+		
+		if [[ -n "${_PARAM[token]}" ]] ; then
+			PRIVATE_TOKEN="${_PARAM[token]}"
+		else
+			PRIVATE_TOKEN=$( adpnprop "gitlab/token" )
+			if [[ "${PRIVATE_TOKEN}" =~ ^keepass:/*(/.*)$ ]] ; then
+				KDBX_FILE="${BASH_REMATCH[1]}"
+				if [[ -r "${KDBX_FILE}" ]] ; then
+					if [[ -n "${V}" ]] ; then
+						printf "* Getting Gitlab token from KeePass repository %s\n" "${BASH_REMATCH[1]}" 1>&2
+					fi
+					PRIVATE_TOKEN=$( adpn-get-keepass.py --database="${BASH_REMATCH[1]}" --regex="^(adpn-)?gitlab-token" )
+				else
+					printf "* ERROR: Tried to find Gitlab token from KeePass repository %s - NOT READABLE\n" "${BASH_REMATCH[1]}" 1>&2
+					EXITCODE=1
+				fi
+			fi
+		fi
+		printf "%s" "${PRIVATE_TOKEN}"
+		;;
+	
 	"packet")
 		
 		F_GL_ISSUE=$(mktemp)
@@ -200,7 +234,7 @@ case "${CMD}" in
 			echo "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}" 1>&2
 		fi
 		
-		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${_LINESWITCH[token]} ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
 		RE_PACKET="^JSON\s+PACKET:\s*"
 		
@@ -235,7 +269,7 @@ case "${CMD}" in
 		
 			# 2. Scan for the JSON packet, if any, in issue/notes.body
 			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode > "${F_GL_ISSUE}"
+			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_LINESWITCH[token]} > "${F_GL_ISSUE}"
 			EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
@@ -275,22 +309,26 @@ case "${CMD}" in
 		if [[ "${OBJECT}" == "packet" ]] ; then
 		# Treat this as a request for a JSON packet encoded within a given Gitlab Issue
 		
-			"${ME}" packet "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+			"${ME}" packet "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "issue" ]] ; then
 		# Treat this as a request for a Gitlab Issue object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/issues.html>
-				
-			"${ME}" issue "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+			
+			"${ME}" issue "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "project" ]] ; then
-		# Treat this as a request for a Gitlab Project object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/projects.html>		
-
-			"${ME}" project "${_CMDLINE[@]:3}" ; EXITCODE="$?"
+		# Treat this as a request for a Gitlab Project object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/projects.html>
+			
+			"${ME}" project "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
+			
+		elif [[ "${OBJECT}" == "token" ]] ; then
+		# Treat this as a request for the Gitlab private access token as stored in adpnet.json or the encrypted KeePass database
+			
+			"${ME}" token "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
 			
 		else 
 		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
 
-			PRIVATE_TOKEN=$( adpnprop "gitlab/token" )
 			if [[ -z "${PRIVATE_TOKEN}" ]] ; then
 				printf "[%s] WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>\n" "${SCRIPT_CMD_NAME}" 1>&2
 			else 

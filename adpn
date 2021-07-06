@@ -224,6 +224,7 @@ mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysq
 python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 python:pysftp	%s Python module	python3 -m pip install pysftp
 python:paramiko	%s Python module	python3 -m pip install paramiko
+python:pykeepass	%s Python module	python3 -m pip install pykeepass
 """
 
 		printf "* DEPENDENCIES: checking for dependencies.\n"
