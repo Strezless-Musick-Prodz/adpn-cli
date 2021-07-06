@@ -151,6 +151,17 @@ case "${CMD}" in
 		;;
 
 	"issue")
+		METHOD=get
+		declare -a ADPN_GITLAB_SW=("--fail")
+		
+		if [[ -n "${_PARAM[post]}" ]] ; then
+			METHOD=post
+			[[ -n "${_PARAM[dry-run]}" ]] && ADPN_GITLAB_SW+=("--dry-run")
+			[[ -n "${_PARAM[title]}" ]] && ADPN_GITLAB_SW+=("--data-title=${_PARAM[title]}")
+			[[ -n "${_PARAM[description]}" ]] && ADPN_GITLAB_SW+=("--data-description=${_PARAM[description]}")
+			[[ -n "${_PARAM[labels]}" ]] && ADPN_GITLAB_SW+=("--data-labels=${_PARAM[description]}")
+		fi
+		
 		API_PATH="/issues"
 		
 		[[ -n "${_PARAM[project]}" ]] && PROJECT="${_PARAM[project]}" || PROJECT="${_ARGV[2]}"
@@ -185,11 +196,11 @@ case "${CMD}" in
 		if [[ -n "${_PARAM[output]}" ]] ; then
 			ADPN_JSON_SW+=( $(printf "%s--output=%s" "" "${_PARAM[output]}" ) )
 		elif [[ -z "${_PARAM[key]}" ]] ; then
-			ADPN_JSON_SW+=( "--output=urlencode" )			
+			ADPN_JSON_SW+=( "--output=urlencode" )
 		fi
-
+		
 		F_JSON_OUT=$(mktemp)
-		"${ME}" get --fail "${API_PATH}" ${_LINESWITCH[token]} > "${F_JSON_OUT}"
+		"${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${_LINESWITCH[token]} ${V} ${DBG} > "${F_JSON_OUT}"
 		EXITCODE="$?"
 
 		if [[ "${_PARAM[output]}" =~ ^(application/)?json$ ]] ; then
@@ -365,6 +376,60 @@ case "${CMD}" in
 		fi
 		;;
 	
+	"post")
+		if [[ -z "${PRIVATE_TOKEN}" ]] ; then
+			printf "[%s] WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>\n" "${SCRIPT_CMD_NAME}" 1>&2
+		else 
+			
+			API_URL=$( adpnprop "gitlab/base" )
+			if [[ -n "${_PARAM[url]}" ]] ; then
+				API_URL="${_PARAM[url]}"
+			fi
+		
+			declare -a CURL_SW=()
+			CURL_SW+=( "--silent" )
+			CURL_SW+=( "--request" "POST" )
+			if [[ -n "${_PARAM[fail]}" ]] ; then
+				CURL_SW+=( "--fail" )
+			fi
+			if [[ -n "${PRIVATE_TOKEN}" ]] ; then
+				CURL_SW+=( "--header" )
+				CURL_SW+=( "PRIVATE-TOKEN: ${PRIVATE_TOKEN}"  )
+			fi
+			
+			for KEY in "${!_PARAM[@]}" ; do 
+				case "${KEY}" in 
+				"token"|"context"|"verbose"|"quiet"|"debug"|"dry-run")
+					;;
+				"fail")
+					;;
+				*)
+					FIELD="${KEY}"
+					if [[ "${KEY}" =~ ^data-(.*) ]] ; then
+						FIELD="${BASH_REMATCH[1]}"
+					fi
+					CURL_SW+=( "--data-urlencode" "${FIELD}=${_PARAM[$KEY]}" )
+					;;
+				esac
+			done
+			
+			for SLUG in "${_ARGV[@]:2}" ; do
+				URL=$( printf "${API_URL}" "${SLUG#/}" )
+				if [[ -n "${DBG}" ]] ; then
+					echo "DBG:" curl "${CURL_SW[@]}" "${URL}" 1>&2
+				fi
+				if [[ -z "${_PARAM[dry-run]}" ]] ; then
+					curl "${CURL_SW[@]}" "${URL}"
+				fi
+				
+				CURLEXIT="$?"
+				if [[ "${CURLEXIT}" -ge "${EXITCODE}" ]] ; then
+					EXITCODE="${CURLEXIT}"
+				fi
+			done
+		fi
+		;;
+		
 	"parse")
 		GITLAB_ISSUE=""
 		for PACKET_SOURCE in "${_ARGV[@]:2}" ; do
