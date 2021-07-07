@@ -73,7 +73,7 @@ rm "${CMDLINETXT}"
 #	[cut]="command-line %s tool"
 #	[curl]="command-line %s tool"
 #	[adpn-ingest-test]="%s Bash script"
-#	[adpn-do-preserve-email]="%s Bash script"
+#	[adpn-do-notify]="%s Bash script"
 #	[adpn-do-gitlab]="%s Bash script"
 #	[adpn-do-rebalance]="%s Bash script"
 #	[adpn-do-publisher]="%s Bash script"
@@ -534,8 +534,8 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 #
 # Output: a report containing AU data, file size information, plugin parameters
 # and a JSON packet for use by adpn ingest and adpn publish by Config Manager.
-# Displayed to stdout; if adpn-do-preserve-email can find an e-mail client,
-# it is also filled in to an e-mail to the Config Manager.
+# Displayed to stdout; if adpn-do-notify can post a notification for the Config Manager
+# this is filled in to the notification.
 #
 # @version 2019.0715
 
@@ -560,7 +560,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 			[[ -n "${DROP_ID}" ]] || DROP_ID="${FROM}"
 
 			printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
-			printf "%s" "${JSON_PACKET}" | adpn-do-preserve-email --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}"
+			printf "%s" "${JSON_PACKET}" | adpn-do-notify --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT} ${CMD}"
 			ADPN_ERRCODE="$?"
 
 		fi
