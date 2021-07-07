@@ -153,19 +153,21 @@ case "${CMD}" in
 	"issue")
 		METHOD=get
 		declare -a ADPN_GITLAB_SW=("--fail")
-		
+
 		if [[ -n "${_PARAM[post]}" ]] ; then
 			METHOD=post
 			[[ -n "${_PARAM[dry-run]}" ]] && ADPN_GITLAB_SW+=("--dry-run")
 			[[ -n "${_PARAM[title]}" ]] && ADPN_GITLAB_SW+=("--data-title=${_PARAM[title]}")
 			[[ -n "${_PARAM[description]}" ]] && ADPN_GITLAB_SW+=("--data-description=${_PARAM[description]}")
-			[[ -n "${_PARAM[labels]}" ]] && ADPN_GITLAB_SW+=("--data-labels=${_PARAM[description]}")
+			[[ -n "${_PARAM[labels]}" ]] && ADPN_GITLAB_SW+=("--data-labels=${_PARAM[labels]}")
 		fi
+		[[ -n "${_PARAM[pipe]}" ]] && ADPN_GITLAB_SW+=("--pipe=${_PARAM[pipe]}")
+		[[ -n "${_PARAM[token]}" ]] & ADPN_GITLAB_SW+=( "--token=${_PARAM[token]}" )
 		
 		API_PATH="/issues"
 		
 		[[ -n "${_PARAM[project]}" ]] && PROJECT="${_PARAM[project]}" || PROJECT="${_ARGV[2]}"
-
+		
 		ISSUE_ASPECT=$( printf "%s" "${PROJECT}" | cut --field=3 --delimiter='#' --only-delimited )
 		ISSUE_ID=$( printf "%s" "${PROJECT}" | cut --field=2 --delimiter='#' --only-delimited )
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
@@ -200,7 +202,12 @@ case "${CMD}" in
 		fi
 		
 		F_JSON_OUT=$(mktemp)
-		"${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${_LINESWITCH[token]} ${V} ${DBG} > "${F_JSON_OUT}"
+
+		if [[ -n "${_PARAM[pipe]}" ]] ; then
+			printf "%s" "$( cat - )" | "${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${V} ${DBG} > "${F_JSON_OUT}"
+		else 
+			"${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${V} ${DBG} > "${F_JSON_OUT}"
+		fi
 		EXITCODE="$?"
 
 		if [[ "${_PARAM[output]}" =~ ^(application/)?json$ ]] ; then
@@ -208,6 +215,9 @@ case "${CMD}" in
 		elif [[ "${EXITCODE}" -eq 0 ]] ; then
 			cat "${F_JSON_OUT}" | adpn-json.py --parse "${ADPN_JSON_SW[@]}"
 			EXITCODE="$?"
+		else 
+			printf "[%s] Error from HTTP request (exit code=%d).\n" "${SCRIPT_CMD_NAME}" "${EXITCODE}" 1>&2
+			cat "${F_JSON_OUT}" 1>&2
 		fi
 
 		rm "${F_JSON_OUT}"
@@ -402,6 +412,11 @@ case "${CMD}" in
 				"token"|"context"|"verbose"|"quiet"|"debug"|"dry-run")
 					;;
 				"fail")
+					;;
+				"pipe")
+					PIPED_TEXT="$( cat - )"
+					PIPED_PAIR="$( printf "%s=%s" "${_PARAM[$KEY]}" "${PIPED_TEXT}" )"
+					CURL_SW+=( '--data-urlencode' "${PIPED_PAIR}")
 					;;
 				*)
 					FIELD="${KEY}"

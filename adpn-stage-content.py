@@ -14,7 +14,7 @@ from paramiko import ssh_exception
 from datetime import datetime
 from io import BytesIO
 from ftplib import FTP
-from getpass import getpass
+from getpass import getpass, getuser
 from myLockssScripts import myPyCommandLine, myPyJSON
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 from myFTPStaging import myFTPStaging
@@ -40,6 +40,10 @@ class ADPNStagingArea :
         self.subdirectory = subdirectory
         self.key_protocols = [ "sftp", "scp" ]
         self.authentication = authentication
+    
+    @property
+    def account (self) :
+        return ( "%(user)s@%(host)s" % { "user": self.user, "host": self.host } )
         
     def accept_url(self, url) :
         (host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
@@ -257,6 +261,15 @@ command line with explicit switches.
         canonical = os.path.realpath(file)
         return os.path.dirname(canonical)
 
+    def get_username (self) :
+        return self.switches.get("user/realname", None) if self.switched("user/realname") else getuser()
+    
+    def get_email (self) :
+        return self.switches.get("user/email", None) if self.switched("user/email") else self.stage.account
+    
+    def get_emailname (self) :
+        return ( "%(realname)s <%(email)s>" % { "realname": self.get_username(), "email": self.get_email() } )
+        
     def mkBackupDir (self) :
         backupPath=self.switches['backup']
         
@@ -414,7 +427,7 @@ command line with explicit switches.
                         "path": os.path.realpath(package.get_path()),
                         "code": package._bagit_exitcode
                     })
-                    print ( package._bagit_output, file=sys.stderr)
+                    print ( "\n".join(package._bagit_output), file=sys.stderr)
 
             if self.still_ok :
                 # Let's log in to the host
@@ -447,6 +460,8 @@ command line with explicit switches.
                     "Plugin JAR": self.switches["jar"],
                     "Start URL": au_start_url, # FIXME
                     "Ingest Step": "staged",
+                    "Staged By": self.get_emailname(),
+                    "Staged To": self.stage.account,
                     }
                 
                     for parameter in plugin_parameters :
@@ -504,6 +519,7 @@ if __name__ == '__main__':
             "stage/base": None, "stage/host": None, "stage/user": None, "stage/pass": None, "stage/protocol": None,
             "stage/identity": None, "identity": None,
             "stage/authentication": None, "authentication": None, "password": None,
+            "user/realname": None, "user/email": None,
             "jar": None,
             "subdirectory": None, "directory": None,
             "base_dir": None, "output": "text/plain",
@@ -513,7 +529,7 @@ if __name__ == '__main__':
             "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
             "dummy": None
-    }, configfile=configjson, settingsgroup=["stage", "ftp"]).parse()
+    }, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()
     
     align_switches("identity", "stage/identity", switches)
     align_switches("authentication", "stage/authentication", switches)

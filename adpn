@@ -539,7 +539,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 #
 # @version 2019.0715
 
-		echo "[${SCRIPT} ${CMD}] Staging content..."
+		printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT} ${CMD}"
 
 		JSON_PACKET=$(
 			${SCRIPT} stage "${_ARGV[2]}" "${_ARGV[3]}" \
@@ -550,22 +550,19 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 			echo "[${SCRIPT} ${CMD}] adpn stage failed." 1>&2
 			EXITCODE="${ASC_ERRCODE}"
 		else 
+			
 			[ ! -z "${_PARAM[from]}" ] && FROM="${_PARAM[from]}"  || FROM=$(${SCRIPT} property get "peer")
 			if [[ -z "${FROM}" ]] ; then
 				read -p "From (ALL|<PEER>): " FROM
 			fi
+			
+			DROP_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Staged To" )
+			[[ -n "${DROP_ID}" ]] || DROP_ID="${FROM}"
 
-			AIT_OUTPUT="$(mktemp)"
-			echo "${JSON_PACKET}" | adpn-ingest-test - \
-				--local="${_ARGV[2]}" --peer-from="${FROM}" > "${AIT_OUTPUT}" ; AIT_ERRCODE="$?"
-			cat "${AIT_OUTPUT}"
-			if [[ "${AIT_ERRCODE}" -gt 0 ]] ; then
-				echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
-				EXITCODE="${AIT_ERRCODE}"
-			else
-				cat "${AIT_OUTPUT}" | adpn-do-preserve-email --subject="ADPNet AU for Ingest: ${_PARAM[au_title]}"
-			fi
-			rm "${AIT_OUTPUT}"
+			printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
+			printf "%s" "${JSON_PACKET}" | adpn-do-preserve-email --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}"
+			ADPN_ERRCODE="$?"
+
 		fi
 		;;
 	
