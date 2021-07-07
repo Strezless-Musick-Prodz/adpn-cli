@@ -115,8 +115,22 @@ EOText
 #SUBJECT_TEXT=$( rawurlencode "${SUBJECT_TEXT}" )
 #BODY_TEXT=$( rawurlencode "${BODY_TEXT}" )
 
-printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --pipe=description --project="${DEFAULT_REPOSITORY}" ${V} ${DDBG}
-EXITCODE="$?"
+ADPN_GITLAB_POST_JSON=$(mktemp)
+
+printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
+
+if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
+	ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
+	ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
+	printf "[%s] OK: Issue # %d, URL: <%s>\n" "${SCRIPTNAME}" "${ISSUE_ID}" "${ISSUE_URL}"
+else
+	printf "[%s] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPTNAME}" "${DEFAULT_REPOSITORY}" 1>&2
+	cat "${ADPN_GITLAB_POST_JSON}" 1>&2
+fi
+
+rm "${ADPN_GITLAB_POST_JSON}"
+
+EXITCODE="${ADGIP_EXITCODE}"
 
 ##########################################################################################
 ### SCRIPT: Look to see if Outlook.exe is available. #####################################
