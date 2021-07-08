@@ -497,9 +497,11 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 # Archival Unit (AU) to preserve. E.g.: "w:\WPA\Folder 01"
 #
 # STAGING is an URL specifying the FTP server and the path to the staging area to
-# stage the AU files. E.g.: "ftp://charlesw.johnson@archives.alabama.gov/Lockss/"
+# stage the AU files. E.g.: "sftp://adah@drop.adpn.org/adah/drop_au_content_in_here/"
+# If omitted, content will be staged to the location provided by the stage/base
+# configuration setting (@see adpn property get stage/base)
 #
-# @version 2019.0715
+# @version 2021.0707
 
 		ASC_OUTPUT="$(mktemp)"
 
@@ -547,14 +549,16 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 # Archival Unit (AU) to preserve. E.g.: "w:\WPA\Folder 01"
 #
 # STAGING is an URL specifying the FTP server and the path to the staging area to
-# stage the AU files. E.g.: "ftp://charlesw.johnson@archives.alabama.gov/Lockss/"
+# stage the AU files. E.g.: "sftp://adah@drop.adpn.org/adah/drop_au_content_in_here/"
+# If omitted, content will be staged to the location provided by the stage/base
+# configuration setting (@see adpn property get stage/base)
 #
 # Output: a report containing AU data, file size information, plugin parameters
 # and a JSON packet for use by adpn ingest and adpn publish by Config Manager.
 # Displayed to stdout; if adpn-do-notify can post a notification for the Config Manager
 # this is filled in to the notification.
 #
-# @version 2019.0715
+# @version 2021.0707
 
 		printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT} ${CMD}"
 
