@@ -90,32 +90,56 @@ fi
 [ ! -z "${_PARAM[subject]}" ] && SUBJECT_TEXT="${_PARAM[subject]}" || SUBJECT_TEXT="ADPNet Ingest"
 
 PIPED_TEXT="$( cat "${_ARGV[@]}" )"
-PRETTY_JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json --indent=2 )"
-DEFAULT_REPOSITORY="$( adpnprop gitlab/repository )"
-USER_NAME="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --key="Staged By" )"
-DIRECTORY="${_PARAM[subdirectory]}"
+JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"
+PRETTY_JSON="$( printf "%s" "${JSON}" | adpn-json.py --output=application/json --indent=2 )"
+DEFAULT_REPOSITORY="$( adpn_parameter_from ".gitlab/repository" )"
+USER_NAME="$( adpn_parameter_from ".Staged By<${JSON}" )"
+EXTENT="$( adpn_parameter_from ".File Size<${JSON}" )"
+LOCATION="$( adpn_parameter_from ".Staged To<${JSON}" )"
+SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" )"
+AU_START_URL="$( adpn_parameter_from ".Start URL<${JSON}" )"
+AU_TITLE="$( adpn_parameter_from ".Ingest Title<${JSON}" )"
 
-IFS='' read -r -d '' BODY_TEXT <<EOText
-${USER_NAME} used the \`adpn\` CLI tool to upload files for an ADPNet ingest to the ${LOCATION} staging area, directory: \`${DIRECTORY}\`.
+declare -A TEMPLATE_PARAMS=(
+	[cmd]="${SCRIPT_CMD_NAME}"
+	[timestamp]="$( date )"
+	[user_name]="${USER_NAME}"
+	[extent]="${EXTENT}"
+	[location]="${LOCATION}"
+	[subdirectory]="${SUBDIRECTORY}"
+	[au_start_url]="${AU_START_URL}"
+	[au_title]="${AU_TITLE}"
+	[piped_text]="${PIPED_TEXT}"
+	[json]="${JSON}"
+	[pretty_json]="${PRETTY_JSON}"
+)
 
-AU meta-data output by \`adpn preserve\` follows:
+TEMPLATE_FILE="${SCRIPTDIR}/templates/adpn.notify.md.sprintf"
+if [[ -r "${TEMPLATE_FILE}" ]] ; then
+
+	BODY_TEXT="$( cat "${TEMPLATE_FILE}" )"
+	
+else 
+
+	IFS='' read -r -d '' BODY_TEXT <<EOText
+%(user_name)s used the \`adpn\` CLI tool to upload files for an ADPNet ingest to the `%(location)s` staging area, directory: \`%(subdirectory)s\`.
+
+AU meta-data output by \`%(cmd)s\` follows:
 
 ~~~
 ${PIPED_TEXT}
 ~~~
-
-Pretty-printed JSON packet:
-
-~~~
-${PRETTY_JSON}
-~~~
-
-This ticket has been created automatically by the \`adpn preserve\` command to notify ADPNet Techs that the AU has been staged and is ready to be tested for ingest, and to provide a place to track the work of adding the new AU to the config server.
 EOText
 
-#ADMIN_EMAIL=$( rawurlencode "${ADMIN_EMAIL}" )
-#SUBJECT_TEXT=$( rawurlencode "${SUBJECT_TEXT}" )
-#BODY_TEXT=$( rawurlencode "${BODY_TEXT}" )
+fi
+
+for KEY in "${!TEMPLATE_PARAMS[@]}" ; do
+
+	SEARCH="%(${KEY})s"
+	REPLACE="${TEMPLATE_PARAMS[$KEY]}"
+	
+	BODY_TEXT="${BODY_TEXT//${SEARCH}/${REPLACE}}"
+done
 
 ADPN_GITLAB_POST_JSON=$(mktemp)
 

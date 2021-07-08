@@ -1,0 +1,47 @@
+***This ticket has been created automatically by the `%(cmd)s` command-line tool for %(user_name)s at %(timestamp)s, using a template provided by the script.***
+
+%(user_name)s used the the `%(cmd)s` CLI tool to upload %(extent)s for distributed preservation in ADPNet.
+The AU has been staged on the `%(location)s` staging area, subdirectory: `%(subdirectory)s`.
+
+| | |
+| -- | -- |
+| AU Title | %(au_title)s |
+| AU Start URL | <%(au_start_url)s> |
+| File Size | %(extent)s |
+
+### Archival Unit Meta-Data ###
+
+Here is the pipeline output produced by `%(cmd)s`:
+
+~~~
+%(piped_text)s
+~~~
+
+### Pretty-Printed JSON ###
+
+~~~
+%(pretty_json)s
+~~~
+
+### Tool Chain: ###
+
+*    **STAGED** by `%(cmd)s` at %(timestamp)s
+
+*    **TO VERIFY:** use `adpn verify` module to check retrieval of the start URL on the
+     1st crawl Host. Reference: <https://gitlab.com/adpnet/adpn-cli/-/wikis/adpn-verify>
+
+*    **1ST CRAWL:** (1) use `adpn accept` module to make AU visible to the 1st crawl Host.
+     (2) Initiate crawl from LOCKSS daemon and confirm successful harvest of content. 
+     Reference: <https://gitlab.com/adpnet/adpn-cli/-/wikis/adpn-accept>
+
+*    **2ND CRAWL:** (1) use `adpn accept` module to make AU visible to the 2nd crawl Host.
+     (2) Initiate crawl from LOCKSS daemon and confirm successful harvest of content.
+     Reference: <https://gitlab.com/adpnet/adpn-cli/-/wikis/adpn-accept>
+
+*    **TO PROMOTE AU:** (1) use `adpn promote` module to make AU visible to entire network.
+     (2) Announce availability of AU to ADPNet Host members.
+     Reference: <https://gitlab.com/adpnet/adpn-cli/-/wikis/adpn-promote>
+
+*    **MANUAL BACKUP:** In case of any speed-bumps or breakdowns in the
+     process, fall back to manual ingest.
+     Reference: <https://gitlab.com/adpnet/adpn---general/-/wikis/Adding%20content%20to%20ADPN%20manually>
