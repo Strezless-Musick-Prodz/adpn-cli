@@ -532,6 +532,11 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		
 		EXITCODE="${ASC_ERRCODE}"
 		;;
+
+	"notify")
+		adpn-do-notify --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}"
+		EXITCODE="$?"
+		;;
 		
 	"preserve")
 # @method adpn preserve
