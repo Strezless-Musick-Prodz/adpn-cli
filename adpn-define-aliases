@@ -2,11 +2,57 @@
 #
 # adpn-define-aliases: some basic subroutines used across many of the adpn suite of scripts
 #
-# @version 2019.1016
+# @version 2021.0708
 
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
+
+# adpn_parameter_from: retrieve and echo a property that may be found in one of several possible sources for parameter data, including
+# command-line switches, JSON configuration files, live JSON data, user console input, and fall-back defaults.
+# example: FOOBAR=$( adpn_parameter_from "--foo" "--bar" ".baz" "<FOO [bar]: " )
+#
+# --SWITCH: accept a parameter from the command-line switch named SWITCH
+# .PROPERTY: accept a parameter from the key-value pair in the data provided by the standard configuration JSON file (typically adpnet.json)
+# .PROPERTY<{JSON DATA}: accept a parameter from the key-value pair in the JSON DATA provided
+# <PROMPT: accept a parameter interactively from user input, using the text in PROMPT as a prompt
+# TEXT: use the literal text provided as a default value if previous sources have failed
+# \TEXT: use the literal text provided as a default value if previous sources have failed; the backslash allows for text beginning with special characters like "--", ".", "<" or "\"
+#
+# @version 2021.0708
+
+function adpn_parameter_from() {
+	RESULT="" ; EXITCODE=2
+	
+	while [[ "$#" -gt 0 && "${EXITCODE}" -gt 0 ]] ; do
+		local source="${1}" ; shift
+		if [[ "${source}" =~ ^(--|!!)(.*)$ ]] ; then
+			KEY="${BASH_REMATCH[2]}"
+			if [[ -v _PARAM[$KEY] ]] ; then
+				RESULT="${_PARAM[$KEY]}" ; EXITCODE=0
+			fi
+		elif [[ "${source}" =~ ^[.]([^\<]+)([\<](.*))?$ ]] ; then
+			KEY="${BASH_REMATCH[1]}"
+			JSON="${BASH_REMATCH[3]}"
+			if [[ -n "${JSON}" ]] ; then
+				RESULT="$( printf "%s" "${JSON}" | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
+			else
+				RESULT="$( adpnprop "${KEY}" )" ; EXITCODE="$?"
+			fi
+		elif [[ "${source}" =~ ^[\<](.*)$ ]] ; then
+			read -p "${BASH_REMATCH[1]}" RESULT ; EXITCODE="$?"
+			[[ -z "${RESULT}" ]] && EXITCODE=1
+		elif [[ "${source}" =~ ^\\(.*)$ ]] ; then
+			RESULT="${BASH_REMATCH[1]}" ; EXITCODE=0
+		else 
+			RESULT="${source}" ; EXITCODE=0
+		fi
+		
+	done
+	
+	printf "%s" "${RESULT}"
+	return "${EXITCODE}"
+}
 
 # adpnprop: retrieve and echo a property from the adpnet.json config file
 # example: FOOBAR=$( adpnprop "${KEY}" )
@@ -288,16 +334,26 @@ function adpn_help_notes () {
 function adpn_setting() {
 	local switch="${1}"
 	local prop="${2}"
+	local default="${3}"
 	
 	if [[ -z "${prop}" ]] ; then
 		prop="${1}"
 	fi
 	
-	if [[ ! -z "${_PARAM[$switch]}" ]] ; then
-		printf "%s" "${_PARAM[$switch]}"
-	else
-		adpnprop "${prop}"
+	[[ -n "${_PARAM[$switch]}" ]] && RESULT="${_PARAM[$switch]}" || RESULT="$( adpnprop "${prop}" )"
+	
+	if [[ -z "${RESULT}" ]] ; then
+		if [[ "${default}" =~ ^[\<](.*)\s*$ ]] ; then
+			prompt="${BASH_REMATCH[1]}"
+			read -p "${prompt}" RESULT
+		elif [[ "${default}" =~ ^\\(.*)$ ]] ; then
+			RESULT="${BASH_REMATCH[1]}"
+		else 
+			RESULT="${default}"
+		fi
 	fi
+	
+	printf "%s" "${RESULT}"
 }
 
 function echo_header() {
