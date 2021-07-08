@@ -108,6 +108,14 @@ else
 	DDBG=""
 fi
 
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+	if [[ -n "${CMD}" ]] ; then
+		SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+	fi
+fi
+
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
 		CMD="version"
