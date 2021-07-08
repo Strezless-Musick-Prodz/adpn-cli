@@ -565,30 +565,32 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 #
 # @version 2021.0707
 
-		printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT} ${CMD}"
-
-		JSON_PACKET=$(
-			${SCRIPT} stage "${_ARGV[2]}" "${_ARGV[3]}" \
-			--au_title="${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}"
-		) ; ASC_ERRCODE="$?"
+		AU_LOCALPATH="${_ARGV[2]}"
+		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
+		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
 		
-		if [[ "${ASC_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn stage failed." 1>&2
-			EXITCODE="${ASC_ERRCODE}"
+		STAGING_AREA="${_ARGV[3]}"
+		
+		FROM="$( adpn_parameter_from "--from" "--peer" ".peer" "<From (<PUBLISHER>): " )"
+		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
+		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title: " )"
+
+		[[ -z "${V}" ]] || printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT_CMD_NAME}"
+		
+		JSON_PACKET=$(
+			${ME} stage "${AU_LOCALPATH}" "${STAGING_AREA}" \
+			--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}"
+		) ; EXITCODE="$?"
+		
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s] %s stage FAILED.\n" "${SCRIPT_CMD_NAME}" "${SCRIPT}" 1>&2
 		else 
-			
-			[ ! -z "${_PARAM[from]}" ] && FROM="${_PARAM[from]}"  || FROM=$(${SCRIPT} property get "peer")
-			if [[ -z "${FROM}" ]] ; then
-				read -p "From (ALL|<PEER>): " FROM
-			fi
-			
-			DROP_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Staged To" )
-			[[ -n "${DROP_ID}" ]] || DROP_ID="${FROM}"
+			DROP_ID=$( adpn_parameter_from ".Staged To<${JSON_PACKET}" "\\${FROM}" )
 
-			printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
-			printf "%s" "${JSON_PACKET}" | adpn-do-notify --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT} ${CMD}"
-			ADPN_ERRCODE="$?"
+			[[ -z "${V}" ]] || printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
+			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ; ADN_ERRCODE="$?"
 
+			EXITCODE="${ADN_ERRCODE}"
 		fi
 		;;
 	
