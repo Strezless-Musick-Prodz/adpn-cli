@@ -689,95 +689,78 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		fi
 		;;
 		
-	"post"|"ingest")
-# @method adpn post
+	"accept"|"post"|"ingest")
+# @method adpn accept
 # Config Manager: accept JSON data specifying a new AU for ingest,
 # test connection to the staging server and verify parameters; then
 # insert into local titlesdb and confirm insertion.
 #
-# Usage: adpn post [-|<JSONFILE>] [<OPTIONS>]...
+# Usage: adpn accept [-|<JSONFILE>] [<OPTIONS>]...
 #
 # Options:
 #   --from=<PEER>       	code for origin node (AUB, ADAH, etc.); overrides JSON data
-#   --to=ALL|<PEER>     	node to publish to (AUB, ADAH...; ALL=entire network)	
+#   --for=ALL|<PEER>     	node to publish to (AUB, ADAH...; ALL=entire network)
+#   --to=ALL|<PEER>     	synonym for --for=<NODE>
 #   --dry-run           	output SQL script for titlesdb insert but do not execute
 #   --sqldump=<SQLFILE> 	output SQL script for titlesdb to this file
 #
-# @version 2021.0420
+# @version 2021.0708
+
+# @method adpn post
+# Config Manager: synonym for `adpn accept`
+#
+# @version 2021.0708
 
 # @method adpn ingest
-# Config Manager: synonym for `adpn post`
+# Config Manager: synonym for `adpn accept`
 #
 # @version 2021.0420
 
 		AV_OUTPUT="$(mktemp)"
 		
-		if [[ "${_PARAM[pipeline]}" ]] ; then
-			PIPELINE="${_LINESWITCH[pipeline]}"
-		else
-			PIPELINE="--pipeline=verified:ingested"
-		fi
-		
-		"${ME}" verify "${_CMDLINE[@]:2}" ${PIPELINE} > "${AV_OUTPUT}"
-		AV_ERRCODE="$?"
+		PIPELINE="$( adpn_parameter_from "--pipeline" "verified:ingested" )"
+		"${ME}" verify "${_CMDLINE[@]:2}" --pipeline="${PIPELINE}" > "${AV_OUTPUT}"
+		EXITCODE="$?"
 
 		cat "${AV_OUTPUT}" ; echo
 		JSON_PACKET=$(grep "^JSON PACKET:" "${AV_OUTPUT}" | cut --fields=2-)
 		
 		rm "${AV_OUTPUT}"
 		
-		if [[ "${AV_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] ${SCRIPT} verify failed." 1>&2
-			EXITCODE="${AV_ERRCODE}"
-		
-		else 
-
-			INGEST_FROM="${_PARAM[from]}"
-			if [[ -z "${INGEST_FROM}" ]] ; then
-				INGEST_FROM=$(echo "${JSON_PACKET}" | adpn-json.py --key="From Peer")
-				if [[ -z "${INGEST_FROM}" ]] ; then
-					read -p "From (ALL|<PEER>): " INGEST_FROM
-				fi
-			fi
-
-			INGEST_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-			if [[ -z "${INGEST_TO}" ]] ; then
-				INGEST_TO=$(echo "${JSON_PACKET}" | adpn-json.py --key="To Peer")
-				if [[ -z "${INGEST_TO}" ]] ; then
-					read -p "To (ALL|<PEER>): " INGEST_TO
-				fi
-			fi
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] %s verify FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
 			
-			INGEST_DRY_RUN="$( [[ ! -z "${_PARAM[dry-run]}" ]] && printf "%s" "--dry-run" || printf "%s" "" )"
+		else 
+			
+			INGEST_FROM="$( adpn_parameter_from "--from" ".From Peer<${JSON_PACKET}" "<From (<PEER>): " )"
+			INGEST_TO="$( adpn_parameter_from "--for" "--to" "--peer" ".To Peer<${JSON_PACKET}" "<To (ALL|<PEER>): " )"
 			
 			adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
-
+			
 			AIIT_OUTPUT="${_PARAM[sqldump]}"
 			if [[ -z "${AIIT_OUTPUT}" ]] ; then
-				[[ -z "${INGEST_DRY_RUN}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+				[[ -z "${_PARAM[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
 			fi
 			
 			adpn-ingest-into-titlesdb.py --snapshot
-			echo "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py ${INGEST_DRY_RUN} --from="${INGEST_FROM}" --to="${INGEST_TO}" > "${AIIT_OUTPUT}" ; AIIT_ERRCODE="$?"
+			printf "%s" "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py --from="${INGEST_FROM}" --to="${INGEST_TO}" ${_LINESWITCH[dry-run]} > "${AIIT_OUTPUT}" ; EXITCODE="$?"
 			
-			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
-				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
-				EXITCODE="${AIIT_ERRCODE}"
+			if [[ "${EXITCODE}" -gt 0 ]] ; then
+				printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 			else
 				adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; ATD_ERRCODE="$?"
-				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${INGEST_DRY_RUN}"  ]] ; then
-					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
+				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_PARAM[dry-run]}"  ]] ; then
+					printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 					EXITCODE="${ATD_ERRCODE}"
 				elif [[ -z "${_PARAM[context]}" ]] ; then
-					echo "" 1>&2
-					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit posted to ${INGEST_TO} titlesdb." 1>&2
+					printf "\n[%s:%d] DONE: Archival Unit posted to %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${INGEST_TO}" 1>&2
 				fi
 			fi
 		fi
 		;;
 		
 	"promote"|"publish")
-# @method adpn publish
+# @method adpn promote
 # Config Manager: accept JSON data specifying a new AU for ingest,
 # test connection to the staging server and verify parameters; then
 # insert into titlesdb for whole network and confirm insertion.
@@ -798,7 +781,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 
 		AI_OUTPUT="$(mktemp)"
-		"${ME}" post "${_CMDLINE[@]:2}" --to=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
+		"${ME}" accept "${_CMDLINE[@]:2}" --for=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -807,7 +790,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		rm "${AI_OUTPUT}"
 
 		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] ${SCRIPT} post failed." 1>&2
+			echo "[${SCRIPT} ${CMD}] ${SCRIPT} accept failed." 1>&2
 			EXITCODE="${AI_ERRCODE}"
 		
 		else
