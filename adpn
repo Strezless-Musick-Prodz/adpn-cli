@@ -13,7 +13,7 @@ ME="${SCRIPTPATH}"
 source "${SCRIPTDIR}/adpn-define-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
-__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__HELP__="Try '${SCRIPT} help' for more information."
 __DOC__="""${__USAGE__}
 
   --version 	Display the version of the script
@@ -22,8 +22,8 @@ __DOC__="""${__USAGE__}
 The most commonly used ${SCRIPT} commands are:
   preserve  	ADPNet Member: prepare an AU for preservation and notify config manager
   verify    	Node Manager: accept an AU from Member, test, and confirm accessibility from your node
-  ingest    	Config Manager: accept a verified AU from Node, test, and insert into titlesdb
-  publish   	Config Manager: publish an accepted Member's AU to the entire network
+  accept    	Config Manager: accept a verified AU from Node, test, and insert into titlesdb
+  promote   	Config Manager: publish an accepted Member's AU to the entire network
   help      	Display usage notes for the ${SCRIPT} script or for a given command
   
 Exit codes:
@@ -131,8 +131,8 @@ fi
 
 case "${CMD}" in
 	"")
-		echo "[${SCRIPT}] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} ingest', etc.)" 1>&2
-		echo "${__HELP__}" 1>&2
+		printf "[%s:%d] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} ingest', etc.)\n" "${SCRIPT}" "${LINENO}" 1>&2
+		printf "[%s:%d] %s\n" "${SCRIPT}" "${LINENO}" "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
 	
@@ -199,16 +199,16 @@ case "${CMD}" in
 				"${_CMDLINE[0]}" "${_CMDLINE[@]:3}" ${TESTFILE}
 				EXITCODE="$?"
 			else
-				echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
-				echo "" 1>&2
-				echo "Available tests:" 1>&2
+				printf "[%s:%d] Use '%s [<TESTCODE>]'.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
+				printf "\n" 1>&2
+				printf "Available tests:\n" 1>&2
 				cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
 				EXITCODE=255
 			fi
 		else
-			echo "[${SCRIPT} ${CMD}] Use '${SCRIPT} ${CMD} [<TESTCODE>]'." 1>&2
-			echo "" 1>&2
-			echo "Available tests:" 1>&2
+			printf "[%s:%d] Use '%s [<TESTCODE>]'.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
+			printf "\n" 1>&2
+			printf "Available tests:\n" 1>&2
 			cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
 			EXITCODE=255
 		fi
@@ -478,7 +478,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				EXITCODE=0
 				;;
 			*)
-				echo "[${SCRIPT} ${CMD}] '${SUBCMD}' command not understood." 1>&2
+				printf "[%s:%d] '%s' command not understood.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SUBCMD}" 1>&2
 				EXITCODE=255
 				;;
 		esac
@@ -712,7 +712,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		done
 
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn-ingest-test failed." 1>&2
+			printf "[%s:%d] adpn-ingest-test FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 		fi
 		;;
 		
@@ -817,12 +817,12 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		rm "${AI_OUTPUT}"
 
 		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] ${SCRIPT} accept failed." 1>&2
+			printf "[%s:%d] ${SCRIPT} accept FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
 			EXITCODE="${AI_ERRCODE}"
 		
 		else
 			printf "\n" 1>&2
-			printf "[${SCRIPT} ${CMD}] DONE: Archival Unit published to titlesdb.\n" 1>&2
+			printf "[%s:%d] DONE: Archival Unit published to titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 
 			TDB_XML=$( adpnprop "props/titlesdb.xml" )
 			if [[ -r "${TDB_XML}" ]] ; then
@@ -854,7 +854,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 			else 
 			
-				printf "[${SCRIPT} ${CMD}] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n" "${TDB_XML}" 1>&2
+				printf "[%s:%d] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${SCRIPT_CMD_NAME}" "${LINENO}" "${TDB_XML}" 1>&2
 				
 			fi
 			
@@ -971,16 +971,16 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 			AIIT_ERRCODE="$?"
 			
 			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
-				echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
+				printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 				EXITCODE="${AIIT_ERRCODE}"
 			else
 				adpn-titlesdb-diff --after "${FLAG_TO}" ${V} ; ATD_ERRCODE="$?"
 				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_LINESWITCH[dry-run]}"  ]] ; then
-					echo "[${SCRIPT} ${CMD}] adpn-titlesdb-diff failed." 1>&2
+					printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 					EXITCODE="${ATD_ERRCODE}"
 				elif [[ -z "${_PARAM[context]}" ]] ; then
-					echo "" 1>&2
-					echo "[${SCRIPT} ${CMD}] DONE: Archival Unit flagged with ${AIIT_PARAM_KEY}='${AIIT_PARAM_VALUE}' on ${FLAG_TO} titlesdb." 1>&2
+					printf "\n" 1>&2
+					printf "[%s:%d] DONE: Archival Unit flagged with %s='%s' on %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${FLAG_TO}" 1>&2
 				fi
 			fi
 
@@ -991,7 +991,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		done
 
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			echo "[${SCRIPT} ${CMD}] adpn-ingest-into-titlesdb.py failed." 1>&2
+			printf "[%s:%d] %s FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
 		fi
 		;;
 		
@@ -1104,8 +1104,8 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		;;
 		
 	*)
-		echo "[${SCRIPT}] '${CMD}' command not understood." 1>&2
-		echo "${__HELP__}" 1>&2
+		printf "[%s:%d] '%s' command not understood.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
+		printf "[%s:%d] %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
 esac
