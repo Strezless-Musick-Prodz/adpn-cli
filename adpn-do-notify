@@ -86,12 +86,10 @@ if [[ -n "${QQ}" ]] ; then
 	Q="--quiet"
 fi
 
-[ ! -z "${_PARAM[to]}" ] && ADMIN_EMAIL="${_PARAM[to]}" || ADMIN_EMAIL=$(adpnprop preserve/admin-email)
-[ ! -z "${_PARAM[subject]}" ] && SUBJECT_TEXT="${_PARAM[subject]}" || SUBJECT_TEXT="ADPNet Ingest"
-
 PIPED_TEXT="$( cat "${_ARGV[@]}" )"
 JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"
 PRETTY_JSON="$( printf "%s" "${JSON}" | adpn-json.py --output=application/json --indent=2 )"
+STAGED_TO="$( adpn_parameter_from "--from" ".Staged To<${JSON}" )"
 DEFAULT_REPOSITORY="$( adpn_parameter_from ".gitlab/repository" )"
 USER_NAME="$( adpn_parameter_from ".Staged By<${JSON}" )"
 EXTENT="$( adpn_parameter_from ".File Size<${JSON}" )"
@@ -99,9 +97,11 @@ LOCATION="$( adpn_parameter_from ".Staged To<${JSON}" )"
 SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" )"
 AU_START_URL="$( adpn_parameter_from ".Start URL<${JSON}" )"
 AU_TITLE="$( adpn_parameter_from ".Ingest Title<${JSON}" )"
+LABELS="$( adpn_parameter_from "--labels" "Content Ingest" )"
 
 declare -A TEMPLATE_PARAMS=(
 	[cmd]="${SCRIPT_CMD_NAME}"
+	[staged_to]="${STAGED_TO}"
 	[timestamp]="$( date )"
 	[user_name]="${USER_NAME}"
 	[extent]="${EXTENT}"
@@ -114,14 +114,20 @@ declare -A TEMPLATE_PARAMS=(
 	[pretty_json]="${PRETTY_JSON}"
 )
 
+###############################################################################
+## FORMAT TEMPLATE TEXT #######################################################
+###############################################################################
+
 TEMPLATE_FILE="${SCRIPTDIR}/templates/adpn.notify.md.sprintf"
 if [[ -r "${TEMPLATE_FILE}" ]] ; then
 
-	BODY_TEXT="$( cat "${TEMPLATE_FILE}" )"
+	TEMPLATE_TEXT="$( cat "${TEMPLATE_FILE}" )"
 	
 else 
 
-	IFS='' read -r -d '' BODY_TEXT <<EOText
+	IFS='' read -r -d '' TEMPLATE_TEXT <<EOText
+Add AU from %(staged_to)s: %(subdirectory)s - %(au_title)s
+==========================================================
 %(user_name)s used the \`adpn\` CLI tool to upload files for an ADPNet ingest to the `%(location)s` staging area, directory: \`%(subdirectory)s\`.
 
 AU meta-data output by \`%(cmd)s\` follows:
@@ -138,19 +144,48 @@ for KEY in "${!TEMPLATE_PARAMS[@]}" ; do
 	SEARCH="%(${KEY})s"
 	REPLACE="${TEMPLATE_PARAMS[$KEY]}"
 	
-	BODY_TEXT="${BODY_TEXT//${SEARCH}/${REPLACE}}"
+	TEMPLATE_TEXT="${TEMPLATE_TEXT//${SEARCH}/${REPLACE}}"
+
 done
+
+declare -a BODY_TEXT_SECTIONS=( )
+
+SECT="$( printf "%s" "${TEMPLATE_TEXT}" | sed -E -n '0,/^\s*=+\s*$/p' )"
+if [[ -n "${SECT}" ]] ; then
+	BODY_TEXT_SECTIONS+=( "${SECT}" )
+fi
+
+SECT="$( printf "%s" "${TEMPLATE_TEXT}" | sed -E -n '/^\s*=+\s*$/,$p' )"
+if [[ -n "${SECT}" ]] ; then
+	BODY_TEXT_SECTIONS+=( "${SECT}" )
+fi
+
+if [[ "${#BODY_TEXT_SECTIONS[@]}" -gt 1 ]] ; then
+	SUBJECT_TEXT="$( printf "%s" "${BODY_TEXT_SECTIONS[0]}" | head -n 1 )"
+	BODY_TEXT="$( printf "%s" "${BODY_TEXT_SECTIONS[1]}" | tail -n +2 )"
+else
+	SUBJECT_TEXT="$( adpn_parameter_from "--subject" "ADPNet Ingest" )"
+	BODY_TEXT="${BODY_TEXT_SECTIONS[0]}"
+fi
+
+###############################################################################
+## EXECUTE ADPN-DO-GITLAB SCRIPT ##############################################
+###############################################################################
 
 ADPN_GITLAB_POST_JSON=$(mktemp)
 
-printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
+printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
 
 if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
+	if [[ "${DBG}" ]] ; then
+		printf "[%s:%d] adpn-do-gitlab result: %s" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ADPN_GITLAB_POST_JSON}" 1>&2
+	fi
+
 	ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
 	ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
-	printf "[%s] OK: Issue # %d, URL: <%s>\n" "${SCRIPT_CMD_NAME}" "${ISSUE_ID}" "${ISSUE_URL}"
+	printf "[%s:%d] OK: Issue # %d, URL: <%s>\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" "${ISSUE_URL}"
 else
-	printf "[%s] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPT_CMD_NAME}" "${DEFAULT_REPOSITORY}" 1>&2
+	printf "[%s:%d] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${DEFAULT_REPOSITORY}" 1>&2
 	cat "${ADPN_GITLAB_POST_JSON}" 1>&2
 fi
 

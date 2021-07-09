@@ -534,7 +534,12 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		;;
 
 	"notify")
-		adpn-do-notify --subject="Add AU from ${DROP_ID}: ${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}"
+# @method adpn notify
+# ADPNet Member: Post a notification of a staged AU 
+#
+# @version 2021.0709
+
+		adpn-do-notify --from="${_PARAM[from]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V}
 		EXITCODE="$?"
 		;;
 		
@@ -588,7 +593,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 			DROP_ID=$( adpn_parameter_from ".Staged To<${JSON_PACKET}" "\\${FROM}" )
 
 			[[ -z "${V}" ]] || printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
-			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${_PARAM[subdirectory]} - ${_PARAM[au_title]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ; ADN_ERRCODE="$?"
+			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V} ; ADN_ERRCODE="$?"
 
 			EXITCODE="${ADN_ERRCODE}"
 		fi
