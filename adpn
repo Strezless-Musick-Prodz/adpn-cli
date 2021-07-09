@@ -535,7 +535,20 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 	"notify")
 # @method adpn notify
-# ADPNet Member: Post a notification of a staged AU 
+# ADPNet Member: Post a notification of a staged AU for the ADPNet Config Manager
+# to accept from the staging server.
+#
+# Usage: printf "%s" "<JSON_INPUT>" | adpn notify [--from=<FROM>] [--subdirectory=<SLUG>]
+#
+#   --from=<FROM>        	ID of the staging area that this AU should be harvested from
+#   --subdirectory=<DIR> 	AU subdirectory on staging server
+#
+# JSON_INPUT is the JSON-formatted metadata packet produced by a script command like
+# `adpn stage` after packaging and staging the AU on an ADPNet staging server. E.g.:
+#
+# ~~~
+# JSON PACKET: { "Ingest Title": "...", "File Size": "...", "From Peer": "ADAH", [...] }
+# ~~~
 #
 # @version 2021.0709
 
