@@ -19,37 +19,28 @@ source "${SCRIPTDIR}/adpn-define-aliases"
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=( )
+
 shopt -s lastpipe
 
 declare -a SWITCHFILES ; SWITCHFILES=()
-declare -a _ARGV ; _ARGV=()
-declare -A _PARAM ; _PARAM=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
 
 CMDLINETXT=$(mktemp)
 
-until [[ -z "$1" ]] ; do
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
 
 SWITCHFILES+=(${CMDLINETXT})
 
-cat "${SWITCHFILES[@]}" | while IFS="" read -r SWITCH ; do
-
-	if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=\s*(.*)\s*)?$ ]] ; then
-		KEY="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[3]}"
-		if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-			VALUE="${KEY}"
-		fi
-
-		_PARAM[$KEY]="${VALUE}"
-		
-	elif [[ ! -z "${SWITCH}" ]] ; then
-		_ARGV+=("${SWITCH}")
-	fi
-	
-done
+adpn_command_line "${SWITCHFILES[@]}"
 
 rm "${CMDLINETXT}"
 
@@ -59,7 +50,7 @@ if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
 fi
 
 ##########################################################################################
-### SCRIPT: Get admin e-mail address, subject, and body from config, cmd line or stdin ###
+### PARAMETERS: GET PARAMETER VALUES FROM COMMAND LINE AND JSON INPUT ####################
 ##########################################################################################
 
 VV="${_LINESWITCH[verbose]}"
@@ -86,7 +77,7 @@ if [[ -n "${QQ}" ]] ; then
 	Q="--quiet"
 fi
 
-PIPED_TEXT="$( cat "${_ARGV[@]}" )"
+PIPED_TEXT="$( cat "${_ARGV[@]:1}" )"
 JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"
 PRETTY_JSON="$( printf "%s" "${JSON}" | adpn-json.py --output=application/json --indent=2 )"
 STAGED_TO="$( adpn_parameter_from "--from" ".Staged To<${JSON}" )"
@@ -178,7 +169,7 @@ printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT
 
 if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
 	if [[ "${DBG}" ]] ; then
-		printf "[%s:%d] adpn-do-gitlab result: %s" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ADPN_GITLAB_POST_JSON}" 1>&2
+		printf "[%s:%d] adpn-do-gitlab result: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "$( cat "${ADPN_GITLAB_POST_JSON}" )" 1>&2
 	fi
 
 	ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
