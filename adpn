@@ -592,7 +592,16 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		FROM="$( adpn_parameter_from "--from" "--peer" ".peer" "<From (<PUBLISHER>): " )"
 		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
 		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title: " )"
-
+		AU_INSTITUTION="$( adpn_parameter_from "--institution" ".institution" )"
+		
+		if [[ -n "${AU_TITLE}" ]] ; then
+			if [[ ! ( "${AU_TITLE}" =~ ^${AU_INSTITUTION} ) ]] ; then
+				AU_TITLE="$( printf "%s: %s" "${AU_INSTITUTION}" "${AU_TITLE}" )"
+			fi
+		else
+			AU_TITLE="$( printf "%s: AU from %s" "${AU_INSTITUTION}" "${SUBDIRECTORY}" )"
+		fi
+		
 		[[ -z "${V}" ]] || printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT_CMD_NAME}"
 		
 		JSON_PACKET=$(
