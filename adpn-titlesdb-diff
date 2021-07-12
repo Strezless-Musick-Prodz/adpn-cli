@@ -51,7 +51,7 @@ source "${SCRIPTDIR}/adpn-define-aliases"
 _CMDLINE="$0 $*"
 
 declare -a _ARGV ; _ARGV=("$0")
-declare -A _PARAM ; _PARAM=([props-server]="" [xmldir]="" [wget]="" )
+declare -A _PARAM ; _PARAM=()
 
 shopt -s lastpipe
 
