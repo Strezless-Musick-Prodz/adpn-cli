@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 #
-# adpn-get-keypass.py: retrieve a stored password or token information stored in an
+# adpn-get-keepass.py: retrieve a stored password or token information stored in an
 # encrypted .kdbx (KeePass) database.
 #
 # @version 2021.0706
 
-import io, os, sys
+import io, os, stat, sys
 import pykeepass
 from pykeepass import PyKeePass
 from getpass import getpass
@@ -29,7 +29,7 @@ the user will be prompted to provide it interactively.
   --title=<TITLE>               the title of the key requested from the database
   --regex=<REGULAR-EXPRESSION>  a regular expression to match the title of the key requested from the database
   --all                         if provided, return ALL keys that match the requested title or regular expression pattern; if not, return the first matching key
-  
+  --set                         if provided, then SET the password for the selected key to the first line of text on STDIN
     """
     
     def __init__ (self, scriptpath, argv, switches) :
@@ -127,8 +127,14 @@ the user will be prompted to provide it interactively.
             kp = None
             request_passphrase = True
         except FileNotFoundError as e :
-            kp = None
-            self.write_error(1, ("FAILED: could not open KeePass database [%(database)s]" % {"database": self.database_file}))
+            if self.switched('create') :
+                kp = pykeepass.create_database(self.database_file, password=self.get_password())
+                kp.add_group(kp.root_group, "ADPNet")
+                self.write_error(0, ("CREATED: created new KeePass database [%(database)s]" % {"database": self.database_file}))
+
+            else :
+                kp = None
+                self.write_error(1, ("FAILED: could not open KeePass database [%(database)s]" % {"database": self.database_file}))
         
         if request_passphrase :
             
@@ -150,26 +156,62 @@ the user will be prompted to provide it interactively.
         return kp
 
     def execute (self) :
+        dirty = False
+        
         if self.switched('database') :
 
             try :
                 kp = self.read_keepass_database()
                 entries = kp.find_entries( title=self.entry_title, first=False, regex=self.entry_title_use_regex )
-                
+
                 if len(entries) > 0 :
                     if not self.switched('all') :
                         entries = [ entries[0] ]
                     for entry in entries :
-                        self.write_entry(entry)
+                        if self.switched('set') :
+                            next_line = sys.stdin.readline()
+                            if next_line :
+                                next_line.strip("\n")
+                                entry.password = next_line
+                                dirty = True
+                                self.write_error(0, "Set password for %(key)s to %(stars)s" % { "key": entry.title, "stars": "*" * len(next_line) })
+                                
+                        else :
+                            self.write_entry(entry)
+                
+                elif ( self.switched('create') or self.switched('set') ) and not self.entry_title_use_regex :
+                    self.write_error(0, "CREATE/SET: KeePass database [%(database)s] accessed, creating key '%(key)s'..." % { "database": self.database_file, "key": self.entry_title })
+                    group = kp.find_groups(name="ADPNet", first=True)
+                    if group is None :
+                        group = kp.root_group
+
+                    mode = os.fstat(sys.stdin.fileno()).st_mode
+                    if stat.S_ISFIFO(mode) or stat.S_ISREG(mode) :
+                        # Piped or redirected stdin
+                        received_username = self.entry_title
+                        received_password = sys.stdin.readline()
+                        if received_password : 
+                            received_password.strip("\n")
+                    else :
+                        # Terminal
+                        received_username = input("Username [%(username)s]: " % { "username": self.entry_title } )
+                        received_password = getpass("Password: ")
+                        
+                    kp.add_entry(group, title=self.entry_title, username=received_username, password=received_password)
+                    dirty = True
+                    
                 else :
                     self.write_error(3, "FAILED: KeePass database [%(database)s] accessed, but no such key ['%(key)s'] found" % { "database": self.database_file, "key": self.entry_title })
 
             except KeyError as e :
                 pass
-                
+            
         else :
             self.write_error(1, "REQUIRED: path to KeePass database must be provided in --database='...'")
             
+        if dirty :
+            kp.save()
+
     def exit (self) :
         sys.exit(self.exitcode)
 
@@ -195,6 +237,7 @@ if __name__ == '__main__':
         "database": None, "output": "text/plain",
         "password": None, "keyfile": None,
         "title": None, "regex": None, "all": None,
+        "set": None, "create": None,
         "help": None, "version": None
     }, configfile=configjson).parse()
        
