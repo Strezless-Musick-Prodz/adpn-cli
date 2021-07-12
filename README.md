@@ -11,7 +11,7 @@ network:
 * `adpn verify` allows the manager of an ADPNet preservation node to verify that
   a submitted AU is accessible from their preservation node.
   
-* `adpn ingest` allows the manager of the ADPNet network props server to accept
+* `adpn accept` allows the manager of the ADPNet network props server to accept
   a verified AU and prepare a test node for test crawls of the resource.
   
 * `adpn publish` allows the manager of the ADPNet network props server to mark
@@ -90,7 +90,7 @@ adpn verify
 -----------
 Verify that the start URL for an AU submitted by a publisher is valid and can be
 successfully crawled from the current preservation node. Also prepares data to
-be piped in to `adpn ingest` or `adpn publish` on the ADPNet props server.
+be piped in to `adpn accept` or `adpn promote` on the ADPNet props server.
 
 Usage:
 
@@ -131,7 +131,7 @@ URL RETRIEVAL TESTS:
 200     OK      au_start_url    http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/Digitization-Masters-Q-numbers-Master-Q0000106501_Q0000107000m/manifest.html     "%s%s/manifest.html", base_url, directory
 ~~~
 	
-adpn ingest
+adpn accept
 -----------
 Accept an AU that has been verified by a node manager and add the AU to that node's live
 feed of AUs for ingest and preservation (titlesdb). This step sets up the 1st and 2nd
@@ -139,9 +139,9 @@ test crawls of an AU that has been staged for ingest.
 
 Usage:
 
-	adpn ingest gitlab:<ISSUEREFERENCE> [--to=<PEER>] [--dry-run]
-	adpn ingest [<FILE>] [--to=<PEER>] [--dry-run]
-	cat <FILE> | adpn verify - [--to=<PEER>] [--dry-run]
+	adpn accept gitlab:<ISSUEREFERENCE> [--to=<PEER>] [--dry-run]
+	adpn accept [<FILE>] [--to=<PEER>] [--dry-run]
+	cat <FILE> | adpn accept - [--to=<PEER>] [--dry-run]
 
 Options:
 --to=<PEER>		make AU visible to this peer (AUB, ADAH, ...; ALL=whole network)
@@ -149,7 +149,7 @@ Options:
 
 For example:
 
-	adpn ingest 'gitlab:adpnet/adpn---general#77'
+	adpn accept 'gitlab:adpnet/adpn---general#77'
 	
 Sample output (to be pasted back into the Gitlab issue, or otherwise sent back to the ingest manager):
 
@@ -211,11 +211,11 @@ URL RETRIEVAL TESTS:
     <property name="name" value="All Alabama Digital Preservation Network AUs" />
     <property name="class" value="xpath" />
 
-[adpn ingest] DONE: Archival Unit ingested into ADAH titlesdb.
+[adpn accept] DONE: Archival Unit ingested into ADAH titlesdb.
 cjohnson@lockss-adpn-con:/home/cjohnson/bin/adpn-cli$
 ~~~
 
-adpn publish
+adpn promote
 ------------
 Given an AU that has been submitted, verified, and accepted, publish it to the entire
 preservation network. This step adds the AU to the whole-network titlesdb database and
