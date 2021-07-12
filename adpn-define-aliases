@@ -331,31 +331,6 @@ function adpn_help_notes () {
 	return "${EXITCODE}"
 }
 
-function adpn_setting() {
-	local switch="${1}"
-	local prop="${2}"
-	local default="${3}"
-	
-	if [[ -z "${prop}" ]] ; then
-		prop="${1}"
-	fi
-	
-	[[ -n "${_PARAM[$switch]}" ]] && RESULT="${_PARAM[$switch]}" || RESULT="$( adpnprop "${prop}" )"
-	
-	if [[ -z "${RESULT}" ]] ; then
-		if [[ "${default}" =~ ^[\<](.*)\s*$ ]] ; then
-			prompt="${BASH_REMATCH[1]}"
-			read -p "${prompt}" RESULT
-		elif [[ "${default}" =~ ^\\(.*)$ ]] ; then
-			RESULT="${BASH_REMATCH[1]}"
-		else 
-			RESULT="${default}"
-		fi
-	fi
-	
-	printf "%s" "${RESULT}"
-}
-
 function echo_header() {
 	local title="${1}"
 	local underline="${2}"

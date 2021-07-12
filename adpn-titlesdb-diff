@@ -75,9 +75,9 @@ adpn_command_line "${SWITCHFILES[@]}"
 ### SCRIPT: Download XML from props server, then diff against old. #######################
 ##########################################################################################
 
-PROPS=$(adpn_setting props-server)
-XMLDIR=$(adpn_setting xmldir)
-WGET=$(adpn_setting wget)
+PROPS=$(adpn_parameter_from "--props-server" ".props-server" "" )
+XMLDIR=$(adpn_parameter_from "--xmldir" ".xmldir" ~ )
+WGET=$(adpn_parameter_from "--wget" ".wget" "" )
 
 if [[ -n "${PROPS}" ]] ; then
 	TITLELIST="${PROPS%%+(/)}/titlelist/" 

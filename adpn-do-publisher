@@ -225,7 +225,7 @@ case "${CMD}" in
 		ARG_ID="${_PARAM[id]}"
 		if [[ -z "${ARG_ID}" ]] ; then
 			ARG_ID="${WORDS[0]}"
-			WORDS=( "${WORDS[@]:1}" )			
+			WORDS=( "${WORDS[@]:1}" )
 		fi
 
 		if [[ -z "${ARG_ID}" ]] ; then
@@ -243,10 +243,10 @@ case "${CMD}" in
 		;;
 	
 	"sql")
-		MYSQL_HOST="$( adpn_setting "mysql-host" "mysql/host" )"
-		MYSQL_DB="$( adpn_setting "mysql-db" "mysql/db" )"
-		MYSQL_USER="$( adpn_setting "mysql-user" "mysql/user" )"
-		MYSQL_PASSWORD="$( adpn_setting "mysql-password" "mysql/password" )"
+		MYSQL_HOST="$( adpn_parameter_from "--mysql-host" ".mysql/host" )"
+		MYSQL_DB="$( adpn_parameter_from "--mysql-db" ".mysql/db" )"
+		MYSQL_USER="$( adpn_parameter_from "--mysql-user" ".mysql/user" )"
+		MYSQL_PASSWORD="$( adpn_parameter_from "--mysql-password" ".mysql/password" )"
 		
 		if [[ -z "${MYSQL_PASSWORD}" ]] ; then
 			MYSQL_PASSWORD_SWITCH=""

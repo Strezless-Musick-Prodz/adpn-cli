@@ -187,9 +187,6 @@ case "${CMD}" in
 		if [[ "${_ARGV[2]}" == "adpnprop" ]] ; then
 			SETTING_VALUE="$( adpnprop "${_ARGV[@]:3}" )" ; EXITCODE="$?"
 			printf "adpnprop: exit=%d, value='%s'\n" "${EXITCODE}" "${SETTING_VALUE}"
-		elif [[ "${_ARGV[2]}" == "adpn_setting" ]] ; then
-			SETTING_VALUE="$( adpn_setting "${_ARGV[@]:3}" )"
-			printf "adpn_setting: '%s'\n" "${SETTING_VALUE}"
 		elif [[ "${_ARGV[2]}" == "adpn_parameter_from" ]] ; then
 			SETTING_VALUE="$( adpn_parameter_from "${_ARGV[@]:3}" )"
 			printf "adpn_parameter_from: exit=%d, value='%s'\n" "${EXITCODE}" "${SETTING_VALUE}"
