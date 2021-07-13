@@ -80,11 +80,11 @@ Usage:
 
 Options:
 
-| Option                 | Description                                |
-| ---------------------- | ------------------------------------------ |
-| --subdirectory=<SLUG>  | destination subdirectory on staging server |
-| --au_title=<TITLE>     | human-readable title of this AU            |
-| --from=<PEER>          | code for origin node (`AUB`, `ADAH`, etc.) |
+| Option                  | Description                                |
+| ----------------------- | ------------------------------------------ |
+| --subdirectory=`<SLUG>` | destination subdirectory on staging server |
+| --au_title=`<TITLE>`    | human-readable title of this AU            |
+| --from=`<PEER>`         | code for origin node (`AUB`, `ADAH`, etc.) |
 
 adpn verify
 -----------
