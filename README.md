@@ -40,38 +40,30 @@ All the original code in here is hereby released into the public domain. Any cod
 or derived from other public sources is noted in comments, and is governed by the
 licensing terms preferred by the authors of the original code. (CJ, 2019/05/23)
 
-Requirements and Dependencies
-=============================
+Installation, Requirements and Dependencies
+============================================
 To use the adpn suite of utility scripts, you need:
 
 * A [GNU bash][] command-line and scripting environment. This usually means running either:
-  (1) [GNU/Linux][], (2) the [Cygwin][] command-line environment on Windows, or (3) the
-  [Terminal.app][] terminal emulator on Macs with OS X.
+  (1) [GNU/Linux][], (2) [Windows Subsystem for Linux][WSL], [Cygwin][], or similar GNU/Linux-like
+  command-line environments on Windows, or (3) the [Terminal.app][] console on Macs with OS X.
 
 * [Python 3][] scripting language
 
-### GNU command-line tools: ###
-  * [unzip](https://linux.die.net/man/1/unzip): `sudo apt install unzip`
-  * [curl]: `sudo apt install curl`
-  
-### Python 3 utilities and library modules: ###
+To install:
+-----------
+1.  Clone the scripts into a convenient subdirectory. (I recommend a subdirectory of your user home directory, such as `~/bin/adpn-cli`.)
+    `git clone https://github.com/CJohnsonADAH/adpn-cli.git ~/bin/adpn-cli`
 
-  * [pip][] (Python package installer): `sudo apt install python3-pip`
-  * [python3-bs4][] (BeautifulSoup): `sudo apt install python3-bs4`
-  * [python3-socks][] (socks): `sudo apt install python3-socks`
-  * [mysqlclient][] (Python 3 MySQLdb): `sudo pip install mysqlclient`
-  
+2.  Run `adpn setup` to check script dependencies. If you are missing any required components, you may need to have administrator
+    privileges on the workstation or server where you are installing the scripts, so that you can install new software packages.
+
 [GNU bash]: https://www.gnu.org/software/bash/
 [GNU/Linux]: https://en.wikipedia.org/wiki/Linux
+[Windows Subsystem for Linux]: https://docs.microsoft.com/en-us/windows/wsl/install-win10
 [Cygwin]: https://cygwin.com/
 [Terminal.app]: https://en.wikipedia.org/wiki/Terminal_(macOS)
 [Python 3]: https://www.python.org/
-[unzip]: https://linux.die.net/man/1/unzip
-[curl]: https://linux.die.net/man/1/curl
-[pip]: https://pypi.org/project/pip/
-[python3-bs4]: https://pypi.org/project/beautifulsoup4/
-[python3-socks]: https://pypi.org/project/PySocks/
-[mysqlclient]: https://pypi.org/project/mysqlclient/
 
 adpn CLI Tools
 =============
@@ -84,8 +76,16 @@ to accept and verify the AU for ingest.
 
 Usage:
 
-	(Under construction!)
-	
+	adpn preserve [<LOCALPATH>] [<STAGING>] [<OPTIONS>]...
+
+Options:
+
+| Option                 | Description                                |
+| ---------------------- | ------------------------------------------ |
+| --subdirectory=<SLUG>  | destination subdirectory on staging server |
+| --au_title=<TITLE>     | human-readable title of this AU            |
+| --from=<PEER>          | code for origin node (`AUB`, `ADAH`, etc.) |
+
 adpn verify
 -----------
 Verify that the start URL for an AU submitted by a publisher is valid and can be
@@ -102,7 +102,7 @@ For example:
 
 	adpn verify 'gitlab:adpnet/adpn---general#77'
 	
-Verifies the AU referenced in Gitlab repository adpnet/adpn---general, issue #77.
+... verifies the AU referenced in Gitlab repository `adpnet/adpn---general`, issue #77.
 
 Sample output (to be pasted into the Gitlab Issue, or otherwise sent back to the ingest manager):
 
@@ -292,8 +292,11 @@ one plugin, you can also use the wildcard:
 	./adpn plugins details --plugin-keywords="Department Directory"
 	./adpn plugins details --plugin-regex="Auburn.*Directory.*"
 
+Lower-Level and Miscellaneous Tools
+===================================
+
 adpn-ingest-test
-================
+----------------
 	
 	Usage: ./adpn-ingest-test [--daemon=<HOST>] [--user=<USER>] [--pass=<PASSWORD>]
 		[--proxy=<PROXYHOST>] [--port=<PROXYPORT>] [--tunnel=<TUNNELHOST>]
@@ -301,8 +304,8 @@ adpn-ingest-test
 		[--au_title=<TITLE>] [--local=<PATH>|--remote|--help]
 		[--<KEY>=<FIELD> ...]
 
-On the publisher's side, to get data needed for the content to ingest:
-----------------------------------------------------------------------
+### On the publisher's side, to get data needed for the content to ingest: ###
+
 0. 	Create a adpn-ingest-test.defaults.conf file containing the following parameters,
 	in plain text, one per line. Place in the same subdir as the adpn-ingest-test script.
 	
@@ -366,8 +369,7 @@ On the publisher's side, to get data needed for the content to ingest:
 
 3.	Copy and paste the report into an e-mail and send it to the LOCKSS network administrator.
 	
-On the LOCKSS network administrator's side, to run tests prior to ingesting:
-----------------------------------------------------------------------------
+### On the LOCKSS network administrator's side, to run tests prior to ingesting: ###
 
 0. 	Create a adpn-ingest-test.defaults.conf file containing the usual parameters,
 	in plain text, one per line. Place in the same subdir as the adpn-ingest-test script.
