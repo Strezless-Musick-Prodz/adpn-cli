@@ -44,11 +44,13 @@ Installation, Requirements and Dependencies
 ============================================
 To use the adpn suite of utility scripts, you need:
 
-* A [GNU bash][] command-line and scripting environment. This usually means running either:
-  (1) [GNU/Linux][], (2) [Windows Subsystem for Linux][WSL], [Cygwin][], or similar GNU/Linux-like
-  command-line environments on Windows, or (3) the [Terminal.app][] console on Macs with OS X.
+*   A [GNU bash][] command-line and scripting environment. This usually means running either:
 
-* [Python 3][] scripting language
+    1. [GNU/Linux][];
+    2. [Windows Subsystem for Linux], [Cygwin], or similar GNU/Linux-like command-line environments on Windows;
+    3. The [Terminal.app][] console on Macs with OS X.
+
+*   [Python 3][] scripting language
 
 To install:
 -----------
