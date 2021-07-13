@@ -231,6 +231,13 @@ command line with explicit switches.
         self.switches['subdirectory'] = rhs
         self.switches['directory'] = rhs
     
+    @property
+    def skip_steps (self) :
+        return [ step.strip().lower() for step in self.switches.get('skip').split(",") ] if self.switched('skip') else [ ]
+    
+    def test_skip (self, step) :
+        return ( ( step.strip().lower() ) in self.skip_steps )
+    
     def get_locallocation (self) :
         return os.path.realpath(self.switches.get('local'))
         
@@ -414,8 +421,9 @@ command line with explicit switches.
                     self.output_status(2, "package.make_bagit_enclosure", ( package.get_path(), os.path.realpath(package.get_path()) ) )
                     package.make_bagit_enclosure()
 
-                self.output_status(2, "package.check_bagit_validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                validates = package.check_bagit_validation()
+                self.output_status(1, "* Checking BagIt validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
+                validates = package.check_bagit_validation() if not self.test_skip("scan") else True
+
                 if validates :
                     if self.manifest["au_file_size"] is None :
                         self.manifest["au_file_size"] = package.reset_au_file_size()
@@ -441,11 +449,13 @@ command line with explicit switches.
                         self.write_error(3, "Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir })
                         raise
                     
-                    backupDir = self.mkBackupDir()
-            
-                    (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
-                    self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
-                
+                    (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
+                    
+                    if not self.test_skip("download") :
+                        backupDir = self.mkBackupDir()
+                        (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
+                        self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+                    
                     self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
                     (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
                     self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
@@ -527,6 +537,7 @@ if __name__ == '__main__':
             "verbose": 1, "quiet": False,
             "base_url": None, "stage/base_url": None,
             "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
+            "skip": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
             "dummy": None
     }, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()

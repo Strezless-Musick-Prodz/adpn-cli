@@ -52,10 +52,23 @@ class myFTPStaging :
         return ("%(user)s@%(host)s" if self.user else "%(host)s") % {"user": self.user, "host": self.host}
     
     def url (self) :
-        return "%(protocol)s://%(host)s%(path)s" % {"protocol": self.get_protocol(), "host": self.url_host(), "path": self.get_location() }
+        return "%(protocol)s://%(host)s%(path)s" % {"protocol": self.get_protocol(), "host": self.url_host(), "path": self.get_location(remote=True) }
     
-    def get_location (self) :
-        return ( self.ftp.getcwd() if self.is_sftp() else self.ftp.pwd() )
+    def get_location (self, remote=False, local=False) :
+        remote_pwd = ( self.ftp.getcwd() if self.is_sftp() else self.ftp.pwd() )
+        local_pwd = os.getcwd()
+        
+        if remote and local :
+            result = ( local_pwd, remote_pwd )
+        elif remote :
+            result = ( remote_pwd )
+        elif local :
+            result = ( local_pwd )
+        # Default to remote only...
+        else :
+            result = ( remote_pwd )
+            
+        return result
     
     def remove_item (self, file) :
         if self.is_sftp() :
@@ -78,7 +91,7 @@ class myFTPStaging :
     def set_location (self, dir=None, remote=None, make=False) :
         rdir = remote if remote is not None else dir
         rlast = self.set_remotelocation(dir=rdir, make=make)
-        llast = os.getcwd()
+        llast = self.get_location(local=True)
 
         try :
             if dir is not None :
@@ -93,7 +106,7 @@ class myFTPStaging :
         return (llast, rlast)
         
     def set_remotelocation (self, dir, make=False) :
-        last = self.get_location()
+        last = self.get_location(remote=True)
         
         exists = False
         try :
@@ -137,7 +150,7 @@ class myFTPStaging :
             
             if '.' != file :
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
-                out(2, "chdir", (os.getcwd(), self.get_location()))
+                out(2, "chdir", self.get_location(local=True, remote=True))
 
             for subfile in self.get_childitem() :
                 exclude_this = exclude(subfile) if exclude is not None else False
@@ -187,13 +200,14 @@ class myFTPStaging :
             
             if '.' != file :
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
-                out(2, "chdir", (os.getcwd(), self.get_location()))
+                out(2, "chdir", self.get_location(local=True, remote=True))
 
             for subfile in os.listdir() :
                 exclude_this = exclude(subfile) if exclude is not None else False
                 if not exclude_this :
                     (level, type) = (1, "uploaded")
-                    self.upload(blob=None, file=subfile, exclude=exclude, notification = notification)
+                    if self.get_file_size(subfile) != os.stat(subfile).st_size :
+                        self.upload(blob=None, file=subfile, exclude=exclude, notification=notification)
                 else :
                     (level, type) = (2, "excluded")
                     

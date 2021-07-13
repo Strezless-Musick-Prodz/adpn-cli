@@ -603,7 +603,8 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 		
 		JSON_PACKET=$(
 			${ME} stage "${AU_LOCALPATH}" "${STAGING_AREA}" \
-			--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}"
+			--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
+			${_LINESWITCH[skip]}
 		) ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
@@ -612,7 +613,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 			DROP_ID=$( adpn_parameter_from ".Staged To<${JSON_PACKET}" "\\${FROM}" )
 
 			[[ -z "${V}" ]] || printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
-			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V} ; ADN_ERRCODE="$?"
+			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${SUBDIRECTORY}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V} ; ADN_ERRCODE="$?"
 
 			EXITCODE="${ADN_ERRCODE}"
 		fi
