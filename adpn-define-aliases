@@ -112,6 +112,29 @@ function pluginprop() {
 	return $?
 }
 
+function adpn_getpassword_from() {
+	
+	RESULT="" ; EXITCODE=2
+	KDBX_SCHEME="keepass"
+	while [[ "$#" -gt 0 && "${EXITCODE}" -gt 0 ]] ; do
+		local source="${1}" ; shift
+		if [[ "${source}" =~ ^${KDBX_SCHEME}:/*(/([^/]+)+) ]] ; then
+			RESULT="$( adpn-get-keepass.py --single "${source}" )"
+			EXITCODE="$?"
+		elif [[ "${source}" =~ ^[\<](.*)$ ]] ; then
+			IFS='' read -s -p "${BASH_REMATCH[1]}" RESULT 1>&2 ; EXITCODE="$?"
+			[[ -z "${RESULT}" ]] && EXITCODE=1
+		elif [[ "${source}" =~ ^\\(.*)$ ]] ; then
+			RESULT="${BASH_REMATCH[1]}" ; EXITCODE=0
+		else 
+			RESULT="${source}" ; EXITCODE=0
+		fi
+	done
+	
+	printf "%s" "${RESULT}"
+	return "${EXITCODE}"
+}
+
 declare -A _LINESWITCH=()
 
 function adpn_command_line() {

@@ -225,24 +225,14 @@ case "${CMD}" in
 
 	"token")
 		
-		if [[ -n "${_PARAM[token]}" ]] ; then
-			PRIVATE_TOKEN="${_PARAM[token]}"
+		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" )
+		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
+			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" )
+			EXITCODE="$?"
+			printf "%s" "${PRIVATE_TOKEN}"
 		else
-			PRIVATE_TOKEN=$( adpnprop "gitlab/token" )
-			if [[ "${PRIVATE_TOKEN}" =~ ^keepass:/*(/.*)$ ]] ; then
-				KDBX_FILE="${BASH_REMATCH[1]}"
-				if [[ -r "${KDBX_FILE}" ]] ; then
-					if [[ -n "${V}" ]] ; then
-						printf "* Getting Gitlab token from KeePass repository %s\n" "${BASH_REMATCH[1]}" 1>&2
-					fi
-					PRIVATE_TOKEN=$( adpn-get-keepass.py --database="${BASH_REMATCH[1]}" --regex="^(adpn-)?gitlab-token" )
-				else
-					printf "* ERROR: Tried to find Gitlab token from KeePass repository %s - NOT READABLE\n" "${BASH_REMATCH[1]}" 1>&2
-					EXITCODE=1
-				fi
-			fi
+			EXITCODE=1
 		fi
-		printf "%s" "${PRIVATE_TOKEN}"
 		;;
 	
 	"packet")

@@ -10,6 +10,7 @@ import pykeepass
 from pykeepass import PyKeePass
 from getpass import getpass
 import re, json
+import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyJSON
 
 class ADPNDoKeePassScript :
@@ -37,8 +38,25 @@ the user will be prompted to provide it interactively.
         self._argv = argv
         self._switches = switches
         self._exitcode = 0
-        if not self.switched('regex') and not self.switched('title') :
-            self._switches["title"] = "ADPNet"
+
+        self._query={ "title": "ADPNet" }
+
+        self._url = urllib.parse.urlparse(self.database_url)
+        if self._url.scheme == "keepass" :
+            # Check whether we can get entry name from query or from fragment
+            if self._url.query :
+                qs = urllib.parse.parse_qs(self._url.query)
+                
+                for key in qs.keys() :
+                    if len(qs[key]) == 1 :
+                        qs[key] = qs[key][0]
+                        
+                self._query = { **self._query,  **qs }
+            if self._url.fragment :
+                self._query = { **self._query, **{ "title": self._url.fragment } }
+        
+        if self.switched('title') :
+            self._query = { **self._query, **{ "title": self.switches.get("title") } }
     
     @property
     def path (self) :
@@ -73,6 +91,10 @@ the user will be prompted to provide it interactively.
     
     @property
     def database_file (self) :
+        return os.path.expanduser(self._url.path.lstrip("/")) if re.match("^~", self._url.path.lstrip("/")) and not self._url.netloc else self._url.path
+        
+    @property
+    def database_url (self) :
         return self.switches.get("database", None)
     
     @property
@@ -81,7 +103,7 @@ the user will be prompted to provide it interactively.
         
     @property
     def entry_title (self) :
-        return self.switches.get("regex" if self.entry_title_use_regex else "title")
+        return self.switches.get("regex") if self.entry_title_use_regex else self._query.get("title")
     
     @property
     def entry_title_use_regex (self) :
@@ -236,7 +258,8 @@ if __name__ == '__main__':
     (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
         "database": None, "output": "text/plain",
         "password": None, "keyfile": None,
-        "title": None, "regex": None, "all": None,
+        "title": None, "regex": None,
+        "all": None, "single": None,
         "set": None, "create": None,
         "help": None, "version": None
     }, configfile=configjson).parse()
