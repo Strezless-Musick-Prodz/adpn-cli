@@ -54,11 +54,14 @@ To use the adpn suite of utility scripts, you need:
 
 To install:
 -----------
-1.  Clone the scripts into a convenient subdirectory. (I recommend a subdirectory of your user home directory, such as `~/bin/adpn-cli`.)
-    `git clone https://github.com/CJohnsonADAH/adpn-cli.git ~/bin/adpn-cli`
-
-2.  Run `adpn setup` to check script dependencies. If you are missing any required components, you may need to have administrator
-    privileges on the workstation or server where you are installing the scripts, so that you can install new software packages.
+1.  `git clone https://github.com/CJohnsonADAH/adpn-cli.git ~/bin/adpn-cli`   
+    Clones the scripts into a convenient subdirectory. (If you prefer a destination
+    other than `~/bin/adpn-cli`, substitute it in.)
+    
+2.  `adpn setup`   
+    Run setup tool to set up environment, configure settings, and check script dependencies. If you are
+	missing any required components, you may need to have administrator (root) privileges on the server
+	or workstation where you are installing the scripts, so that you can install new software packages.
 
 [GNU bash]: https://www.gnu.org/software/bash/
 [GNU/Linux]: https://en.wikipedia.org/wiki/Linux
