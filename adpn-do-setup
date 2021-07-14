@@ -1,0 +1,366 @@
+#!/bin/bash
+#
+# adpn-do-setup: script to handle Gitlab API commands
+#
+# @version 2021.0714
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+ME="${SCRIPTPATH}"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  dependencies 	a
+  path         	Set up the script location and system PATH
+  settings     	Set up the configuration file with appropriate settings
+  backups      	Set up the directory paths for backups stored by script 
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _ARGV ; _ARGV=("$0")
+declare -a _CMDLINE ; _CMDLINE=("$0")
+declare -A _PARAM=()
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+
+ADPNPATH="$( adpn_parameter_from "--script" "\\${SCRIPTPATH}" )"
+ADPN="$( basename "${ADPNPATH}" )"
+
+VV="${_LINESWITCH[verbose]}"
+QQ="${_LINESWITCH[quiet]}"
+V="${_LINESWITCH[verbose]}"
+Q=""
+
+DBG="${_LINESWITCH[debug]}"
+DBGLEVEL="${_PARAM[debug]}"
+if [[ "${DBGLEVEL}" == "debug" ]] ; then
+	DBGLEVEL=1
+fi
+if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+	DBGLEVEL=$(( DBGLEVEL - 1 ))
+	DDBG="--debug=${DBGLEVEL}"
+else
+	DDBG=""
+fi
+
+
+if [[ -z "${_PARAM[verbose]}" ]] ; then
+	Q="--quiet"
+fi
+if [[ -n "${QQ}" ]] ; then
+	Q="--quiet"
+fi
+
+CMD="${_ARGV[1]}"
+
+SCRIPT_CMD_NAME="${_PARAM[context]}"
+if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT}"
+fi
+if [[ -n "${CMD}" ]] ; then
+	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
+fi
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+case "${CMD}" in
+		
+	""|"all")
+# @method adpn setup
+# Proceed through all the appropriate setup steps.
+# 
+# Usage: adpn setup [all] [--for=<PURPOSE>]
+#
+#   --for=<PURPOSE> 	the command setup is setting up for
+#                   	options: preserve|verify|accept|promote
+#
+# @version 2021.0714
+		"${ME}" dependencies ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
+			"${ME}" path ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
+			"${ME}" settings ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
+			"${ME}" backups ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]}
+		EXITCODE="$?"
+		;;
+	"dependencies")
+# @method adpn setup dependencies
+# Check external dependencies and offer to install if necessary and possible.
+#
+# Usage: adpn setup dependencies --for=<PURPOSE>
+#
+# @version 2021.0714
+		DEPENDENCIES="""
+curl	%s command-line tool	apt install curl	yum install curl
+unzip	%s command-line tool	apt install unzip	yum install unzip
+python3	%s scripting environment	apt install python3	yum install python3
+apt:python3-dev	%s system module	apt install python3-dev
+yum:python3-devel	%s system module	yum install python3-devel
+python3	%s scripting environment	apt install python3	yum install python3
+pip	%s package management tool	apt install python3-pip
+python:bs4	%s Python module	apt install python3-bs4	python3 -m pip install bs4
+python:socks	%s Python module	apt install python3-socks	python3 -m pip install pysocks
+mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysql-devel
+python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
+python:pysftp	%s Python module	python3 -m pip install pysftp
+python:paramiko	%s Python module	python3 -m pip install paramiko
+python:pykeepass	%s Python module	python3 -m pip install pykeepass
+"""
+
+		printf "* DEPENDENCIES: checking for dependencies.\n"
+		printf "%s\n" "${DEPENDENCIES}" | adpn_check_dependencies - --interactive
+		EXITCODE="$?"
+		;;
+
+	"path")
+# @method adpn setup path
+# Set up a symbolic link to place adpn in the user's private bin dir
+#
+# @version 2021.0714
+
+		MY_BINDIR="${HOME}/bin"
+		printf "* PATH: Ensure that ${ADPN} is accessible through ${MY_BINDIR}\n" 1>&2
+		if [[ ! -d "${MY_BINDIR}" ]] ; then
+			printf "\n"
+			mkdir -v "${MY_BINDIR}"
+			EXITCODE="$?"
+			printf "\n"
+		fi
+		if [[ "${SCRIPTDIR}" != "${MY_BINDIR}" ]] ; then
+			ADPNALIAS="${MY_BINDIR}/${ADPN}"
+			if [[ ! -x "${MY_BINDIR}/${ADPN}" ]] ; then
+				printf "\n"
+				ln --verbose --symbolic --logical --backup "${ADPNPATH}" "${ADPNALIAS}"
+				EXITCODE="$?"
+				printf "\n"
+			fi
+		fi
+		;;
+	
+	"settings")
+# @method adpn setup settings
+# Generate an adpnet.json file in the user's home dir, then place a symlink in the bindir
+#
+# @version 2021.0714
+
+		MY_CONFDIR="${HOME}/.adpn"
+		JSONFILENAME="$( basename "${JSONCONFFILE}" )"
+		printf "* SETTINGS: Ensure that ${JSONFILENAME} is accessible through ${MY_CONFDIR}\n" 1>&2
+		if [[ ! -d "${MY_CONFDIR}" ]] ; then
+			printf "\n"
+			mkdir -v "${MY_CONFDIR}"
+			printf "\n"
+		fi
+		if [[ ! -r "${JSONCONFFILE}" ]] ; then
+			MY_CONFFILE="${MY_CONFDIR}/${JSONFILENAME}"
+			if [[ ! -r "${MY_CONFFILE}" ]] ; then
+				printf "%s\n" "{}" > "${MY_CONFFILE}"
+				ln --verbose --symbolic --logical --backup "${MY_CONFFILE}" "${JSONCONFFILE}"
+				EXITCODE="$?"
+
+				declare -A AS_PROPS=()
+				printf "* SETTINGS: Let's set up some properties for ${MY_CONFFILE}.\n" 1>&2
+				printf "  N.B.: Not all of these settings need to be filled in on all systems.\n" 1>&2
+				printf "\n" 1>&2
+				
+				AS_CONTEXT="$( [[ -z "${_PARAM[for]}" ]] && echo "preserve" || echo "${_PARAM[for]}" )"
+				AS_CONTEXT="$( printf "%s" "${AS_CONTEXT}" | tr "[:upper:]" "[:lower:]" )"
+				
+				IFS=""
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve)$ ]] ; then
+					read -ep "Institution: " AS_PROPS[institution]
+					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
+					
+					KEY="api/makemanifest" DEFAULT="https://archives.alabama.gov/Services/ADPNet/MakeManifest/"
+					read -ep "MakeManifest API Endpoint [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(accept|post|ingest|publish|promote)$  ]] ; then
+				
+					read -ep "LOCKSS Daemon URL: " AS_PROPS[daemon]
+					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
+						read -ep "LOCKSS Daemon User: " AS_PROPS[daemon/user]
+						if [[ -n "${AS_PROPS[daemon/user]}" ]] ; then
+							read -sep "LOCKSS Daemon Password: " AS_PROPS[daemon/pass]
+							printf "\n"
+						fi
+					fi
+					
+				fi
+
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|publish|promote)$ ]] ; then
+					KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
+					read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				DROP_SERVER="drop.adpn.org"
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve)$ ]] ; then
+					DROP_SERVER_USER="$( printf "%s" "${AS_PROPS[publisher]}" | tr '[:upper:]' '[:lower:]' )"
+					
+					KEY="stage/host" DEFAULT="${DROP_SERVER}"
+					read -ep "Drop Server [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
+					KEY="stage/user" DEFAULT="${DROP_SERVER_USER}"
+					read -ep "Drop Server Account [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+					KEY="stage/base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/drop_au_content_in_here/"
+					read -ep "Staging Area Base URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|publish|promote)$ ]] ; then
+					KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
+					read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(verify)$ ]] ; then
+					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]					
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|ingest|publish)$ ]] ; then
+					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
+					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
+						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
+						DEFAULT="${USER}@${NODE_SERVER}"
+						PROMPT_DEFAULT="[${DEFAULT}]"
+					fi
+					read -ep "Node Server SSH Identity ${PROMPT_DEFAULT}: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				PROPS_SERVER="configuration.adpn.org"
+				if [[ "${AS_CONTEXT}" =~ ^(ingest|publish)$ ]] ; then
+					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
+					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+					KEY="mysql/host" DEFAULT="localhost"
+					read -ep "[titlesdb] MySQL Server [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					if [[ -n "${AS_PROPS[mysql/host]}" ]] ; then
+						KEY="mysql/db" DEFAULT="adpn"
+						read -ep "[titlesdb] MySQL Database [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+						if [[ -n "${AS_PROPS[mysql/db]}" ]] ; then
+							KEY="mysql/user" DEFAULT="${USER}"
+							read -ep "[titlesdb] MySQL User [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+							if [[ -n "${AS_PROPS[mysql/user]}" ]] ; then
+								read -sep "[titlesdb] MySQL Password: " AS_PROPS[mysql/password]
+								printf "\n"
+							fi
+						fi
+					fi
+	
+					KEY="props/titlesdb.xml" DEFAULT="/var/www/html/overhead/takeover/lockss/titlesdb.xml"
+					read -ep "[titlesdb] TitlesDB XML Location [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="xmldir" DEFAULT="${HOME}/titlesdb-xml"
+					read -ep "[titlesdb] XML Working Directory [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify)$ ]] ; then
+					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
+					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify|ingest|publish)$ ]] ; then
+					KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
+					read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
+					read -ep "Gitlab Repository [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					KEY="gitlab/token" DEFAULT=""
+					read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+				fi
+				
+				declare -a AS_KEYS=()
+				IFS="" printf "%s\n" "${!AS_PROPS[@]}" | sort | while read -r KEY ; do
+					if [[ -n "${AS_PROPS[$KEY]}" ]] ; then
+						printf "%s property set %s '%s'\n" "\$ adpn" "${KEY}" "${AS_PROPS[$KEY]}" 1>&2
+						adpn property set "${KEY}" "${AS_PROPS[$KEY]}" --quiet
+						EXITCODE="$?"
+					fi
+				done
+			fi
+			printf "\n"
+		fi
+		;;
+		
+	"backups")
+# @method adpn setup backups
+# If we are setting up a props node, and we set a work directory for XML diffs, go ahead and create it.
+#
+# @version 2021.0714
+		xmldir="$(adpnprop xmldir)"
+		if [[ -n "${xmldir}" ]] ; then
+			printf "* XML PATH: Ensure that working directory is available at ${xmldir}\n" 1>&2
+			if [[ ! -d "${xmldir}" ]] ; then
+				printf "\n"
+				mkdir --verbose --parents "${xmldir}"
+				EXITCODE="$?"
+				printf "\n"
+			fi
+		fi
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+exit ${EXITCODE}
