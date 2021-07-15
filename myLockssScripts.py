@@ -46,7 +46,21 @@ class myPyPipeline :
 		_lastproc.stdout.close()
 		
 		return (buf, errbuf, [proc.returncode for proc in processes])
-	
+
+def align_switches (left, right, switches, override=True) :
+    if switches[left] is None :
+        switches[left] = switches[right]
+    if switches[right] is None :
+        switches[right] = switches[left]
+    if override :
+        if switches[right] != switches[left] :
+            switches[right] = switches[left]
+
+def shift_args (args: list) -> tuple :
+    top = args[0] if len(args) > 0 else None
+    remainder = args[1:] if len(args) > 1 else []
+    return ( top, remainder )
+
 class myPyCommandLine :
 	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.
 	"""

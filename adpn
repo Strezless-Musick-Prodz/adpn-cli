@@ -298,6 +298,44 @@ case "${CMD}" in
 				;;
 		esac
 		;;
+	"package")
+# @method adpn package
+# ADPNet Member: Package a directory of files into a LOCKSS Archival Unit (AU).
+#
+# Usage: adpn package [<LOCALPATH>] [<OPTIONS>]
+#
+# LOCALPATH is a directory on the local workstation containing the files for the
+# Archival Unit (AU) to prepare.
+#
+# @version 2021.0715
+		
+		ADP_OUTPUT="$(mktemp)"
+		
+		declare -a ADP_ARGV=( "${_ARGV[@]:2}" )
+		declare -A ADP_SWITCHES=( )
+		for SWITCH in "${!_LINESWITCH[@]}" ; do
+			case "${SWITCH}" in 
+				"output")
+					# DROP IT -- WE'LL SET IT OURSELVES BELOW
+					;;
+				*)
+					ADP_SWITCHES[${SWITCH}]="${_LINESWITCH[$SWITCH]}"
+					;;
+			esac
+		done
+		
+		adpn-do-package.py --output=application/json \
+			"${ADP_ARGV[@]}" \
+			"${ADP_SWITCHES[@]}"
+		EXITCODE="$?"
+		
+		if [[ "${EXITCODE}" -lt 255 ]] ; then
+			JSON_PACKET="$( adpn_select_json_packet "${ADP_OUTPUT}" )"
+			printf "%s" "${JSON_PACKET}"
+		fi
+		
+		rm "${ADP_OUTPUT}"
+		;;
 		
 	"stage")
 # @method adpn stage
@@ -320,11 +358,11 @@ case "${CMD}" in
 
 		ASC_OUTPUT="$(mktemp)"
 
-		declare -a ASC_ARGV=( "${_ARGV[@]:3}" )
+		declare -a ASC_ARGV=( "${_ARGV[@]:2}" )
 		declare -A ASC_SWITCHES=( )
 		for SWITCH in "${!_LINESWITCH[@]}" ; do
 			case "${SWITCH}" in 
-				"local"|"output")
+				"output")
 					# DROP IT -- WE'LL SET IT OURSELVES BELOW
 					;;
 				*)
@@ -333,13 +371,13 @@ case "${CMD}" in
 			esac
 		done
 		
-		adpn-stage-content.py --local="${_ARGV[2]}" --output=application/json \
-			"${_LINESWITCH[@]}" \
+		adpn-stage-content.py --output=application/json \
+			"${ASC_SWITCHES[@]}" \
 			"${ASC_ARGV[@]}" ${V} ${Q} > "${ASC_OUTPUT}"
 			ASC_ERRCODE="$?"
 		
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
-			JSON_PACKET=$( adpn_select_json_packet "${ASC_OUTPUT}" )
+			JSON_PACKET="$( adpn_select_json_packet "${ASC_OUTPUT}" )"
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -416,24 +454,41 @@ case "${CMD}" in
 		else
 			AU_TITLE="$( printf "%s: AU from %s" "${AU_INSTITUTION}" "${SUBDIRECTORY}" )"
 		fi
-		
-		[[ -z "${V}" ]] || printf "[%s] 1. Staging content to drop server.\n" "${SCRIPT_CMD_NAME}"
+
+		[[ -z "${V}" ]] || printf "[%s:%d] 1. Packaging files into LOCKSS Archival Unit (AU).\n" "${SCRIPT_CMD_NAME}" "${LINENO}"
 		
 		JSON_PACKET=$(
-			${ME} stage "${AU_LOCALPATH}" "${STAGING_AREA}" \
-			--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-			${_LINESWITCH[skip]}
+			"${ME}" package "${AU_LOCALPATH}" \
+				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
+				${_LINESWITCH[skip]}
 		) ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s] %s stage FAILED.\n" "${SCRIPT_CMD_NAME}" "${SCRIPT}" 1>&2
+			printf "[%s:%d] %s package FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
+		else
+			[[ -z "${V}" ]] || printf "[%s:%d] 2. Staging content to drop server.\n" "${SCRIPT_CMD_NAME}" "${LINENO}"
+		
+			JSON_PACKET=$(
+				printf "%s" "${JSON_PACKET}" \
+				| "${ME}" stage "${STAGING_AREA}" \
+				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
+				${_LINESWITCH[skip]}
+			) ; EXITCODE="$?"
+		fi
+		
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] %s stage FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
 		else 
 			DROP_ID=$( adpn_parameter_from ".Staged To<${JSON_PACKET}" "\\${FROM}" )
 
-			[[ -z "${V}" ]] || printf "[%s] 2. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}"
+			[[ -z "${V}" ]] || printf "[%s:%d] 3. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}" "${LINENO}"
 			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${SUBDIRECTORY}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V} ; ADN_ERRCODE="$?"
 
 			EXITCODE="${ADN_ERRCODE}"
+		fi
+
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] %s notify FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
 		fi
 		;;
 	

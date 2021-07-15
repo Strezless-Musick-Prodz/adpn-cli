@@ -6,6 +6,7 @@
 # @version 2021.0629
 
 import io, os, sys, stat
+import fileinput
 import subprocess
 import json, re
 import urllib
@@ -16,7 +17,8 @@ scripts = myADPNScriptSuite(__file__)
 class myLockssPlugin :
     
     def __init__ (self, jar, parameters=None, switches=None) :
-        self._parameters = ( parameters if parameters is not None else {} )
+        self._parameters = {}
+        self.set_parameters(parameters)
         self._switches = ( switches if switches is not None else {} )
         self._switches = { **{ "local": None, "proxy": None, "port": None, "tunnel": None, "tunnel-port": None }, **self._switches }
         self._jar = jar
@@ -29,21 +31,24 @@ class myLockssPlugin :
     def switches (self) :
         return self._switches
     
+    @switches.setter
+    def switches (self, rhs) :
+        self._switches = rhs
+
+    def set_switch (self, key, value) :
+        self._switches[key] = value
+
     @property
     def parameters (self) :
         return self._parameters
     
     def get_parameters (self, mapped=False) :
         if mapped :
-            params = {}
-            for item in self.parameters :
-                key = item[0]
-                value = item[1]
-                params[key] = value
-        else :
             params = self.parameters
+        else :
+            params = [ (key, value) for (key, value) in self.parameters ]
         return params
-
+    
     def get_parameter_keys (self, names=False, descriptions=False) :
         try :
             tsv = self.get_tool_data("adpn-plugin-details.py", parameters={"jar": self.jar})
@@ -53,6 +58,23 @@ class myLockssPlugin :
         bothneither = ( not ( names or descriptions ) or ( names and descriptions ) )
         justone = "description" if descriptions else "name"
         return mapped if bothneither else [ param[justone] for param in mapped ]
+    
+    def set_parameters (self, parameters, append=False) :
+        results = self._parameters if append else {}
+        if parameters is not None :
+            if type(parameters) is list or type(parameters) is tuple :
+                for parameter in parameters :
+                    (key, value) = parameter
+                    results[key] = value
+            elif type(parameters) is dict :
+                for (key, value) in parameters.items() :
+                    results[key] = value
+            else :
+                raise ValueError("Cannot initialize myLockssPlugin.parameters with this value", parameters)
+        self._parameters = results
+                
+    def set_parameter (self, key, value) :
+        self.set_parameters( [ (key, value) ], append=True )
     
     def get_details (self, check_parameters=None) :
         parameters = {"jar": self.jar, "parameters": json.dumps(self.get_parameters(mapped=True)), "check_parameters": 1 }
@@ -67,7 +89,6 @@ class myLockssPlugin :
             else :
                 error_message = ( "Plugin %(url)s NOT FOUND" % { "url": self.jar } )
                 raise AssertionError(error_message) from e
-
         mapped = [ {"name": row[1], "value": row[2] } for row in tsv if row[0]=="detail" ]
         return mapped
     
@@ -177,11 +198,11 @@ class ADPNPreservationPackage :
     def plugin (self) -> myLockssPlugin :
         return self._plugin
     
-    def get_path (self, item=None) -> str :
+    def get_path (self, item=None, canonicalize=False) -> str :
         path = self.path
         if item is not None :
             path = os.path.join(path, item)
-        return path
+        return os.path.realpath(path) if canonicalize else path
     
     def get_single_file_size (self, file) :
         size = None
@@ -236,7 +257,11 @@ class ADPNPreservationPackage :
     def reset_au_file_size (self) :
         self.set_manifest("au_file_size", self.get_au_file_size())
         return self.manifest.get("au_file_size")
-        
+    
+    def accept_bagit_results (self, exitcode, buf) :
+        self._bagit_exitcode = exitcode
+        self._bagit_output = re.split("[\r\n]+", buf) if buf is not None else None
+    
     def has_bagit_enclosure (self) -> bool :
         has_it = False
         try :
@@ -250,53 +275,49 @@ class ADPNPreservationPackage :
             pass
         return has_it
     
-    def check_bagit_validation (self) -> bool :
-        exitcode = 0 if self.has_bagit_enclosure() else 256
+    def check_bagit_validation (self, halt=False) -> bool :
+        
         buf = None
-        if 0 == exitcode :
+        if self.has_bagit_enclosure() :
+            exitcode=0
             try :
-                cmdline = [
-                    "python3",
-                    scripts.path("externals/bagit-python/bagit.py"),
-                        "--validate",
-                        self.get_path()
-                ]
-                
-                buf = subprocess.check_output(cmdline, stderr=subprocess.STDOUT, encoding="utf-8")
+                cmd = [ "python3", scripts.path("externals/bagit-python/bagit.py"), "--validate", self.get_path() ]
+                buf = subprocess.check_output(cmd, stderr=subprocess.STDOUT, encoding="utf-8")
+                self.accept_bagit_results(exitcode, buf)
             except subprocess.CalledProcessError as e :
-                exitcode = e.returncode
-                buf = e.output
-                
-        self._bagit_exitcode = exitcode
-        self._bagit_output = re.split("[\r\n]+", buf) if buf is not None else None
+                (exitcode, buf) = (e.returncode, e.output)
+                self.accept_bagit_results(exitcode, buf)
+                if halt :
+                    raise AssertionError("BagIt", "BagIt validation process FAILED", self.get_path(), self._bagit_exitcode, self._bagit_output) from e
+        elif halt :
+            exitcode=256
+            self.accept_bagit_results(exitcode, buf)
+            raise AssertionError("BagIt", "BagIt formatting not found", self.get_path(), exitcode, "")
+        else :
+           exitcode=256
+
         return ( 0 == exitcode ) # 0=OK, non-0 = error code
     
-    def make_bagit_enclosure (self) :
+    def make_bagit_enclosure (self, halt=False, validate=True) :
         exitcode = 0 if self.has_bagit_enclosure() else 256
         buf = None
         if 0 == exitcode :
-            
-            validates = self.check_bagit_validation()
-            if not validates :
-                raise OSError(package._bagit_exitcode, "BagIt validation FAILED", os.path.realpath(self.get_path()), self._bagit_output)
-            
+            if validate :
+                validates = self.check_bagit_validation(halt=halt)
+                exitcode = ( 0 if validates else self._bagit_exitcode )
+            else :
+                self.accept_bagit_results(exitcode, buf)
         else :
-            
             try :
-                cmdline = [
-                    "python3",
-                    scripts.path("externals/bagit-python/bagit.py"),
-                        self.get_path()
-                ]
+                cmd = [ "python3", scripts.path("externals/bagit-python/bagit.py"), self.get_path() ]
                 exitcode = 0
-                buf = subprocess.check_output(cmdline, stderr=subprocess.STDOUT, encoding="utf-8")
+                buf = subprocess.check_output(cmd, stderr=subprocess.STDOUT, encoding="utf-8")
+                self.accept_bagit_results(exitcode, buf)
             except subprocess.CalledProcessError as e :
-                self._bagit_exitcode = e.returncode
-                self._bagit_output = re.split("[\r\n]+", e.output)
-                raise
-        
-            self._bagit_exitcode = exitcode
-            self._bagit_output = re.split("[\r\n]+", buf) if buf is not None else None
+                (exitcode, buf) = (e.returncode, e.output)
+                self.accept_bagit_results(exitcode, buf)
+                if halt :
+                    raise AssertionError("BagIt formatting process FAILED", self.get_path(), self._bagit_exitcode, self._bagit_output) from e
 
         return self._bagit_output if ( 0 == exitcode ) else None # 0=OK, non-0 = error code
     
@@ -313,6 +334,34 @@ class ADPNPreservationPackage :
     def has_manifest (self) -> bool :
         return ( self.get_manifest() is not None )
     
+    def check_manifest (self) :
+        manifest = self.get_manifest()
+        phrase = "LOCKSS system has permission to collect, preserve, and serve this Archival Unit"
+        
+        if manifest is None :
+            raise AssertionError("manifest", "Manifest HTML does not exist", self.plugin.get_manifest_filename(), phrase)
+
+        # Check for the permission-to-harvest phrase
+        html = ''.join(fileinput.input(files=manifest[0]))
+        
+        words = re.split(r'\s+', phrase)
+        pattern = re.compile('\s+'.join(words), re.MULTILINE)
+        m = re.search(pattern, html)
+            
+        if not m :
+            raise AssertionError("manifest", "Manifest HTML exists, but does not contain permissions boilerplate language", self.plugin.get_manifest_filename(), phrase)
+    
+    def has_valid_manifest (self) :
+        try :
+            self.check_manifest()
+            ok = True
+        except AssertionError as e :
+            if e.args[0] == 'manifest' :
+                ok = False
+            else :
+                raise
+        return ok
+        
     def make_manifest (self) :
         try :
             jsonManifestParams = json.dumps(self.manifest)

@@ -7,9 +7,10 @@
 #
 # @version 2021.0707
 
-SCRIPTPATH=$(which "$0")
-SCRIPTDIR=$(dirname "${SCRIPTPATH}")
-SCRIPTNAME=$(basename "${SCRIPTPATH}")
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$(readlink -f "${SCRIPTPATH}")"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPTNAME="$(basename "${SCRIPTPATH}")"
 
 EXITCODE=0
 

@@ -15,7 +15,7 @@ from datetime import datetime
 from io import BytesIO
 from ftplib import FTP
 from getpass import getpass, getuser
-from myLockssScripts import myPyCommandLine, myPyJSON
+from myLockssScripts import myPyCommandLine, myPyJSON, align_switches, shift_args
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 from myFTPStaging import myFTPStaging
 
@@ -27,6 +27,23 @@ def input (*args) :
         return python_std_input(*args)
     finally :
         sys.stdout = old_stdout
+
+class ADPNScriptPipeline :
+
+    def __init__ (self) :
+        self._pipelines = None
+        self.json = myPyJSON()
+
+    @property
+    def pipelines (self) :
+        if self._pipelines is None :
+            self._pipelines = [ line for line in fileinput.input() ]
+        return self._pipelines
+    
+    def get_data(self, key=None) :
+        lines = self.pipelines
+        self.json.accept(lines)
+        return self.json.allData if key is None else ( self.json.allData[key] if key in self.json.allData else None )
 
 class ADPNStagingArea :
 
@@ -375,7 +392,44 @@ command line with explicit switches.
     def display_usage (self) :
         print(self.__doc__)
         self.exitcode = 0
+    
+    def get_au_start_url (self) :
+        au_start_url = None
         
+        details_list = self.package.plugin.get_details(check_parameters=True) # bolt on missing parameter(s)
+        details = {}
+        for detail in details_list :
+            details[detail['name']] = detail['value']
+        au_start_url = details['Start URL']
+        return au_start_url
+
+    def do_transfer_files (self) :
+        # Let's log in to the host
+        self.ftp = self.establish_connection()
+
+        assert self.ftp is not None, { "message": ("Connection failed for %(user)s@%(host)s" % {"user": self.stage.user, "host": self.stage.host}), "code": 1 }
+        
+        # Let's CWD over to the repository
+        try :
+            self.ftp.set_remotelocation(self.stage.base_dir)
+        except FileNotFoundError as e :
+            raise AssertionError( { "message": ("Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir } ), "code": 1} ) from e
+                    
+        (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
+                    
+        if not self.test_skip("download") :
+            backupDir = self.mkBackupDir()
+            (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
+            self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+                
+        self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
+        (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
+        self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
+            
+        # upload the present directory recursively
+        self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+        
+
     def execute (self) :
 
         try :
@@ -397,124 +451,64 @@ command line with explicit switches.
             self.plugin_parameters = plugin_parameter_settings
             
             # Now let's plug the parameters for this package in to the package and plugin
-            package = ADPNPreservationPackage(self.switches['local'], self.plugin_parameters, self.manifest, self.switches)
+            self.package = ADPNPreservationPackage(self.switches['local'], self.plugin_parameters, self.manifest, self.switches)
 
-            au_start_url = None
-            try :
-                details_list = package.plugin.get_details(check_parameters=True) # bolt on missing parameter(s)
-                details = {}
-                for detail in details_list :
-                    details[detail['name']] = detail['value']
-                au_start_url = details['Start URL']
-            except AssertionError as e : # Parameter requirements failure
-                if len(e.args) == 2 :
-                    ( message, req ) = e.args
-                    missing = [ parameter for parameter in req if self.switches.get(parameter) is None ]
-                    self.write_error(2, "Required parameter missing: %(missing)s" % { "missing": ", ".join(missing) })
-                else :
-                    ( message, req ) = ( e.args[0], None )
-                    self.write_error(2, "Requirement failure: %(message)s" % { "message": message })
+            au_start_url = self.get_au_start_url()
+                
+            # Now let's check the packaging
+            assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
+            assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
+                
+            if self.manifest["au_file_size"] is None :
+                self.manifest["au_file_size"] = self.package.reset_au_file_size()
+                
+            self.do_transfer_files()
+
+            out_packet = {
+            "Ingest Title": self.manifest["au_title"],
+            "File Size": self.manifest["au_file_size"],
+            "From Peer": self.manifest["institution_publisher_code"],
+            "Plugin JAR": self.switches["jar"],
+            "Start URL": au_start_url, # FIXME
+            "Ingest Step": "staged",
+            "Staged By": self.get_emailname(),
+            "Staged To": self.stage.account,
+            }
             
-            if self.still_ok : # still OK
-                # Now let's check the packaging
-                if not package.has_bagit_enclosure() :
-                    self.output_status(2, "package.make_bagit_enclosure", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                    package.make_bagit_enclosure()
-
-                self.output_status(1, "* Checking BagIt validation", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                validates = package.check_bagit_validation() if not self.test_skip("scan") else True
-
-                if validates :
-                    if self.manifest["au_file_size"] is None :
-                        self.manifest["au_file_size"] = package.reset_au_file_size()
-                    if not package.has_manifest() :
-                        self.output_status(2, "package.make_manifest", ( package.get_path(), os.path.realpath(package.get_path()) ) )
-                        package.make_manifest()
-                else :
-                    self.write_error((100 + package._bagit_exitcode), "BagIt validation of '%(path)s' FAILED, exit code %(code)d. Output:" % {
-                        "path": os.path.realpath(package.get_path()),
-                        "code": package._bagit_exitcode
-                    })
-                    print ( "\n".join(package._bagit_output), file=sys.stderr)
-
-            if self.still_ok :
-                # Let's log in to the host
-                self.ftp = self.establish_connection()
-
-                if self.ftp is not None :
-                    # Let's CWD over to the repository
-                    try :
-                        self.ftp.set_remotelocation(self.stage.base_dir)
-                    except FileNotFoundError as e :
-                        self.write_error(3, "Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir })
-                        raise
-                    
-                    (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
-                    
-                    if not self.test_skip("download") :
-                        backupDir = self.mkBackupDir()
-                        (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
-                        self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
-                    
-                    self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
-                    (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
-                    self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
+            for parameter in plugin_parameters :
+                description = re.sub('\s*[(][^)]+[)]\s*$', '', parameter["description"])
+                out_packet[description] = plugin_parameter_map[parameter["name"]]
+            
+            out_packet = { **out_packet, **{ "parameters": self.plugin_parameters } }
+            
+            self.output_status(0, "ok", out_packet)
                 
-                    # upload the present directory recursively
-                    self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
-                
-                    out_packet = {
-                    "Ingest Title": self.manifest["au_title"],
-                    "File Size": self.manifest["au_file_size"],
-                    "From Peer": self.manifest["institution_publisher_code"],
-                    "Plugin JAR": self.switches["jar"],
-                    "Start URL": au_start_url, # FIXME
-                    "Ingest Step": "staged",
-                    "Staged By": self.get_emailname(),
-                    "Staged To": self.stage.account,
-                    }
-                
-                    for parameter in plugin_parameters :
-                        description = re.sub('\s*[(][^)]+[)]\s*$', '', parameter["description"])
-                        out_packet[description] = plugin_parameter_map[parameter["name"]]
-                
-                    out_packet = { **out_packet, **{ "parameters": self.plugin_parameters } }
-                
-                    #"local": os.getcwd(), "staged": self.ftp.url(),
-                    #"jar": self.switches['jar'],
-                    #"au_title": self.switches['au_title'],
-                    #"parameters": [ [ key, self.manifest[key] ] for key in self.manifest ]
-                    self.output_status(0, "ok", out_packet)
-                
-                else :
-                    self.write_error(1, "Connection failed for %(user)s@%(host)s." % {"user": self.stage.user, "host": self.stage.host})
+        except AssertionError as e : # Parameter or precondition requirements failure
+            if len(e.args) > 0 and type(e.args[0]) is dict :
+                err = e.args[0]
+                code = err['code'] if 'code' in err else 2
+                message = ( "REQUIRED: %(message)s; try `%(remedy)s`" if "remedy" in err else "FAILED: %(message)s.") % err
+                self.write_error(code, message)
+            elif len(e.args) == 2 :
+                ( message, req ) = e.args
+                missing = [ parameter for parameter in req if self.switches.get(parameter) is None ]
+                self.write_error(2, "Required parameter missing: %(missing)s" % { "missing": ", ".join(missing) })
+            else :
+                ( message, req ) = ( e.args[0], None )
+                self.write_error(2, "Requirement failure: %(message)s" % { "message": message })
                 
         except KeyboardInterrupt as e :
             self.write_error(255, "Keyboard Interrupt.", prefix="^C\n")
 
-        except FileNotFoundError as e :
-            if 3 == self.exitcode :
-                pass
-            else :
-                raise
-
-        if self.ftp is not None :
+        finally :
             try :
-                self.ftp.quit()
+                if self.ftp is not None :
+                    self.ftp.quit()
             except ftplib.error_perm as e :
                 pass
 
     def exit (self) :
         sys.exit(self.exitcode)
-
-def align_switches (left, right, switches, override=True) :
-    if switches[left] is None :
-        switches[left] = switches[right]
-    if switches[right] is None :
-        switches[right] = switches[left]
-    if override :
-        if switches[right] != switches[left] :
-            switches[right] = switches[left]
 
 if __name__ == '__main__':
 
@@ -524,7 +518,7 @@ if __name__ == '__main__':
     
     os.environ["PATH"] = ":".join( [ scriptdir, os.environ["PATH"] ] )
     
-    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+    defaults={
             "ftp/host": None, "ftp/user": None, "ftp/pass": None,
             "stage/base": None, "stage/host": None, "stage/user": None, "stage/pass": None, "stage/protocol": None,
             "stage/identity": None, "identity": None,
@@ -540,22 +534,38 @@ if __name__ == '__main__':
             "skip": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
             "dummy": None
-    }, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()
+    }
+    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaults, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()
     
     align_switches("identity", "stage/identity", switches)
     align_switches("authentication", "stage/authentication", switches)
     align_switches("directory", "subdirectory", switches)
     align_switches("base_url", "stage/base_url", switches)
     
-    # look for positional arguments: first argument goes to --remote=...
-    cmd_args = sys.argv[1:]
-    if switches.get('remote') is None :
-        if len(sys.argv) > 1 :
-            switches['remote'] = cmd_args[0]
-            cmd_args = cmd_args[1:]
+    args = sys.argv[1:]
     
+    # look for positional arguments: first argument goes to --local=...
+    if switches.get('local') is None :
+        if len(args) > 0 :
+            ( switches['local'], args ) = shift_args(args)
+    # look for positional arguments: next argument goes to --remote=...
+    if switches.get('remote') is None :
+        if len(args) > 0 :
+            ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
+    pipes = ADPNScriptPipeline()
+    if switches.get('local') is None :        
+        # Let's pull some text off of standard input/pipeline
+        local = pipes.get_data('Packaged In')
+        if local :
+            switches['local'] = local
+    if switches.get('remote') is None :
+        # Let's pull some text off of standard input/pipeline
+        remote = pipes.get_data('Staged To')
+        if remote :
+            switches['remote'] = remote
+
     institution = switches["institution"]
     if switches["peer"] is not None :
         institution = "%(institution)s (%(code)s)" % { "institution": institution, "code": switches["peer"].upper() }
@@ -579,9 +589,11 @@ if __name__ == '__main__':
     if script.switched('help') :
         script.display_usage()
     elif script.switched('details') :
-        print("Defaults:", defaults)
-        print("")
+        print("FROM:", switches['local'])
+        print("TO:", switches['remote'])
         print("Settings:", switches)
+        print("")
+        print("Defaults:", defaults)
     else :
         script.execute()
 

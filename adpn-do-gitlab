@@ -113,13 +113,19 @@ if [[ "${CMD}" != "token" ]] ; then
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
 	PRIVATE_TOKEN=$( "${ME}" token ${_LINESWITCH[token]} )
+	ADG_CODE="$?"
 	
 	# We should only have to retrieve this once, at the outset; pass it down to any child calls
 	if [[ -n "${PRIVATE_TOKEN}" ]] ; then
 		_LINESWITCH[token]="--token=${PRIVATE_TOKEN}"
 		_PARAM[token]="${PRIVATE_TOKEN}"
+	elif [[ "${ADG_CODE}" -gt 0 ]] ; then
+		EXITCODE="${ADG_CODE}"
+		printf "[%s:%d] REQUIRED: Gitlab API access token.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT_CMD_NAME}" 1>&2
 	fi
 fi
+
+if [[ "${EXITCODE}" -eq 0 ]] ; then
 
 case "${CMD}" in
 		
@@ -479,6 +485,8 @@ case "${CMD}" in
 		EXITCODE=255
 		;;
 esac
+
+fi
 
 ##########################################################################################
 ### CLEANUP: remove temporary output file. ###############################################
