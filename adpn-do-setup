@@ -209,6 +209,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				EXITCODE="$?"
 
 				declare -A AS_PROPS=()
+				declare -A AS_KDBX_KEYS=()
 				printf "* SETTINGS: Let's set up some properties for ${MY_CONFFILE}.\n" 1>&2
 				printf "  N.B.: Not all of these settings need to be filled in on all systems.\n" 1>&2
 				printf "\n" 1>&2
@@ -267,7 +268,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]					
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(preserve|ingest|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|accept|post|ingest|promote|publish)$ ]] ; then
 					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
 						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
@@ -278,7 +279,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				fi
 				
 				PROPS_SERVER="configuration.adpn.org"
-				if [[ "${AS_CONTEXT}" =~ ^(ingest|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(accept|post|ingest|promote|publish)$ ]] ; then
 					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
 					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
@@ -304,18 +305,22 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify)$ ]] ; then
 					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
 					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(preserve|verify|ingest|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|promote|publish)$ ]] ; then
 					KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
 					read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 					KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
 					read -ep "Gitlab Repository [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
 					KEY="gitlab/token" DEFAULT=""
-					read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " GITLAB_TOKEN
+					if [[ -n "${GITLAB_TOKEN}" ]] ; then
+						AS_KDBX_KEYS["ADPNet-Gitlab-Token:gitlab/token"]="${GITLAB_TOKEN}"
+					fi
 				fi
 				
 				declare -a AS_KEYS=()
@@ -326,6 +331,16 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 						EXITCODE="$?"
 					fi
 				done
+				
+				KDBX="${MY_CONFDIR}/adpnet.kdbx"
+				IFS="" printf "%s\n" "${!AS_KDBX_KEYS[@]}" | sort | while read -r KEY ; do
+					KEYNAME="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=1 )"
+					PROPERTY="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=2 )"
+					ENCODED_KEYNAME="$( rawurlencode "${KEYNAME}" )"
+					adpn property set "${PROPERTY}" "keepass:///${KDBX}?title=${ENCODED_KEYNAME}"
+					printf "%s" "${AS_KDBX_KEYS[${KEY}]}" | adpn-get-keepass.py --database="${KDBX}" --set --create --title="${KEYNAME}"
+				done
+				
 			fi
 			printf "\n"
 		fi
