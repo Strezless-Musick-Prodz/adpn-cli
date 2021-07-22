@@ -436,13 +436,20 @@ case "${CMD}" in
 #
 # @version 2021.0707
 
-		AU_LOCALPATH="${_ARGV[2]}"
+		declare -a AU_LOCALPATHS=( "${_ARGV[@]:2}" )
+		AU_LOCALPATHS+=( "${PWD}" )
+		AU_LOCALPATHS=( "${AU_LOCALPATHS[@]/#/\\}" )
+		
+		AU_LOCALPATH="$( adpn_parameter_from "--local" "${AU_LOCALPATHS[@]}" )"
 		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
 		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
 		
-		STAGING_AREA="${_ARGV[3]}"
+		[[ -n "${_PARAM[local]}" ]] && N=2 || N=3
+		declare -a AU_STAGINGAREAS=( "${_ARGV[@]:$N}" )
+		AU_STAGINGAREAS=( "${AU_STAGINGAREAS[@]/#/\\}" )
+		STAGING_AREA="$( adpn_parameter_from "--remote" "${AU_STAGINGAREAS[@]}" ".stage/base" )"
 		
-		FROM="$( adpn_parameter_from "--from" "--peer" ".peer" "<From (<PUBLISHER>): " )"
+		FROM="$( adpn_parameter_from "--from" "--publisher" "--peer" ".publisher"  ".peer" "<From (<PUBLISHER>): " )"
 		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
 		DEFAULT_AU="$( printf "AU from %s" "${SUBDIRECTORY}" )"
 		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"

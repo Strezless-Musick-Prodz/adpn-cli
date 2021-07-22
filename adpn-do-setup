@@ -217,8 +217,14 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				AS_CONTEXT="$( [[ -z "${_PARAM[for]}" ]] && echo "preserve" || echo "${_PARAM[for]}" )"
 				AS_CONTEXT="$( printf "%s" "${AS_CONTEXT}" | tr "[:upper:]" "[:lower:]" )"
 				
+				PUBLISHER_CONTEXTS="package|stage|preserve"
+				NODE_MANAGER_CONTEXTS="verify"
+				PROPS_MANAGER_CONTEXTS="accept|post|ingest|promote|publish"
+				TECH_CONTEXTS="${NODE_MANAGER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS}"
+				ALL_CONTEXTS="${PUBLISHER_CONTEXTS}|${NODE_MANAGER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS}"
+				
 				IFS=""
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS})$ ]] ; then
 					read -ep "Institution: " AS_PROPS[institution]
 					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
 					
@@ -226,7 +232,20 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					read -ep "MakeManifest API Endpoint [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(accept|post|ingest|publish|promote)$  ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
+					USER_FULLNAME="$( getent passwd "${USER}" | cut -d ":" -f 5 -s | cut -d "," -f 1 -s )"
+					[[ -n "${USER_FULLNAME}" ]] || USER_FULLNAME="${USER}"
+
+					KEY="user/realname" DEFAULT="${USER_FULLNAME}"
+					read -ep "User Full Name [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
+					USER_EMAIL="${USER}@$( hostname )"
+					KEY="user/email" DEFAULT="${USER_EMAIL}"
+					read -ep "User E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+
+				fi
+
+				if [[ "${AS_CONTEXT}" =~ ^(${TECH_CONTEXTS})$  ]] ; then
 				
 					read -ep "LOCKSS Daemon URL: " AS_PROPS[daemon]
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
@@ -239,13 +258,13 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					
 				fi
 
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|publish|promote)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
 					KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
 					read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				DROP_SERVER="drop.adpn.org"
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve)$ ]] ; then
+				DROP_SERVER="drop.adpn.org" ; DROP_HERE="drop_au_content_in_here"
+				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS})$ ]] ; then
 					DROP_SERVER_USER="$( printf "%s" "${AS_PROPS[publisher]}" | tr '[:upper:]' '[:lower:]' )"
 					
 					KEY="stage/host" DEFAULT="${DROP_SERVER}"
@@ -253,22 +272,25 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					
 					KEY="stage/user" DEFAULT="${DROP_SERVER_USER}"
 					read -ep "Drop Server Account [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
+					KEY="stage/base" DEFAULT="sftp://${DROP_SERVER_USER}@${DROP_SERVER}/${DROP_HERE}/"
+					read -ep "Staging Area Base [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
-					KEY="stage/base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/drop_au_content_in_here/"
+					KEY="stage/base_url" DEFAULT="http://${DROP_SERVER}/drop-server/${DROP_SERVER_USER}/${DROP_HERE}/"
 					read -ep "Staging Area Base URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|publish|promote)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
 					KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
 					read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(verify)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${NODE_MANAGER_CONTEXTS})$ ]] ; then
 					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]					
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|accept|post|ingest|promote|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS})$ ]] ; then
 					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
 						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
@@ -279,7 +301,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				fi
 				
 				PROPS_SERVER="configuration.adpn.org"
-				if [[ "${AS_CONTEXT}" =~ ^(accept|post|ingest|promote|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${PROPS_MANAGER_CONTEXTS})$ ]] ; then
 					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
 					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
@@ -305,12 +327,12 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS}|${NODE_MANAGER_CONTEXTS})$ ]] ; then
 					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
 					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(stage|preserve|verify|accept|post|ingest|promote|publish)$ ]] ; then
+				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
 					KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
 					read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 					KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"

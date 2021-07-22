@@ -654,6 +654,13 @@ if __name__ == '__main__':
     
     args = sys.argv[1:]
     
+    pipes = ADPNScriptPipeline(conditional=True)
+    switches=pipes.backfilled(switches, 'local', 'Packaged In')
+    switches=pipes.backfilled(switches, 'remote', 'Staged To')
+    switches=pipes.backfilled(switches, 'au_file_size', 'File Size')
+    switches=pipes.backfilled(switches, 'au_title', 'AU Package')
+    switches=pipes.backfilled(switches, 'au_title', 'Ingest Title')
+    
     # look for positional arguments: first argument goes to --local=...
     if switches.get('local') is None :
         if len(args) > 0 :
@@ -664,13 +671,6 @@ if __name__ == '__main__':
             ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
-    pipes = ADPNScriptPipeline(conditional=True)
-    switches=pipes.backfilled(switches, 'local', 'Packaged In')
-    switches=pipes.backfilled(switches, 'remote', 'Staged To')
-    switches=pipes.backfilled(switches, 'au_file_size', 'File Size')
-    switches=pipes.backfilled(switches, 'au_title', 'AU Package')
-    switches=pipes.backfilled(switches, 'au_title', 'Ingest Title')
-
     script = ADPNStageContentScript(switches.get('context'), sys.argv, switches)
     
     if script.switched('help') :
