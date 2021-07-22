@@ -337,7 +337,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					KEYNAME="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=1 )"
 					PROPERTY="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=2 )"
 					ENCODED_KEYNAME="$( rawurlencode "${KEYNAME}" )"
-					adpn property set "${PROPERTY}" "keepass:///${KDBX}?title=${ENCODED_KEYNAME}"
+					adpn property set "${PROPERTY}" "keepass://${KDBX}?title=${ENCODED_KEYNAME}"
 					printf "%s" "${AS_KDBX_KEYS[${KEY}]}" | adpn-get-keepass.py --database="${KDBX}" --set --create --title="${KEYNAME}"
 				done
 				

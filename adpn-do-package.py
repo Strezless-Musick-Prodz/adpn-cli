@@ -63,11 +63,11 @@ The default values in adpnet.json are overridden if values are provided on the
 command line with explicit switches.
     """
     
-    def __init__ (self, scriptname, argv, switches, manifest) :
+    def __init__ (self, scriptname, argv, switches) :
         self.scriptname = scriptname
         self.argv = argv
         self.switches = switches
-        self.manifest = manifest
+        self.manifest_data = None
         self.exitcode = 0
         
         self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
@@ -79,9 +79,6 @@ command line with explicit switches.
         self._plugin = None
         self._plugin_parameters = None
         
-        # FIXME: we need to figure out a good way to get this...
-        self.manifest["institution_code"] = self.institution_code
-
     @property
     def subdirectory (self) :
         return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')
@@ -93,9 +90,10 @@ command line with explicit switches.
     
     @property
     def institution_code (self) :
+        code = None
         if self.switched('stage/user') :
             code = self.switches.get('stage/user')
-        else :
+        elif self.switched('stage/base') :
             url = self.switches.get('stage/base')
             (host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
         
@@ -108,7 +106,6 @@ command line with explicit switches.
                 (user, passwd) = (credentials[0], credentials[1] if len(credentials) > 1 else None)
             
             code = user
-        
         return code
         
     @property
@@ -119,7 +116,7 @@ command line with explicit switches.
         return ( ( step.strip().lower() ) in self.skip_steps )
     
     def get_location (self) :
-        return os.path.realpath(self.switches.get('local'))
+        return os.path.realpath(os.path.expanduser(self.switches.get('local'))) if self.switches.get('local') else os.path.realpath(".")
     
     @property
     def package (self) :
@@ -191,7 +188,7 @@ command line with explicit switches.
         return self._plugin
         
     def get_plugin (self) :
-        return myLockssPlugin(jar=self.switches["jar"])
+        return self.package.plugin if self.package is not None else myLockssPlugin(jar=self.switches.get("jar"))
     
     def get_plugin_parameters (self) :
         # Let's determine the plugin and its parameters from the command line switches
@@ -199,8 +196,40 @@ command line with explicit switches.
 
     def new_preservation_package (self) :
         # Now let's plug the parameters for this package in to the package and plugin
-        return ADPNPreservationPackage(self.switches['local'], self.plugin_parameters, self.manifest, self.switches)
+        pack = ADPNPreservationPackage(path=self.get_location(), plugin_parameters=self.plugin_parameters, switches=self.switches)
 
+        # FIXME: we need to figure out a good way to extract & apply this setting...
+        pack.staging_user = self.institution_code
+        return pack
+        
+    def get_manifest_data (self, key=None) :
+        data = None
+        if self.manifest_data is None :
+            self.manifest_data = self.package.read_manifest_data()
+        if type(self.manifest_data) is dict :
+            data = self.manifest_data.get(key) if key is not None else self.manifest_data
+        return data
+    
+    @property
+    def au_title (self) :
+        return self.get_au_title(load_manifest=False)
+    
+    @au_title.setter
+    def au_title (self, rhs) :
+        self.switches['au_title'] = rhs
+        if self.package is not None :
+            self.package.au_title = rhs
+            
+    def get_au_title (self, load_manifest=True, use_directory=False) :
+        au_title = self.switches.get('au_title')
+        if load_manifest and not au_title :
+            au_title = self.get_manifest_data("AU Package")
+        if load_manifest and not au_title :
+            au_title = self.get_manifest_data("Ingest Title")
+        if use_directory and not au_title :
+            au_title = self.subdirectory 
+        return au_title
+        
     def get_au_start_url (self) :
         au_start_url = None
         
@@ -217,8 +246,10 @@ command line with explicit switches.
             if self.subdirectory is None :
                 self.subdirectory = os.path.basename(self.get_location())
                 self.output_status(1, "!", "Using present working directory name for staging area subdirectory: %(subdirectory)s" % { "subdirectory": self.subdirectory })
-            
             self.package = self.new_preservation_package()
+
+            if self.get_au_title() is None :
+                self.au_title = input("AU Title [%(default)s]: " % { "default": self.subdirectory })
 
             # STEP 1. Confirm that we have all the plugin parameters required to produce AU Start URL
             self.output_status(2, "*", "Confirming required LOCKSS plugin parameters")
@@ -232,35 +263,18 @@ command line with explicit switches.
                 self.output_status(1, "*", "Skipped BagIt validation: %(path)s" % {"path": self.package.get_path(canonicalize=True)})
 
             # STEP 3. Request manifest HTML from MakeManifest service and write file
-            if self.manifest["au_file_size"] is None :
-                self.manifest["au_file_size"] = self.package.reset_au_file_size()
-            if self.package.has_manifest() :
+            if self.package.has_manifest() and not self.switches.get('manifest') :
                 self.output_status(1, "*", "Confirming manifest HTML: %(path)s" % { "path": self.package.plugin.get_manifest_filename() } )
                 self.package.check_manifest()
             else :
                 self.output_status(1, "*", "Requesting LOCKSS manifest HTML from service: %(path)s" % { "path": self.package.plugin.get_manifest_filename() } )
                 self.package.make_manifest()
-                
-            out_packet = {
-            "Ingest Title": self.manifest["au_title"],
-            "File Size": self.manifest["au_file_size"],
-            "From Peer": self.manifest["institution_publisher_code"],
-            "Plugin JAR": self.switches["jar"],
-            "Start URL": au_start_url, # FIXME
-            "Ingest Step": "packaged",
-            "Packaged In": self.package.get_path(canonicalize=True)
-            }
             
-            for parameter in self.plugin.get_parameter_keys(names=True) :
-                if self.switches.get(parameter) :
-                    self.plugin.set_parameter(parameter, self.switches.get(parameter))
-
-            plugin_settings = self.plugin.get_parameters(mapped=True)
-            for parameter in self.plugin.get_parameter_keys() :
-                description = re.sub('\s*[(][^)]+[)]\s*$', '', parameter["description"])
-                out_packet[description] = plugin_settings[parameter["name"]]
-            out_packet = { **out_packet, **{ "parameters": self.plugin_parameters } }
+            # STEP 4. Feed parameter settings in to LOCKSS plugin, get out AU details,
+            # and package it all together into JSON data output.
+            out_packet = self.package.get_pipeline_metadata(cascade={ "Ingest Step": "packaged" }, read_manifest=True)
             
+            # STEP 5. Send JSON data output to stdout/pipeline
             self.output_status(0, "ok", out_packet)
 
         except AssertionError as e : # Parameter requirements failure
@@ -279,6 +293,8 @@ command line with explicit switches.
                 })
             elif len(e.args) == 2 :
                 ( message, req ) = e.args
+                print("ERR:",file=sys.stderr)
+                print(e.args,file=sys.stderr)
                 missing = [ parameter for parameter in req if self.switches.get(parameter) is None ]
                 self.write_error(2, "Required parameter missing: %(missing)s" % { "missing": ", ".join(missing) })
             else :
@@ -317,7 +333,7 @@ if __name__ == '__main__':
             "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
             "skip": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
-            "dummy": None
+            "manifest": None, "context": scriptname
     }, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()
     
     align_switches("directory", "subdirectory", switches)
@@ -335,25 +351,7 @@ if __name__ == '__main__':
             ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
-    institution = switches["institution"]
-    if switches["peer"] is not None :
-        institution = "%(institution)s (%(code)s)" % { "institution": institution, "code": switches["peer"].upper() }
-    institution_code = switches['stage/user']
-    
-    manifest = {
-        "institution": switches["institution"],
-        "institution_name": institution,
-        "institution_code": switches['stage/user'],
-        "institution_publisher_code": switches["peer"].upper(),
-        "au_title": switches['au_title'],
-        "au_directory": switches['directory'] if switches['directory'] is not None else switches['subdirectory'],
-        "au_file_size": switches['au_file_size'],
-        "au_notes": switches['au_notes'],
-        "drop_server": switches['base_url'],
-        "lockss_plugin": switches['jar'],
-        "display_format": "text/html"
-    }
-    script = ADPNStageContentScript(scriptname, sys.argv, switches, manifest)
+    script = ADPNStageContentScript(switches.get('context'), sys.argv, switches)
     
     if script.switched('help') :
         script.display_usage()
@@ -365,4 +363,3 @@ if __name__ == '__main__':
         script.execute()
 
     script.exit()
-    

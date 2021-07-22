@@ -8,8 +8,8 @@
 import io, os, sys
 import fileinput, stat
 import re, json
-import urllib, ftplib, pysftp
-import math
+import urllib, ftplib, pysftp, paramiko.agent
+import math, binascii
 from paramiko import ssh_exception
 from datetime import datetime
 from io import BytesIO
@@ -30,24 +30,46 @@ def input (*args) :
 
 class ADPNScriptPipeline :
 
-    def __init__ (self) :
+    def __init__ (self, conditional=False, stream_in=sys.stdin) :
+        self._stream_in = stream_in
         self._pipelines = None
+        self._conditional = conditional
         self.json = myPyJSON()
-
+    
+    def test_piped_input (self) :
+        mode = os.fstat(self._stream_in.fileno()).st_mode
+        return any([stat.S_ISFIFO(mode), stat.S_ISREG(mode)])
+        
     @property
     def pipelines (self) :
         if self._pipelines is None :
-            self._pipelines = [ line for line in fileinput.input() ]
+            if self.test_piped_input() or not self._conditional :
+                text = self._stream_in.read()
+                self._pipelines = [ line for line in re.split(r'[\r\n]+', text) if line ]
         return self._pipelines
     
     def get_data(self, key=None) :
-        lines = self.pipelines
-        self.json.accept(lines)
-        return self.json.allData if key is None else ( self.json.allData[key] if key in self.json.allData else None )
+        result = None
+        if self.pipelines is not None :
+            self.json.accept(self.pipelines)
+            result = self.json.allData if key is None else ( self.json.allData[key] if key in self.json.allData else None )
+        return result
+    
+    def backfilled (self, table, key, data_source) :
+        
+        result = { **table }
+        if result.get(key) is None :
+        # O.K., nothing from switches; let's pull some text off stdin/pipeline
+            
+            value = pipes.get_data(data_source)
+            if value is not None :
+                result[key] = value
+        
+        return result
 
 class ADPNStagingArea :
 
-    def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None) :
+    def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None, getpass=lambda x: None) :
         self.protocol = protocol
         self.host = host
         self.user = user
@@ -57,11 +79,58 @@ class ADPNStagingArea :
         self.subdirectory = subdirectory
         self.key_protocols = [ "sftp", "scp" ]
         self.authentication = authentication
-    
+        self._agent = None
+        self.getpass = getpass
+        
     @property
     def account (self) :
         return ( "%(user)s@%(host)s" % { "user": self.user, "host": self.host } )
-        
+    
+    @property
+    def agent (self) :
+        if self._agent is None :
+            try :
+                self._agent = paramiko.agent.Agent()
+            except ssh_exception.SSHException as e :
+                # if we cannot talk to the agent, that's like having no agent
+                pass
+        return self._agent
+
+    @property
+    def agent_keys (self) :
+        keys = []
+        if self.agent is not None :
+            # use: ( key, get_password )
+            keys = [ ( key, lambda: None ) for key in self.agent.get_keys() ]
+        return keys
+
+    @property
+    def private_keys (self) :
+        all_keys = self.agent_keys
+        if self.has_private_keyfile() :
+            # use: ( key, get_password )
+            all_keys.append( ( self.get_private_keyfile(), lambda: self.read_password(keyfile=True, passwd=self.passwd) ) )
+        return all_keys
+    
+    @property
+    def authentication_credentials (self) :
+        creds = [ ( lambda: None, key, get_passphrase ) for (key, get_passphrase) in self.private_keys ]
+        creds.append( ( lambda: self.read_password(keyfile=False, passwd=self.passwd), None, lambda: None ) )
+        return creds
+    
+    @property
+    def getpass (self) :
+        return self._getpass
+    
+    @getpass.setter
+    def getpass (self, callback) :
+        self._getpass = callback
+    
+    def read_password (self, keyfile=None, passwd=None) :
+        prompt = self.get_password_prompt(keyfile=keyfile)
+        passwd = passwd if passwd is not None else self.passwd
+        return passwd if passwd is not None else self.getpass(prompt)
+    
     def accept_url(self, url) :
         (host, user, passwd, base_dir, subdirectory) = (None, None, None, None, None)
         
@@ -92,7 +161,7 @@ class ADPNStagingArea :
 
     def uses_keyfile (self) :
         return ( self.protocol in self.key_protocols )
-        
+
     def get_private_keyfile (self) :
         keyfile = None
         
@@ -117,44 +186,111 @@ class ADPNStagingArea :
         
     def has_private_keyfile (self) :
         return ( self.authentication != "password" ) and ( self.get_private_keyfile() is not None )
-    
-    def get_password_prompt (self) :
-        passwd_prompt=( "%(protocol)s password: " % {"protocol": self.protocol.upper()} )
-        if self.has_private_keyfile() :
-            passwd_prompt = "%(protocol)s private key passphrase (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
-        else :
-            passwd_prompt = "%(protocol)s password (%(user)s@%(host)s): " % {"protocol": self.protocol.upper(), "user": self.user, "host": self.host}
-        return passwd_prompt
+        
+    def get_password_prompt (self, protocol=None, keyfile=None) :
+        protocol = protocol if protocol is not None else self.protocol
+        keyfile = keyfile if keyfile is not None else self.has_private_keyfile()
+        what = "private key passphrase" if keyfile else "password"
+        return "%(protocol)s %(what)s (%(user)s@%(host)s): " % {"protocol": protocol.upper(), "what": what, "user": self.user, "host": self.host}
         
     def open_connection (self) :
         if self.is_sftp() :
             
-            # check for an id_rsa or identity file
-            if self.has_private_keyfile() :
-                passwd = None
-                private_key = self.get_private_keyfile()
-                private_key_pass = self.passwd
-            else :
-                passwd = self.passwd
-                ( private_key, private_key_pass ) = ( None, None )
-                
-            conn = pysftp.Connection(self.host, username=self.user, password=passwd, private_key=private_key, private_key_pass=private_key_pass)
+            # first check to see whether we can establish a connection using key pair authentication
+            conn = None
+            errs = []
+            i = 0
+            for ( get_passwd, private_key, get_private_key_pass ) in self.authentication_credentials :
+                try :
+                    if conn is None :
+                        i = i+1
+                        
+                        ( passwd, private_key_pass ) = ( get_passwd(), get_private_key_pass() )
+                        
+                        credentials=""
+                        if type(private_key) is paramiko.agent.AgentKey :
+                            credentials = ( "agent key(%(key)s)" % {
+                            "key": binascii.hexlify(private_key.get_fingerprint(), sep=":").decode("utf-8")
+                            } )
+                        elif private_key_pass is not None :
+                            credentials = ( "private key(%(key)s, %(pass)s)" % {
+                            "key": private_key if type(private_key) is str else "<AGENT KEY>",
+                            "pass": "*" * len(private_key_pass) if private_key_pass is not None else "<NONE>"
+                            } )
+                        else :
+                            credentials = ( "password(%(pass)s)" % {
+                            "pass": "*" * len(passwd) if passwd is not None else "<NONE>"
+                            } )
+                        #credentials = "key:%(key)/"
+                        print("* %(protocol)s connection attempt %(i)d, %(user)s@%(host)s < %(credentials)s" % {
+                            "protocol": self.protocol.upper(),
+                            "i": i,
+                            "user": self.user,
+                            "host": self.host,
+                            "credentials": credentials,
+                        }, file=sys.stderr)
+                        
+                        conn = pysftp.Connection(
+                            self.host, username=self.user,
+                            password=passwd,
+                            private_key=private_key, private_key_pass=private_key_pass
+                        )
+                    
+                except ValueError as e :
+                    errs.append(e)
+                except ssh_exception.AuthenticationException as e :
+                    errs.append(e)
+                except ssh_exception.SSHException as e :
+                    errs.append(e)
+            
+            if conn is None :
+            # apparently we could not connect using any means that we could figure out
+            # so let's return a pile of exceptions indicating what all we tried
+                raise paramiko.ssh_exception.NoValidConnectionsError( { ( self.host, 22 ): errs } )
                 
         else :
             conn = FTP(self.host, user=self.user, passwd=self.passwd)
         
         return myFTPStaging(conn, user=self.user, host=self.host) if conn is not None else None
 
+class ADPNPublisher :
+    
+    def __init__ (self, switches={}) :
+        self._switches = switches
+    
+    @property
+    def switches (self) :
+        return self._switches
+    
+    def to_dict (self) :
+        return { "name": self.name, "code": self.code }
+    
+    @property
+    def code (self) :
+        code = self.switches.get('publisher') if 'publisher' in self.switches else self.switches.get('peer')
+        return code.upper() if type(code) is str else code
+    
+    @property
+    def name (self) :
+        name = self.switches.get('institution') if 'institution' in self.switches else None
+        return name
+    
+    @property
+    def name_code (self) :
+        pattern = "%(name)s (%(code)s)" if self.code is not None else "%(name)s"
+        return ( pattern % self.to_dict() )
+    
 class ADPNStageContentScript :
     """
 Usage: adpn-stage-content.py [<OPTIONS>]... [<URL>]
 
-URL should be an FTP URL, in the form ftp://[<user>[:<pass>]@]<host>/<dir>
-The <user> and <pass> elements are optional; they can be provided as part
-of the URL, or using command-line switches, or interactively at input and
-password prompts.
+URL should be an SFTP or FTP URL, in the form:
+    sftp://[<USER>[:<PASS>]@]<HOST>/<DIR>
+    ftp://[<USER>[:<PASS>]@]<HOST>/<DIR>
+<USER> and <PASS> elements are optional; they can be provided as part of the URL,
+or using command-line switches, or interactively at input and password prompts.
 
-  --local=<PATH>   	   	the local directory containing the files to stage
+  --local=<PATH>   	the local directory containing the files to stage
   --au_title=<TITLE>   	the human-readable title for the contents of this AU
   --subdirectory=<SLUG>	the subdirectory on the staging server to hold AU files
   --directory=<SLUG>   	identical to --subdirectory
@@ -173,21 +309,6 @@ Common configuration parameters:
   --user=<NAME>        	FTP: username for logging in to the staging server
   --pass=<PASSWD>      	FTP: password for logging in to the staging server
   --base_dir=<PATH>   	FTP: path to the staging area on the FTP server
-  --institution=<NAME>  Manifest: human-readable nmae of the institution
-
-To generate a manifest file, the script needs to use information from the
-LOCKSS Publisher Plugin. Plugins are hosted on the LOCKSS props
-server/admin node.
-
-If you need to connect to the LOCKSS props server through a SOCKS5 proxy, use:
-
-  --proxy=<HOST>      	the name of your proxy (use "localhost" for SSH tunnel)
-  --port=<NUMBER>      	the port number for your proxy
-  
-If you need to use SSH tunneling to connect to the SOCKS5 proxy, use:
-
-  --tunnel=<HOST>     	the name of the host to open an SSH tunnel to
-  --tunnel-port=<PORT> 	the port for SSH connections to the tunnel (default: 22)
 
 Default values for these parameters can be set in the JSON configuration file
 adpnet.json, located in the same directory as the script. To set a default
@@ -206,11 +327,10 @@ The default values in adpnet.json are overridden if values are provided on the
 command line with explicit switches.
     """
     
-    def __init__ (self, scriptname, argv, switches, manifest) :
+    def __init__ (self, scriptname, argv, switches) :
         self.scriptname = scriptname
         self.argv = argv
         self.switches = switches
-        self.manifest = manifest
         self.exitcode = 0
         
         self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
@@ -219,7 +339,8 @@ command line with explicit switches.
         
         # start out with defaults
         self.ftp = None
-        self.stage = ADPNStagingArea()
+        self.stage = ADPNStagingArea(getpass=getpass)
+        self.publisher = ADPNPublisher(switches)
         self._package = None
         
         # now unpack and overlay elements from the SFTP/FTP URL, if any is provided
@@ -236,9 +357,7 @@ command line with explicit switches.
         self.stage.identity=self.switches.get('identity') if self.switches.get('identity') is not None else self.stage.identity
         self.stage.subdirectory=self.subdirectory_switch if self.subdirectory_switch is not None else self.stage.subdirectory
         self.stage.authentication=self.get_authentication_method()
-
-        self.manifest["institution_code"] = self.stage.user
-
+    
     @property
     def subdirectory_switch (self) :
         return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')
@@ -294,7 +413,7 @@ command line with explicit switches.
     def get_emailname (self) :
         return ( "%(realname)s <%(email)s>" % { "realname": self.get_username(), "email": self.get_email() } )
         
-    def mkBackupDir (self) :
+    def new_backup_dir (self) :
         backupPath=self.switches['backup']
         
         try :
@@ -321,18 +440,20 @@ command line with explicit switches.
     def exclude_filesystem_artifacts (self, file) :
         return file.lower() in ['thumbs.db']
         
-    def read_password (self) :
-        return getpass(self.stage.get_password_prompt())
-
     def establish_connection (self, interactive=True) :
         if self.stage.user is None :
             self.stage.user = input("User: ")
-        if self.stage.passwd is None :
-            self.stage.passwd = self.read_password()
-        
+
         conn = None
         try :
             conn = self.stage.open_connection()
+        except ssh_exception.NoValidConnectionsError as e :
+            self.write_error(1, "%(protocol)s connection failure: %(message)s. Attempts:" % { "protocol": self.stage.protocol.upper(), "message": e.args[1] })
+            for ( addr, errs ) in e.errors.items() :
+                for err in errs :
+                    err_message = str(err)
+                    self.write_error(1, "%(host)s:%(port)d: %(err_message)s" % { "host": addr[0], "port": addr[1], "err_message": err_message })
+                    
         except ValueError as e :
             if len(self.stage.passwd) == 0 :
                 settings = { "protocol": self.stage.protocol.upper(), "key": self.stage.get_private_keyfile(), "err": str(e) }
@@ -351,7 +472,7 @@ command line with explicit switches.
                 self.write_error(1, "%(protocol)s key failure. Did you use the right passphrase for the key [%(key)s]?" % settings)
             else :
                 self.write_error(1, "%(protocol)s connection failed: %(err)s." % settings)
-
+        
         return conn
     
     def output_status (self, level, type, arg) :
@@ -393,6 +514,9 @@ command line with explicit switches.
         print(self.__doc__)
         self.exitcode = 0
     
+    def get_au_title (self) :
+        return self.switches.get('au_title') if self.switched('au_title') else self.subdirectory_switch
+    
     def get_au_start_url (self) :
         au_start_url = None
         
@@ -418,12 +542,12 @@ command line with explicit switches.
         (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
                     
         if not self.test_skip("download") :
-            backupDir = self.mkBackupDir()
+            backupDir = self.new_backup_dir()
             (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
             self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
                 
         self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
-        (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.switches['local'], remote=self.stage.subdirectory, make=True)
+        (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.get_locallocation(), remote=self.stage.subdirectory, make=True)
         self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
             
         # upload the present directory recursively
@@ -451,36 +575,22 @@ command line with explicit switches.
             self.plugin_parameters = plugin_parameter_settings
             
             # Now let's plug the parameters for this package in to the package and plugin
-            self.package = ADPNPreservationPackage(self.switches['local'], self.plugin_parameters, self.manifest, self.switches)
+            self.package = ADPNPreservationPackage(path=self.get_locallocation(), plugin_parameters=self.plugin_parameters, switches=self.switches)
 
-            au_start_url = self.get_au_start_url()
-                
             # Now let's check the packaging
             assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
             assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
                 
-            if self.manifest["au_file_size"] is None :
-                self.manifest["au_file_size"] = self.package.reset_au_file_size()
-                
             self.do_transfer_files()
 
-            out_packet = {
-            "Ingest Title": self.manifest["au_title"],
-            "File Size": self.manifest["au_file_size"],
-            "From Peer": self.manifest["institution_publisher_code"],
-            "Plugin JAR": self.switches["jar"],
-            "Start URL": au_start_url, # FIXME
-            "Ingest Step": "staged",
-            "Staged By": self.get_emailname(),
-            "Staged To": self.stage.account,
-            }
+            # Pack up JSON data for output
+            out_packet = self.package.get_pipeline_metadata(cascade={
+                "Ingest Step": "staged",
+                "Staged By": self.get_emailname(),
+                "Staged To": self.stage.account,
+            }, read_manifest=True)
             
-            for parameter in plugin_parameters :
-                description = re.sub('\s*[(][^)]+[)]\s*$', '', parameter["description"])
-                out_packet[description] = plugin_parameter_map[parameter["name"]]
-            
-            out_packet = { **out_packet, **{ "parameters": self.plugin_parameters } }
-            
+            # Send JSON data output to stdout/pipeline
             self.output_status(0, "ok", out_packet)
                 
         except AssertionError as e : # Parameter or precondition requirements failure
@@ -533,7 +643,7 @@ if __name__ == '__main__':
             "au_title": None, "au_notes": None, "au_file_size": None, "institution": None,
             "skip": None,
             "proxy": None, "port": None, "tunnel": None, "tunnel-port": None,
-            "dummy": None
+            "context": scriptname
     }
     (sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaults, configfile=configjson, settingsgroup=["stage", "ftp", "user"]).parse()
     
@@ -554,37 +664,14 @@ if __name__ == '__main__':
             ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
-    pipes = ADPNScriptPipeline()
-    if switches.get('local') is None :        
-        # Let's pull some text off of standard input/pipeline
-        local = pipes.get_data('Packaged In')
-        if local :
-            switches['local'] = local
-    if switches.get('remote') is None :
-        # Let's pull some text off of standard input/pipeline
-        remote = pipes.get_data('Staged To')
-        if remote :
-            switches['remote'] = remote
+    pipes = ADPNScriptPipeline(conditional=True)
+    switches=pipes.backfilled(switches, 'local', 'Packaged In')
+    switches=pipes.backfilled(switches, 'remote', 'Staged To')
+    switches=pipes.backfilled(switches, 'au_file_size', 'File Size')
+    switches=pipes.backfilled(switches, 'au_title', 'AU Package')
+    switches=pipes.backfilled(switches, 'au_title', 'Ingest Title')
 
-    institution = switches["institution"]
-    if switches["peer"] is not None :
-        institution = "%(institution)s (%(code)s)" % { "institution": institution, "code": switches["peer"].upper() }
-    institution_code = switches['stage/user']
-    
-    manifest = {
-        "institution": switches["institution"],
-        "institution_name": institution,
-        "institution_code": switches['stage/user'],
-        "institution_publisher_code": switches["peer"].upper(),
-        "au_title": switches['au_title'],
-        "au_directory": switches['directory'] if switches['directory'] is not None else switches['subdirectory'],
-        "au_file_size": switches['au_file_size'],
-        "au_notes": switches['au_notes'],
-        "drop_server": switches['base_url'],
-        "lockss_plugin": switches['jar'],
-        "display_format": "text/html"
-    }
-    script = ADPNStageContentScript(scriptname, sys.argv, switches, manifest)
+    script = ADPNStageContentScript(switches.get('context'), sys.argv, switches)
     
     if script.switched('help') :
         script.display_usage()

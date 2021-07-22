@@ -326,7 +326,7 @@ case "${CMD}" in
 		
 		adpn-do-package.py --output=application/json \
 			"${ADP_ARGV[@]}" \
-			"${ADP_SWITCHES[@]}"
+			"${ADP_SWITCHES[@]}" ${V} ${Q} ${DDBG} --context="${SCRIPT_CMD_NAME}"
 		EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -lt 255 ]] ; then
@@ -373,7 +373,7 @@ case "${CMD}" in
 		
 		adpn-stage-content.py --output=application/json \
 			"${ASC_SWITCHES[@]}" \
-			"${ASC_ARGV[@]}" ${V} ${Q} > "${ASC_OUTPUT}"
+			"${ASC_ARGV[@]}" ${V} ${Q} ${DDBG} --context="${SCRIPT_CMD_NAME}" > "${ASC_OUTPUT}"
 			ASC_ERRCODE="$?"
 		
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
@@ -444,17 +444,10 @@ case "${CMD}" in
 		
 		FROM="$( adpn_parameter_from "--from" "--peer" ".peer" "<From (<PUBLISHER>): " )"
 		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
-		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title: " )"
+		DEFAULT_AU="$( printf "AU from %s" "${SUBDIRECTORY}" )"
+		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"
 		AU_INSTITUTION="$( adpn_parameter_from "--institution" ".institution" )"
 		
-		if [[ -n "${AU_TITLE}" ]] ; then
-			if [[ ! ( "${AU_TITLE}" =~ ^${AU_INSTITUTION} ) ]] ; then
-				AU_TITLE="$( printf "%s: %s" "${AU_INSTITUTION}" "${AU_TITLE}" )"
-			fi
-		else
-			AU_TITLE="$( printf "%s: AU from %s" "${AU_INSTITUTION}" "${SUBDIRECTORY}" )"
-		fi
-
 		[[ -z "${V}" ]] || printf "[%s:%d] 1. Packaging files into LOCKSS Archival Unit (AU).\n" "${SCRIPT_CMD_NAME}" "${LINENO}"
 		
 		JSON_PACKET=$(
