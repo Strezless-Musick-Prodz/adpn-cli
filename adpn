@@ -876,8 +876,11 @@ case "${CMD}" in
 #
 # @version 2021.0319
 
-		[[ -n "${_PARAM[daemon-user]}" ]] && HTTP_USER="${_PARAM[daemon-user]}" || HTTP_USER="$(adpnprop daemon/user)"
-		[[ -n "${_PARAM[daemon-pass]}" ]] && HTTP_PASS="${_PARAM[daemon-pass]}" || HTTP_PASS="$(adpnprop daemon/pass)"
+		HTTP_USER=$( adpn_parameter_from "--daemon-user" ".daemon/user" )
+		HTTP_PASS=$( adpn_parameter_from "--daemon-pass" ".daemon/pass" )
+		if [[ -n "${HTTP_PASS}" ]] ; then
+			HTTP_PASS="$( adpn_getpassword_from "${HTTP_PASS}" )"
+		fi
 		
 		if [[ -z "${HTTP_USER}" ]] ; then
 			read -p "LOCKSS Daemon User: " HTTP_USER
@@ -887,8 +890,8 @@ case "${CMD}" in
 		fi
 		
 		VERSION=1
-		LOCKSS_BOX="localhost:8081"
-		BASE_URL="http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/"
+		LOCKSS_BOX="$( adpn_parameter_from "--daemon" "localhost:8081" )"
+		BASE_URL="$( adpn_parameter_from "--drop-server" ".stage/base_url" "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/" )"
 		DIRECTORY="${_PARAM[directory]}"
 		FILE="${_PARAM[file]}"
 		
@@ -912,7 +915,7 @@ case "${CMD}" in
 		HT_ARGS=$( join_by "&" "${HT_PARAMS[@]}" )
 
 		OUTPUT_FILENAME="$( rawurlencode "${FILE}" )"
-		wget "http://localhost:8081/ServeContent?${HT_ARGS}" --http-user="${HTTP_USER}" --http-password="${HTTP_PASS}" -O "${OUTPUT_FILENAME}"
+		wget "http://${LOCKSS_BOX}/ServeContent?${HT_ARGS}" --http-user="${HTTP_USER}" --http-password="${HTTP_PASS}" -O "${OUTPUT_FILENAME}"
 		;;
 			
 	"rebalance")

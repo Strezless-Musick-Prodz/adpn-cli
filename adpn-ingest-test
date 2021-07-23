@@ -223,8 +223,14 @@ for KEY in "${!_PARAM[@]}" ; do
 		"batch"|"au_title"|"local"|"remote"|"staged"|"file-size"|"peer"|"peer-from"|"peer-to"|"verbose")
 			# NOOP: adpn-ingest-test parameters, not a passthru
 			;;
-		"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user"|"pass")
+		"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user")
 			SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
+			;;
+		"pass")
+			if [[ -n "${VALUE}" ]] ; then
+				VALUE="$( adpn_getpassword_from "${VALUE}" )"
+			fi
+			SUBARGV_LOCKSSPLUGINURL["${KEY}"]="--${KEY}=${VALUE}"
 			;;
 		"proxy"|"port"|"tunnel"|"tunnel-port")
 			SUBARGV_LOCKSSRETRIEVEJAR[$KEY]="--${KEY}=${VALUE}"
@@ -292,7 +298,7 @@ if [[ -n "${_PARAM[daemon]}" && "-" != "${_PARAM[daemon]}" ]] ; then
 		_ARGV+=("--user=${DAEMONUSER}")
 		SUBARGV_LOCKSSPLUGINURL[user]="--user=${DAEMONUSER}"
 	fi
-
+	
 	if [[ -z "${SUBARGV_LOCKSSPLUGINURL[pass]}" ]] ; then
 		read -r -s -p "LOCKSS Daemon Password: " DAEMONPASS ; echo
 		_ARGV+=("--pass=${DAEMONPASS}")

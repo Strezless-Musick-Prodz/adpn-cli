@@ -133,6 +133,45 @@ case "${CMD}" in
 			"${ME}" backups ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]}
 		EXITCODE="$?"
 		;;
+		
+	"context")
+		
+		PUBLISHER_CONTEXTS=""
+		NODE_MANAGER_CONTEXTS="verify"
+		PROPS_MANAGER_CONTEXTS="accept|post|ingest|promote|publish"
+		TECH_CONTEXTS="${NODE_MANAGER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS}"
+		ALL_CONTEXTS="${PUBLISHER_CONTEXTS}|${NODE_MANAGER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS}"
+		
+		declare -a CONTEXTS=()
+		
+		declare -a PUBLISHER_CONTEXTS=( package stage preserve )
+		declare -a NODE_MANAGER_CONTEXTS=( verify )
+		declare -a CONFIG_MANAGER_CONTEXTS=( accept post ingest promote publish )
+		declare -a NOT_NODE_CONTEXTS=( "${PUBLISHER_CONTEXTS[@]}" "${CONFIG_MANAGER_CONTEXTS[@]}" )
+		declare -a NOT_CONFIG_CONTEXTS=( "${PUBLISHER_CONTEXTS[@]}" "${NODE_MANAGER_CONTEXTS[@]}" )
+		declare -a TECH_CONTEXTS=( "${NODE_MANAGER_CONTEXTS[@]}" "${CONFIG_MANAGER_CONTEXTS[@]}" )
+		declare -a ALL_CONTEXTS=( "${PUBLISHER_CONTEXTS[@]}" "${NODE_MANAGER_CONTEXTS[@]}" "${CONFIG_MANAGER_CONTEXTS[@]}" )
+		
+		if [[ -n "${_PARAM[publisher]}" ]] ; then
+			CONTEXTS+=( "${PUBLISHER_CONTEXTS[@]}" )
+		fi
+		if [[ -n "${_PARAM[node-manager]}" ]] ; then
+			CONTEXTS+=( "${NODE_MANAGER_CONTEXTS[@]}" )
+		fi
+		if [[ -n "${_PARAM[config-manager]}" ]] ; then
+			CONTEXTS+=( "${CONFIG_MANAGER_CONTEXTS[@]}" )
+		fi
+		if [[ -n "${_PARAM[all]}" ]] ; then
+			CONTEXTS+=( "${ALL_CONTEXTS[@]}" )
+		fi
+		
+		REGEX="^($( join_by "|" "${CONTEXTS[@]}" ))$"
+		if [[ -n "${_PARAM[covers]}" ]] ; then
+			[[ "${_PARAM[covers]}" =~ $REGEX ]] && EXITCODE=0 || EXITCODE=1
+		else 
+			printf "%s" "${REGEX}"
+		fi
+		;;
 	"dependencies")
 # @method adpn setup dependencies
 # Check external dependencies and offer to install if necessary and possible.
@@ -224,15 +263,22 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				ALL_CONTEXTS="${PUBLISHER_CONTEXTS}|${NODE_MANAGER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS}"
 				
 				IFS=""
-				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS})$ ]] ; then
+				MAKEMANIFEST_API="https://archives.alabama.gov/Services/ADPNet/MakeManifest/"
+				PLUGINS_SOURCE_API="${MAKEMANIFEST_API}?%(encoded)s"
+				if ( "${ME}" context --publisher --covers="${AS_CONTEXT}" ) ; then
 					read -ep "Institution: " AS_PROPS[institution]
 					read -ep "Publisher Code (ADAH, AUB, ...): " AS_PROPS[publisher]
 					
-					KEY="api/makemanifest" DEFAULT="https://archives.alabama.gov/Services/ADPNet/MakeManifest/"
+					KEY="api/makemanifest" DEFAULT="${MAKEMANIFEST_API}"
 					read -ep "MakeManifest API Endpoint [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
+					KEY="plugins/source" DEFAULT="${PLUGINS_SOURCE_API}"
+					read -ep "Plugins Source API Endpoint [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
+					
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --all --covers="${AS_CONTEXT}" ) ; then
+
 					USER_FULLNAME="$( getent passwd "${USER}" | cut -d ":" -f 5 -s | cut -d "," -f 1 -s )"
 					[[ -n "${USER_FULLNAME}" ]] || USER_FULLNAME="${USER}"
 
@@ -245,26 +291,27 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 				fi
 
-				if [[ "${AS_CONTEXT}" =~ ^(${TECH_CONTEXTS})$  ]] ; then
+				if ( "${ME}" context --node-manager --config-manager --covers="${AS_CONTEXT}" ) ; then
 				
 					read -ep "LOCKSS Daemon URL: " AS_PROPS[daemon]
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
 						read -ep "LOCKSS Daemon User: " AS_PROPS[daemon/user]
 						if [[ -n "${AS_PROPS[daemon/user]}" ]] ; then
-							read -sep "LOCKSS Daemon Password: " AS_PROPS[daemon/pass]
+							read -sep "LOCKSS Daemon Password: " DAEMON_PASS
 							printf "\n"
+							[[ -n "${DAEMON_PASS}" ]] && AS_KDBX_KEYS["ADPNet-LOCKSS-Daemon:daemon/pass"]="${DAEMON_PASS}"
 						fi
 					fi
 					
 				fi
 
-				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --all --covers="${AS_CONTEXT}" ) ; then
 					KEY="stage/jar" DEFAULT="http://configuration.adpn.org/overhead/takeover/plugins/AuburnDirectoryPlugin.jar"
 					read -ep "Default Plugin JAR [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
 				DROP_SERVER="drop.adpn.org" ; DROP_HERE="drop_au_content_in_here"
-				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --publisher --covers="${AS_CONTEXT}" ) ; then
 					DROP_SERVER_USER="$( printf "%s" "${AS_PROPS[publisher]}" | tr '[:upper:]' '[:lower:]' )"
 					
 					KEY="stage/host" DEFAULT="${DROP_SERVER}"
@@ -281,19 +328,19 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --all --covers="${AS_CONTEXT}" ) ; then
 					KEY="preserve/admin-email" DEFAULT="ADPNet TPC <adpntpc@auburn.edu>"
 					read -ep "Staging Admin E-mail [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${NODE_MANAGER_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --node-manager --covers="${AS_CONTEXT}" ) ; then
 					read -ep "Peer Node (ADAH, AUB1, AUB2, ...): " AS_PROPS[peer]					
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS}|${PROPS_MANAGER_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --publisher --config-manager --covers="${AS_CONTEXT}" ) ; then
 					KEY="node-server/ssh" DEFAULT="" PROMPT_DEFAULT="(e.g.: user@host)"
 					if [[ -n "${AS_PROPS[daemon]}" ]] ; then
-						NODE_SERVER=$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )
+						NODE_SERVER="$( printf "%s" "${AS_PROPS[daemon]}" | cut --delimiter=":" --field=1 )"
 						DEFAULT="${USER}@${NODE_SERVER}"
 						PROMPT_DEFAULT="[${DEFAULT}]"
 					fi
@@ -301,7 +348,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				fi
 				
 				PROPS_SERVER="configuration.adpn.org"
-				if [[ "${AS_CONTEXT}" =~ ^(${PROPS_MANAGER_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --config-manager --covers="${AS_CONTEXT}" ) ; then
 					KEY="props-server" DEFAULT="http://${PROPS_SERVER}/"
 					read -ep "Props Server URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 
@@ -327,12 +374,12 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${PUBLISHER_CONTEXTS}|${NODE_MANAGER_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --publisher --node-manager --covers="${AS_CONTEXT}" ) ; then
 					KEY="props-server/ssh" DEFAULT="${USER}@${PROPS_SERVER}"
 					read -ep "Props Server SSH Identity [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 				fi
 				
-				if [[ "${AS_CONTEXT}" =~ ^(${ALL_CONTEXTS})$ ]] ; then
+				if ( "${ME}" context --all --covers="${AS_CONTEXT}" ) ; then
 					KEY="gitlab/base" DEFAULT="https://gitlab.com/api/v4/%s"
 					read -ep "Gitlab API URL [${DEFAULT}]: " AS_PROPS[$KEY] ; AS_PROPS[$KEY]="${AS_PROPS[$KEY]:-$DEFAULT}"
 					KEY="gitlab/repository" DEFAULT="adpnet/adpn---general"
@@ -340,9 +387,7 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 					
 					KEY="gitlab/token" DEFAULT=""
 					read -ep "Gitlab Personal Access Token (see <https://gitlab.com/-/profile/personal_access_tokens>): " GITLAB_TOKEN
-					if [[ -n "${GITLAB_TOKEN}" ]] ; then
-						AS_KDBX_KEYS["ADPNet-Gitlab-Token:gitlab/token"]="${GITLAB_TOKEN}"
-					fi
+					[[ -n "${GITLAB_TOKEN}" ]] && AS_KDBX_KEYS["ADPNet-Gitlab-Token:gitlab/token"]="${GITLAB_TOKEN}"
 				fi
 				
 				declare -a AS_KEYS=()
@@ -356,11 +401,13 @@ python:pykeepass	%s Python module	python3 -m pip install pykeepass
 				
 				KDBX="${MY_CONFDIR}/adpnet.kdbx"
 				IFS="" printf "%s\n" "${!AS_KDBX_KEYS[@]}" | sort | while read -r KEY ; do
-					KEYNAME="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=1 )"
-					PROPERTY="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=2 )"
-					ENCODED_KEYNAME="$( rawurlencode "${KEYNAME}" )"
-					adpn property set "${PROPERTY}" "keepass://${KDBX}?title=${ENCODED_KEYNAME}"
-					printf "%s" "${AS_KDBX_KEYS[${KEY}]}" | adpn-get-keepass.py --database="${KDBX}" --set --create --title="${KEYNAME}"
+					if [[ -n "${KEY}" ]] ; then
+						KEYNAME="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=1 )"
+						PROPERTY="$( printf "%s" "${KEY}" | cut --delimiter=":" --field=2 )"
+						ENCODED_KEYNAME="$( rawurlencode "${KEYNAME}" )"
+						adpn property set "${PROPERTY}" "keepass://${KDBX}?title=${ENCODED_KEYNAME}"
+						printf "%s" "${AS_KDBX_KEYS[${KEY}]}" | adpn-get-keepass.py --database="${KDBX}" --set --create --title="${KEYNAME}"
+					fi
 				done
 				
 			fi
