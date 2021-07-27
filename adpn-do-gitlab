@@ -112,13 +112,15 @@ fi
 if [[ "${CMD}" != "token" ]] ; then
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
-	PRIVATE_TOKEN=$( "${ME}" token ${_LINESWITCH[token]} )
+	declare -a ADG_TOKEN_ARGV=()
+	[[ -n "${_LINESWITCH[token]}" ]] && ADG_TOKEN_ARGV+=( "${_LINESWITCH[token]}" )
+	PRIVATE_TOKEN=$( "${ME}" token "${ADG_TOKEN_ARGV[@]}" )
 	ADG_CODE="$?"
 	
-	# We should only have to retrieve this once, at the outset; pass it down to any child calls
+	# We should only have to retrieve this once, at the first request for the token.
+	# The encrypted stash file can pass it down to any child calls, and up to any parent calls.
 	if [[ -n "${PRIVATE_TOKEN}" ]] ; then
-		_LINESWITCH[token]="--token=${PRIVATE_TOKEN}"
-		_PARAM[token]="${PRIVATE_TOKEN}"
+		export PRIVATE_TOKEN
 	elif [[ "${ADG_CODE}" -gt 0 ]] ; then
 		EXITCODE="${ADG_CODE}"
 		printf "[%s:%d] REQUIRED: Gitlab API access token.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT_CMD_NAME}" 1>&2
@@ -168,7 +170,7 @@ case "${CMD}" in
 			[[ -n "${_PARAM[labels]}" ]] && ADPN_GITLAB_SW+=("--data-labels=${_PARAM[labels]}")
 		fi
 		[[ -n "${_PARAM[pipe]}" ]] && ADPN_GITLAB_SW+=("--pipe=${_PARAM[pipe]}")
-		[[ -n "${_PARAM[token]}" ]] & ADPN_GITLAB_SW+=( "--token=${_PARAM[token]}" )
+		[[ -n "${_PARAM[token]}" ]] && ADPN_GITLAB_SW+=( "--token=${_PARAM[token]}" )
 		
 		API_PATH="/issues"
 		
@@ -177,7 +179,7 @@ case "${CMD}" in
 		ISSUE_ASPECT=$( printf "%s" "${PROJECT}" | cut --field=3 --delimiter='#' --only-delimited )
 		ISSUE_ID=$( printf "%s" "${PROJECT}" | cut --field=2 --delimiter='#' --only-delimited )
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
-		
+
 		if [[ -n "${PROJECT}" ]] ; then
 			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${_LINESWITCH[token]} ${DDBG} | cut --field=2 )
 		fi
@@ -231,10 +233,11 @@ case "${CMD}" in
 
 	"token")
 		
-		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" )
+		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token<(adpn stash)" ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" )
 		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
 			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" )
 			EXITCODE="$?"
+			adpn stash post "gitlab/token" "${PRIVATE_TOKEN}"
 			printf "%s" "${PRIVATE_TOKEN}"
 		else
 			EXITCODE=1

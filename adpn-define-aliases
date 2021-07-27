@@ -34,7 +34,9 @@ function adpn_parameter_from() {
 		elif [[ "${source}" =~ ^[.]([^\<]+)([\<](.*))?$ ]] ; then
 			KEY="${BASH_REMATCH[1]}"
 			JSON="${BASH_REMATCH[3]}"
-			if [[ -n "${JSON}" ]] ; then
+			if [[ "${JSON}" == '(adpn stash)' ]] ; then
+				RESULT="$( adpn stash get --output=application/json | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
+			elif [[ -n "${JSON}" ]] ; then
 				RESULT="$( printf "%s" "${JSON}" | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
 			else
 				RESULT="$( adpnprop "${KEY}" )" ; EXITCODE="$?"

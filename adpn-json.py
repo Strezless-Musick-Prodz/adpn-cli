@@ -9,8 +9,7 @@
 import sys
 import os.path
 import fileinput
-import re
-import json
+import re, json, codecs
 import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyJSON
 
@@ -68,11 +67,11 @@ Exit code:
 	def output (self) :
 		return self._output
 		
-	def switched (self, name, default = None) :
+	def switched (self, name, just_present=False, default=None) :
 		result = default
 		if name in self.switches :
-			result = self.switches[name]
-		return result
+			result = self.switches.get(name)
+		return ( result is not None ) if just_present else result
 
 	def add_flag (self, flag, value) :
 		if value is not None :
@@ -109,7 +108,10 @@ Exit code:
 		requested_table = (( self.get_output_format(index=0) == "text/tab-separated-values" ) or ( self.get_output_format(index=1) == "table" ))
 		implies_table = (( self.switches.get('key') is None ) and ( self.get_output_format(index=0) is None )) 
 		return implies_table or requested_table
-
+	
+	def wants_printf_output (self) :
+		return (( self.get_output_format() == "text/plain" ) and ( self.switches.get('template') is not None ))
+	
 	def wants_json_output(self) :
 		return (( self.get_output_format() == "json" ) or ( self.get_output_format() == "application/json" ) )
 		
@@ -143,7 +145,10 @@ Exit code:
 		sSpec = self.switches.get('output') if self.switches.get('output') is not None else self._default_mime
 		aSpec = sSpec.split(";")
 		return aSpec[index] if (index<len(aSpec)) else None
-		
+	
+	def get_printf_template (self) :
+		return self.switches.get('template')
+	
 	def add_output (self, value, key=None, pair=False, table={}, context={}) :
 		out = self.get_output(value, key, pair, table, context)
 
@@ -185,7 +190,19 @@ Exit code:
 			lines.extend([ display_value ])
 				
 		return lines
+	
+	def display_templated_text (self, text, table) :
+		data = table
+		data["$n"] = "\n"
+		data["$t"] = "\t"
 		
+		# Here is an ugly but functional way to process backslash escapes in the template
+		# via <https://stackoverflow.com/questions/4020539/process-escape-sequences-in-a-string-in-python/37059682#37059682>
+		text_template = codecs.escape_decode(bytes(text, "utf-8"))[0].decode("utf-8")
+		
+		result = ( text_template % table )
+		return result
+	
 	def display_data_dict (self, table, context, parse, depth=0) :
 		keys = ( self.switches.get('key').split(":") ) if self.switches.get('key') is not None else table.keys()
 		out = {} if self.wants_json_output() else []
@@ -198,8 +215,14 @@ Exit code:
 					out.extend( self.get_output(table[key], key, pair=paired, table=table, context=context ) )
 		except KeyError as e :
 			self.add_flag("key_error", key)
-
-		if self.wants_json_output() :
+		
+		if self.wants_printf_output() :
+			try :
+				text = self.display_templated_text(self.get_printf_template(), table)
+				self.output.append(text);
+			except KeyError as e :
+				self.add_flag("key_error", key)
+		elif self.wants_json_output() :
 			self.output.extend([ json.dumps(out,indent=self.get_json_indent()) ])
 		elif self.wants_table() or isinstance(context, list) :
 			line = "\t".join(out)
@@ -284,7 +307,7 @@ if __name__ == '__main__' :
 		script.display_regex()
 	elif script.switched('version') :
 		script.display_version()
-	elif script.switched('key') and script.switched('value') :
+	elif script.switched('key') and script.switched('value', just_present=True) :
 		script.display_keyvalue()
 	else :
 		script.execute()
