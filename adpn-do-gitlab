@@ -143,6 +143,11 @@ case "${CMD}" in
 			CMD="list"
 		fi
 		
+		declare -a ADG_GET_ARGV=( "/projects?membership=1" )
+		[[ -n "${_LINESWITCH[token]}" ]] && ADG_GET_ARGV+=( "${_LINESWITCH[token]}" )
+		[[ -n "${DDBG}" ]] && ADG_GET_ARGV+=( "${DDBG}" )
+		
+		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )"
 		if [[ -n "${_ARGV[*]:2}" ]] ; then
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
