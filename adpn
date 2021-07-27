@@ -127,11 +127,11 @@ fi
 
 case "${CMD}" in
 	"")
-		printf "[%s:%d] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} ingest', etc.)\n" "${SCRIPT}" "${LINENO}" 1>&2
+		printf "[%s:%d] command expected (for example: '${SCRIPT} preserve', '${SCRIPT} accept', etc.)\n" "${SCRIPT}" "${LINENO}" 1>&2
 		printf "[%s:%d] %s\n" "${SCRIPT}" "${LINENO}" "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
-	
+		
 	"version")
 # @method adpn version
 # Displays current version of the adpn script.
