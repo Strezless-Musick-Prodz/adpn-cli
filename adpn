@@ -114,7 +114,7 @@ export ADPN_STASH_FILE
 export ADPN_STASH_KEY
 ADPN_STASH_CLOSE=""
 
-declare -A _NO_RECURSE=( [stash]=stash [setup]=stash )
+declare -A _NO_RECURSE=( [stash]=stash [setup]=stash [version]=stash [help]=stash )
 
 if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
 	# avoid infinite recursion, double-execution, unwanted errors, etc.
