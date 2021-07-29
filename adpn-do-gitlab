@@ -89,7 +89,6 @@ else
 	DDBG=""
 fi
 
-
 if [[ -z "${_PARAM[verbose]}" ]] ; then
 	Q="--quiet"
 fi
@@ -153,11 +152,14 @@ case "${CMD}" in
 		fi
 		
 		declare -a ADG_GET_ARGV=( "/projects?membership=1" )
+		[[ -z "${_LINESWITCH[no-fail]}" ]] && ADG_GET_ARGV+=( "--fail" )
 		[[ -n "${_LINESWITCH[token]}" ]] && ADG_GET_ARGV+=( "${_LINESWITCH[token]}" )
 		[[ -n "${DDBG}" ]] && ADG_GET_ARGV+=( "${DDBG}" )
 		
-		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )"
-		if [[ -n "${_ARGV[*]:2}" ]] ; then
+		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] Gitlab HTTP API request (GET %s) failed, exit code=%d\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ADG_GET_ARGV[0]}" "${EXITCODE}" 1>&2
+		elif [[ -n "${_ARGV[*]:2}" ]] ; then
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
 
@@ -208,8 +210,16 @@ case "${CMD}" in
 		[[ -n "${ISSUE_ID}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ID}" )
 		[[ -n "${ISSUE_ASPECT}" ]] && API_PATH=$( printf "%s/%s" "${API_PATH}" "${ISSUE_ASPECT}" )
 		
+		SEP="?"
+		[[ -n "${_PARAM[labels]}" ]] && LABELS="$( rawurlencode "${_PARAM[labels]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "labels" "${LABELS}" )" && SEP="&"
+		[[ -n "${_PARAM[state]}" ]] && STATE="$( rawurlencode "${_PARAM[state]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "state" "${STATE}" )" && SEP="&"
+		[[ -n "${_PARAM[order_by]}" ]] && ORDER_BY="$( rawurlencode "${_PARAM[order_by]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "order_by" "${ORDER_BY}" )" && SEP="&"
+		[[ -n "${_PARAM[sort]}" ]] && SORT="$( rawurlencode "${_PARAM[sort]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "sort" "${SORT}" )" && SEP="&"
+		[[ -n "${_PARAM[assigneee]}" ]] && ASSIGNEE="$( rawurlencode "${_PARAM[assignee]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "assignee_username" "${ASSIGNEE}" ) )" && SEP="&"
+
 		if [[ -n "${DBG}" ]] ; then
-			printf "[${SCRIPT}] ISSUE ID: %s\n" "${ISSUE_ID}" 1>&2
+			printf "[%s:%d] ISSUE ID: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" 1>&2
+			printf "[%s:%d] GET %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${API_PATH}" 1>&2
 			declare -p _ARGV 1>&2
 		fi
 		
