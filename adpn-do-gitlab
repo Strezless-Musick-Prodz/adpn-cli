@@ -173,7 +173,24 @@ case "${CMD}" in
 		fi
 		EXITCODE="$?"
 		;;
-
+	"opened")
+		PROJECT="$( adpn_parameter_from "--project" ".gitlab/repository" )"
+		STATE="$( adpn_parameter_from "--state" "opened" )"
+		SORT="$( adpn_parameter_from "--sort" "desc" )"
+		ORDER_BY="$( adpn_parameter_from "--order_by" "updated_at" )"
+		LABELS="$( adpn_parameter_from "--labels" "Content Ingest" )"
+		
+		declare -a ADG_ISSUE_ARGV=("--key=iid")
+		[[ -n "${PROJECT}" ]] && ADG_ISSUE_ARGV+=( "--project=${PROJECT}" )
+		[[ -n "${LABELS}" ]] && ADG_ISSUE_ARGV+=( "--labels=${LABELS}" )
+		[[ -n "${STATE}" ]] && ADG_ISSUE_ARGV+=( "--state=${STATE}" )
+		[[ -n "${ORDER_BY}" ]] && ADG_ISSUE_ARGV+=( "--order_by=${ORDER_BY}" )
+		[[ -n "${SORT}" ]] && ADG_ISSUE_ARGV+=( "--sort=${SORT}" )
+		[[ -n "${_LINESWITCH[token]}" ]] && ADG_ISSUE_ARGV+=( "${_LINESWITCH[token]}" )
+		
+		IID="$( "${ME}" issue "${ADG_ISSUE_ARGV[@]}" | head -n 1 )"
+		[[ -n "${IID}" ]] && printf "%s#%d" "${PROJECT}" "${IID}" || EXITCODE=1
+		;;
 	"issue")
 		METHOD=get
 		declare -a ADPN_GITLAB_SW=("--fail")
@@ -472,7 +489,10 @@ case "${CMD}" in
 		GITLAB_ISSUE=""
 		for PACKET_SOURCE in "${_ARGV[@]:2}" ; do
 
-			if [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
+			if [[ "${PACKET_SOURCE}" =~ ^(!|@)$ ]] ; then
+				TOKEN="${_LINESWITCH[token]}"
+				GITLAB_ISSUE="$( adpn gitlab opened ${TOKEN} )"
+			elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
 				GITLAB_ISSUE="${BASH_REMATCH[1]}"
 			elif [[ "${PACKET_SOURCE}" =~ ^(([A-Za-z0-9/]|-)+)[#]([0-9]+)$ ]] ; then
 				GITLAB_ISSUE="${BASH_REMATCH[0]}"
