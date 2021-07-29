@@ -62,26 +62,7 @@ adpn_command_line "${SWITCHFILES[@]}"
 rm "${CMDLINETXT}"
 
 ##########################################################################################
-## COMMUNICATIONS: check for information to access encrypted persistent data #############
-##########################################################################################
-
-export ADPN_STASH_FILE
-export ADPN_STASH_KEY
-declare ADPN_AGENT_CLEANUP=()
-
-if [[ -z "${ADPN_STASH_FILE}" || -z "${ADPN_STASH_KEY}" ]] ; then
-	ADPN_STASH_JSON="$( printf '%s\n' '{}' | adpn-do-stash.py --put )"
-	ADPN_STASH_FILE="$( printf '%s' "${ADPN_STASH_JSON}" | adpn-json.py --key=file )"
-	ADPN_STASH_KEY="$( printf '%s' "${ADPN_STASH_JSON}" | adpn-json.py --key=key )"
-	if [[ -r "${ADPN_STASH_FILE}" ]] ; then
-		ADPN_AGENT_CLEANUP+=( "${ADPN_STASH_FILE}" )
-	fi
-else 
-	ADPN_STASH_JSON="$( printf '{ "file": "%s", "key": "%s", "cached": 1 }' "${ADPN_STASH_FILE}" "${ADPN_STASH_KEY}" )"
-fi
-
-##########################################################################################
-### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+### SCRIPT: DETERMINE COMMAND & SHARED SETTINGS ##########################################
 ##########################################################################################
 
 EXITCODE=0
@@ -124,6 +105,32 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	CMD="help"
 	_ARGV=( "help" "${_ARGV[@]}" )
 fi
+
+##########################################################################################
+## COMMUNICATIONS: check for information to access encrypted persistent data #############
+##########################################################################################
+
+export ADPN_STASH_FILE
+export ADPN_STASH_KEY
+ADPN_STASH_CLOSE=""
+
+if [[ "${CMD}" == "stash" ]] ; then
+	# NOOP - prevent infinite recursion, double-execution, etc.
+	ADPN_STASH_JSON=""
+elif [[ -z "${ADPN_STASH_KEY}" || -z "${ADPN_STASH_FILE}" || ! -r "${ADPN_STASH_FILE}" || ! -w "${ADPN_STASH_FILE}" ]] ; then
+	# stash open: this will output some variable settings
+	eval $( "${ME}" stash open --quiet )
+	ADPN_STASH_CLOSE="${ADPN_STASH_FILE}"
+else 
+	ADPN_STASH_KEY_JSON=$( printf "%s" "${ADPN_STASH_KEY}" )
+	ADPN_STASH_FILE_JSON=$( printf '{"file": "%s"}' "${ADPN_STASH_FILE}" )
+	ADPN_STASH_CACHED_JSON='{ "cached": 1 }'
+	ADPN_STASH_JSON=$( printf '%s\n%s\n%s' "${ADPN_STASH_KEY_JSON}" "${ADPN_STASH_FILE_JSON}" "${ADPN_STASH_CACHED_JSON}" | adpn-json.py --cascade --output=application/json )
+fi
+
+##########################################################################################
+### SCRIPT: EXECUTE PIPELINE  ############################################################
+##########################################################################################
 
 case "${CMD}" in
 	"")
@@ -300,17 +307,31 @@ case "${CMD}" in
 		declare -a ADPN_SECRETS_ARGS=( "${_ARGV[@]:3}" )
 		
 		ADPN_SECRET_COUPLE_KEY=""
-		ADPN_SECRET_OUTPUT_SHELL=""
+		ADPN_JSON_TEMPLATE=""
 		case "${WORD}" in
 			""|"open")
-				[[ -n "${_PARAM[keep]}" ]] && ADPN_AGENT_CLEANUP=()
-				[[ -z "${_LINESWITCH[output]}" ]] && ADPN_SECRET_OUTPUT_SHELL="--template=export ADPN_STASH_FILE='%(file)s'; export ADPN_STASH_KEY='%(key)s'; declare -p ADPN_STASH_FILE;" || ADPN_SECRET_OUTPUT_SHELL=""
+				ADPN_STASH_JSON="$( printf '%s\n' '{}' | adpn-do-stash.py --put )"
+
+				ADPN_STASH_FILE="$( printf '%s' "${ADPN_STASH_JSON}" | adpn-json.py --key=file )"
+				ADPN_STASH_KEY="$( printf '%s' "${ADPN_STASH_JSON}" )"
+
+				declare -a ADPN_STASH_SETTINGS_SHELL=()
+				ADPN_STASH_SETTINGS_SHELL+=( "export ADPN_STASH_FILE='%(file)s'" )
+				ADPN_STASH_SETTINGS_SHELL+=( "export ADPN_STASH_KEY='%(\$json)s'" )
+				[[ -z "${QQ}" ]] && ADPN_STASH_SETTINGS_SHELL+=( "declare -p ADPN_STASH_FILE 1>&2" )
+				ADPN_STASH_SETTINGS="$( join_by "; " "${ADPN_STASH_SETTINGS_SHELL[@]}" )"
+				
+				[[ -z "${_LINESWITCH[output]}" ]] && ADPN_JSON_TEMPLATE=$( printf -- "--template=%s" "${ADPN_STASH_SETTINGS}" ) || ADPN_JSON_TEMPLATE=""
 				[[ -z "${_LINESWITCH[output]}" ]] && _LINESWITCH[output]="--output=text/plain"
 				;;
 			"close")
-				for FILE in "${ADPN_STASH_FILE}" "${ADPN_AGENT_CLEANUP[@]}" ; do
-					rm "${FILE}"
+				declare -a ADPN_STASH_CLEANUP=() # FIXME: fill from log file
+				for FILE in "${ADPN_STASH_FILE}" "${ADPN_STASH_CLEANUP[@]}" ; do
+					[[ -z "${QQ}" ]] && RM="rm -v" || RM="rm"
+					[[ -w "${FILE}" ]] && ${RM} "${FILE}" 1>&2
 				done
+				unset ADPN_STASH_JSON
+				[[ -z "${_LINESWITCH[output]}" ]] && printf "unset ADPN_STASH_FILE;\nunset ADPN_STASH_KEY;\n"
 				;;
 			"get")
 				if [[ -n "${_PARAM[key]}" ]] ; then
@@ -320,18 +341,17 @@ case "${CMD}" in
 					ADPN_SECRETS_ARGS=( "${ADPN_SECRETS_ARGS[@]:1}" )
 				fi
 
-				ADPN_STASH_JSON="$( adpn-do-stash.py --get "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+				ADPN_STASH_JSON="$( printf "%s\n" "${ADPN_STASH_KEY}" | adpn-do-stash.py --get )"
 				EXITCODE="$?"
 
 				;;
 			"put")
-				ADPN_AGENT_OUTPUT="$( printf "%s" "${ADPN_SECRETS_ARGS[@]}" | adpn-do-stash.py --put "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+				ADPN_STASH_OUTPUT="$( printf "%s\n%s" "${ADPN_STASH_KEY}" "${ADPN_SECRETS_ARGS[@]}" | adpn-json.py --cascade --output=application/json | adpn-do-stash.py --put )"
 				
 				ADPN_STASH_JSON="{}"
 				if [[ -r "${ADPN_STASH_FILE}" ]] ; then
-					ADPN_STASH_JSON="$( adpn-do-stash.py --get "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+					ADPN_STASH_JSON="$( printf "%s" "${ADPN_STASH_KEY}" | adpn-do-stash.py --get )"
 				fi
-				
 				;;
 			"post")
 				if [[ -n "${_PARAM[key]}" ]] ; then
@@ -347,17 +367,17 @@ case "${CMD}" in
 					ADPN_SECRETS_ARGS=( "${ADPN_SECRETS_ARGS[@]:1}" )
 				fi
 				
-				ADPN_STASH_JSON="{}"
+				declare -a JSON_OVERLAYS=( "${ADPN_STASH_KEY}" )
 				if [[ -r "${ADPN_STASH_FILE}" ]] ; then
-					ADPN_STASH_JSON="$( adpn-do-stash.py --get "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+					JSON_OVERLAYS+=( "$( printf "%s" "${ADPN_STASH_KEY}" | adpn-do-stash.py --get )" )
 				fi
+				JSON_OVERLAYS+=( "$( adpn-json.py --key="${ADPN_SECRET_COUPLE_KEY}" --value="${ADPN_SECRET_COUPLE_VALUE}" )" )
 				
-				JSON_OVERLAY="$( adpn-json.py --key="${ADPN_SECRET_COUPLE_KEY}" --value="${ADPN_SECRET_COUPLE_VALUE}" )"
-				ADPN_AGENT_OUTPUT="$( printf '%s\n%s\n' "${ADPN_STASH_JSON}" "${JSON_OVERLAY}" | adpn-json.py --cascade --output=application/json | adpn-do-stash.py --put "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+				ADPN_STASH_OUTPUT="$( printf '%s\n' "${JSON_OVERLAYS[@]}" | adpn-json.py --cascade --output=application/json | adpn-do-stash.py --put )"
 				
 				ADPN_STASH_JSON="{}"
 				if [[ -r "${ADPN_STASH_FILE}" ]] ; then
-					ADPN_STASH_JSON="$( adpn-do-stash.py --get "${ADPN_STASH_FILE}" --key="${ADPN_STASH_KEY}" )"
+					ADPN_STASH_JSON="$( printf '%s' "${ADPN_STASH_KEY}" | adpn-do-stash.py )"
 				fi
 				
 				;;
@@ -368,9 +388,9 @@ case "${CMD}" in
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			printf "[%s:%d] adpn-do-stash.py request FAILED: (req='%s', file='%s', error=%d)\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${WORD}" "${ADPN_STASH_FILE}" "${EXITCODE}" 1>&2
 		elif [[ -n "${ADPN_STASH_JSON}" ]] ; then
-			declare -a ADPN_JSON_ARGS=( "--dummy" )
+			declare -a ADPN_JSON_ARGS=( )
 			[[ -n "${ADPN_SECRET_COUPLE_KEY}" ]] && ADPN_JSON_ARGS+=( "--key=${ADPN_SECRET_COUPLE_KEY}" )
-			[[ -n "${ADPN_SECRET_OUTPUT_SHELL}" ]] && ADPN_JSON_ARGS+=( "${ADPN_SECRET_OUTPUT_SHELL}" )
+			[[ -n "${ADPN_JSON_TEMPLATE}" ]] && ADPN_JSON_ARGS+=( "${ADPN_JSON_TEMPLATE}" )
 			[[ -n "${_LINESWITCH[output]}" ]] && ADPN_JSON_ARGS+=( "${_LINESWITCH[output]}" )
 			printf "%s" "${ADPN_STASH_JSON}" | adpn-json.py "${ADPN_JSON_ARGS[@]}"
 		fi
@@ -1066,8 +1086,8 @@ esac
 ### CLEANUP: remove temporary output files and exit. #####################################
 ##########################################################################################
 
-for FILE in "${ADPN_AGENT_CLEANUP[@]}" ; do
-	rm "${FILE}"
-done
+if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
+	eval $( adpn stash close --quiet )
+fi
 
 exit ${EXITCODE}

@@ -7,13 +7,129 @@
 # @version 2021.0726
 
 from myLockssScripts import myPyCommandLine, myPyJSON
-import sys, os, fileinput, tempfile
+import sys, os, stat, fileinput, tempfile
 import re, json
 import urllib.parse
 import binascii
-import cryptography.fernet
-from cryptography.fernet import Fernet
+import base64
+from Cryptodome.PublicKey import RSA
+from Cryptodome.Random import get_random_bytes
+from Cryptodome.Cipher import AES, PKCS1_OAEP
 from contextlib import contextmanager
+
+class ADPNStashEncryption :
+    def __init__ (self) :
+        self._public_key_bytes = None
+        self._private_key_bytes = None
+    
+    @property
+    def keys (self) :
+        return ( self._public_key_bytes, self._private_key_bytes )
+    
+    @keys.setter
+    def keys (self, rhs) :
+        if type(rhs) is tuple or type(rhs) is list:
+            ( self.public_key, self.private_key ) = rhs
+        elif hasattr(rhs, 'publickey') :
+            ( self.public_key, self.private_key ) = ( rhs, rhs )
+        else :
+            raise TypeError("Required: key pair in tuple or object", rhs)
+    
+    @property
+    def public_key (self) :
+        return RSA.import_key(self._public_key_bytes)
+    
+    @property
+    def rsa_public_key (self) :
+        return RSA.import_key(self._public_key_bytes)
+        
+    @public_key.setter
+    def public_key (self, rhs) :
+        if type(rhs) is bytes :
+            self._public_key_bytes = rhs
+        elif hasattr(rhs, 'publickey') :
+            self._public_key_bytes = rhs.publickey().export_key()
+        elif hasattr(rhs, 'export_key') :
+            self._public_key_bytes = rhs.export_key()
+        elif rhs is None :
+            self._public_key_bytes = rhs
+        else :
+            raise TypeError("Required: RSA key pair or public key block", rhs)
+    
+    @property
+    def private_key (self) :
+        return RSA.import_key(self._private_key_bytes)
+    
+    @property
+    def rsa_private_key (self) :
+        return RSA.import_key(self._private_key_bytes)
+        
+    @private_key.setter
+    def private_key (self, rhs) :
+        if type(rhs) is bytes :
+            self._private_key_bytes = rhs
+        elif hasattr(rhs, 'export_key') :
+            self._private_key_bytes = rhs.export_key()
+        elif rhs is None :
+            self._private_key_bytes = None
+        else :
+            raise TypeError("Required: RSA key pair or private key block", rhs)
+    
+    def encode_to_file (self, data: list) -> bytes :
+        all_data = b"".join(data)
+        return base64.urlsafe_b64encode(all_data)
+
+    def decode_from_file (self, data: bytes, private_key) -> bytes :
+        all_data = base64.urlsafe_b64decode(data)
+        
+        N0, N = ( 0, private_key.size_in_bytes() )
+        enc_session_key = all_data[N0:N]
+        N0, N = ( N, N+16 )
+        nonce = all_data[N0:N]
+        N0, N = ( N, N+16 )
+        tag = all_data[N0:N]
+        N0, N = ( N, len(all_data) )
+        ciphertext = all_data[N0:N]
+        
+        return ( enc_session_key, nonce, tag, ciphertext )
+    
+    def generate_keypair (self, size=2048) :
+        key = RSA.generate(size)
+        private_key = key.export_key()
+        public_key = key.publickey().export_key()
+        return (public_key, private_key)
+    
+    def generate_session_key (self) :
+        return get_random_bytes(16)
+    
+    def encrypt_text (self, text: str) -> bytes :
+        data = text.encode("utf-8")
+        
+        session_key = self.generate_session_key()
+        
+        # Encrypt the session key with the public RSA key
+        cipher_rsa = PKCS1_OAEP.new(self.rsa_public_key)
+        enc_session_key = cipher_rsa.encrypt(session_key)
+
+        # Encrypt the data with the AES session key
+        cipher_aes = AES.new(session_key, AES.MODE_EAX)
+        ciphertext, tag = cipher_aes.encrypt_and_digest(data)
+        return self.encode_to_file([ enc_session_key, cipher_aes.nonce, tag, ciphertext])
+
+    def decrypt_text (self, data: bytes) -> str:
+        
+        rsa_private_key = self.rsa_private_key
+        ( enc_session_key, nonce, tag, ciphertext ) = self.decode_from_file(data, rsa_private_key)
+        
+        # Decrypt the session key with the private RSA key
+        cipher_rsa = PKCS1_OAEP.new(rsa_private_key)
+        session_key = cipher_rsa.decrypt(enc_session_key)
+        
+        # Decrypt the data with the AES session key
+        cipher_aes = AES.new(session_key, AES.MODE_EAX, nonce)
+        data = cipher_aes.decrypt_and_verify(ciphertext, tag)
+        
+        return data.decode("utf-8")
 
 class ADPNStashScript :
     """
@@ -56,6 +172,8 @@ Exit code:
         self._keys = []
         self._crypt = None
         self._exitcode = None
+        self._piped_input = None
+        self._json = None
         
         # Initialize properties from command-line
         try :
@@ -63,11 +181,13 @@ Exit code:
         except FileNotFoundError as e :
             self.add_flag("file_not_found", e)
         
+        self.crypt = ADPNStashEncryption()
+        
         try :
-            self.key = self.switches.get('key')
+            self.key = self.get_keys_from()
         except binascii.Error as e :
             self.add_flag( "wrong_key", e )
-
+        
     @property
     def version (self) :
         return self._version
@@ -83,17 +203,41 @@ Exit code:
     @property
     def argv (self) :
         return self._argv
-
+    
     @property
     def output (self) :
         return self._output
-        
+    
+    @property
+    def piped_input (self) :
+        if self._piped_input is None :
+            self._piped_input = self.get_piped_input()
+        return self._piped_input
+    
+    def test_piped_input (self) :
+        mode = os.fstat(sys.stdin.fileno()).st_mode
+        return any([stat.S_ISFIFO(mode), stat.S_ISREG(mode)])
+    
+    def get_piped_input (self) :
+        piped_text = None
+        if self.test_piped_input() :
+            piped_text = sys.stdin.read()
+        return piped_text
+    
+    @property
+    def piped_data (self) :
+        if self._json is None :
+            self._json = myPyJSON()
+        maybe_json = self.piped_input
+        self._json.accept(maybe_json)
+        return self._json.allData
+    
     def switched (self, name, default = None) :
         result = default
         if name in self.switches :
             result = self.switches[name]
         return result
-
+    
     def add_flag (self, flag, value) :
         if value is not None :
             self.flags[flag].extend( [ value ] )
@@ -150,9 +294,21 @@ Exit code:
         file = self.switches.get('file')
         if file is None :
             file = self.argv[1] if len(self.argv) > 1 else None
-        
+        if file is None and self.piped_data is not None :
+            data = self.piped_data
+            self.file = data.get("file")
         if file is not None :
             self.file = file
+    
+    def get_keys_from (self) :
+        data = self.piped_data if self.piped_data is not None else {}
+        public_key = self.switches.get('public_key')
+        if public_key is None and data.get('public_key') is not None :
+            public_key = data.get('public_key').encode("UTF-8")
+        private_key = self.switches.get('private_key')
+        if private_key is None and data.get('private_key') is not None :
+            private_key = data.get('private_key').encode("UTF-8")
+        return ( public_key, private_key )
         
     def display_version (self) :
         print("%(script)s version %(version)s" % {"script": self.scriptname, "version": self.version})
@@ -192,14 +348,10 @@ Exit code:
         
     @key.setter
     def key (self, rhs) :
-        new_key = rhs
-        if type(new_key) is str :
-            new_key = new_key.encode("UTF-8")
-            
-        if new_key != self.key :
-            self._keys = [ new_key ] + self._keys
-            self.crypt = Fernet(new_key)
-    
+        if rhs != self.key :
+            self._keys = [ rhs ] + self._keys
+            self.crypt.keys = rhs
+        
     @property
     def crypt (self) :
         return self._crypt
@@ -227,7 +379,7 @@ Exit code:
         return os.path.exists(self.file) if self.file is not None else False # FIXME - STUB
     
     def new_encryption_key (self) :
-        self.key = Fernet.generate_key()
+        self.key = self.crypt.generate_keypair()
         return self.key
     
     def get_text (self, size=-1, lines=False, headers=False, bork=None) :
@@ -264,7 +416,7 @@ Exit code:
         return result
     
     def put_text (self, size=-1) :
-        text = sys.stdin.read(size)
+        text = self.piped_input
         with self.file_opened(mode="wb") as stream :
             headed_text = "\r\n".join( [ "MIME-Version: 1.0", "ADPN-Stash: %s" % self.version, "Content-Type: %s" % self.get_content_type(), "", text ] )
             stream.write(self.get_encrypted_text(headed_text, key=self.key))
@@ -283,12 +435,12 @@ Exit code:
         if key is not None :
             self.key = key
         
-        return self.crypt.decrypt(source).decode("UTF-8")
+        return self.crypt.decrypt_text(source)
     
     def get_encrypted_text (self, text: str, key=None) -> bytes :
         if key is not None :
             self.key = key
-        return self.crypt.encrypt(text.encode("UTF-8"))
+        return self.crypt.encrypt_text(text)
     
     def get_bork_text (self) :
         bork = self.switches.get('bork')
@@ -314,7 +466,11 @@ Exit code:
                 print(output)
             elif self.switched('put') :
                 self.put_text()
-                output_report = { "file": self.file, "key": self.key.decode("UTF-8") }
+                output_report = {
+                    "file": self.file,
+                    "public_key": self.key[0].decode("UTF-8"),
+                    "private_key": self.key[1].decode("UTF-8")
+                }
                 print(json.dumps(output_report))
             elif self.switched('delete') :
                 self.remove_file()
@@ -324,16 +480,10 @@ Exit code:
                 ("[%(script)s] %(message)s") % {"script": self.scriptname, "message": e.args[0] },
                 file=sys.stderr
             )
-        except cryptography.fernet.InvalidToken as e :
-            self.add_flag( "wrong_key", e )
-            print(
-                ("[%(script)s] Bad key for '%(filename)s': %(key)s") % {"script": self.scriptname, "filename": self.filename_provided, "key": self.key },
-                file=sys.stderr
-            )
         except binascii.Error as e :
             self.add_flag( "wrong_key", e.args[0] )
             print(
-                ("[%(script)s] Bad key for '%(filename)s': %(key)s") % {"script": self.scriptname, "filename": self.filename_provided, "key": self.key },
+                ("[%(script)s] Bad key for '%(filename)s': %(key)s") % {"script": self.scriptname, "filename": self.filename_provided, "public_key": self.key[0], "private_key": self.key[1] },
                 file=sys.stderr
             )
         except FileNotFoundError as e :

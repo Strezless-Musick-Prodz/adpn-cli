@@ -192,15 +192,15 @@ Exit code:
 		return lines
 	
 	def display_templated_text (self, text, table) :
-		data = table
+		data = table.copy()
 		data["$n"] = "\n"
 		data["$t"] = "\t"
-		
+		data["$json"] = json.dumps(table)
 		# Here is an ugly but functional way to process backslash escapes in the template
 		# via <https://stackoverflow.com/questions/4020539/process-escape-sequences-in-a-string-in-python/37059682#37059682>
 		text_template = codecs.escape_decode(bytes(text, "utf-8"))[0].decode("utf-8")
 		
-		result = ( text_template % table )
+		result = ( text_template % data )
 		return result
 	
 	def display_data_dict (self, table, context, parse, depth=0) :
