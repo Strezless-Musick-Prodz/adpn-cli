@@ -2,7 +2,7 @@
 #
 # adpn-do-setup: script to handle Gitlab API commands
 #
-# @version 2021.0714
+# @version 2021.0730
 
 SCRIPTPATH="$(which "$0")"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -178,7 +178,7 @@ case "${CMD}" in
 #
 # Usage: adpn setup dependencies --for=<PURPOSE>
 #
-# @version 2021.0714
+# @version 2021.0730
 		DEPENDENCIES="""
 curl	%s command-line tool	apt install curl	yum install curl
 unzip	%s command-line tool	apt install unzip	yum install unzip
@@ -194,6 +194,7 @@ python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
 python:pysftp	%s Python module	python3 -m pip install pysftp
 python:paramiko	%s Python module	python3 -m pip install paramiko
 python:pykeepass	%s Python module	python3 -m pip install pykeepass
+python:Cryptodome	%s Python module	python3 -m pip install pycryptodomex
 """
 
 		printf "* DEPENDENCIES: checking for dependencies.\n"
