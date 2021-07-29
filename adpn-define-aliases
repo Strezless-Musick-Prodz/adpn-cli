@@ -2,11 +2,19 @@
 #
 # adpn-define-aliases: some basic subroutines used across many of the adpn suite of scripts
 #
-# @version 2021.0708
+# @version 2021.0730
 
 PATH=${SCRIPTDIR}:${PATH}
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+ME="${SCRIPTPATH}"
+ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
+
 
 # adpn_parameter_from: retrieve and echo a property that may be found in one of several possible sources for parameter data, including
 # command-line switches, JSON configuration files, live JSON data, user console input, and fall-back defaults.

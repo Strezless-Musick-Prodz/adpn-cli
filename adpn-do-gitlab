@@ -2,13 +2,11 @@
 #
 # adpn-do-gitlab: script to handle Gitlab API commands
 #
-# @version 2021.0401
+# @version 2021.0730
 
 SCRIPTPATH="$(which "$0")"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
 SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
-SCRIPT="$(basename "${SCRIPTPATH}")"
-ME="${SCRIPTPATH}"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 
@@ -56,6 +54,17 @@ SWITCHFILES+=(${CMDLINETXT})
 adpn_command_line "${SWITCHFILES[@]}"
 
 rm "${CMDLINETXT}"
+
+##########################################################################################
+## COMMUNICATIONS: check for information to access encrypted persistent data #############
+##########################################################################################
+
+export ADPN_STASH_FILE
+export ADPN_STASH_KEY
+ADPN_STASH_CLOSE=""
+
+# stash open: this will output some variable settings
+eval $( "${ADPN}" stash open --quiet --if-needed )
 
 ##########################################################################################
 ### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
@@ -497,7 +506,13 @@ esac
 fi
 
 ##########################################################################################
-### CLEANUP: remove temporary output file. ###############################################
+### CLEANUP: remove temporary files, set exit code, etc. #################################
 ##########################################################################################
+
+if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
+	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
+fi
+
+[[ -n "${DBG}" ]] && printf "[%s %s:%d] exit=%d\n" "${SCRIPT}" "${CMD}" "${LINENO}" "${EXITCODE}" 1>&2
 
 exit ${EXITCODE}
