@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0730
+# @version 2021.0730-1316
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -114,8 +114,10 @@ export ADPN_STASH_FILE
 export ADPN_STASH_KEY
 ADPN_STASH_CLOSE=""
 
-if [[ "${CMD}" == "stash" ]] ; then
-	# NOOP - prevent infinite recursion, double-execution, etc.
+declare -A _NO_RECURSE=( [stash]=stash [setup]=stash )
+
+if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
+	# avoid infinite recursion, double-execution, unwanted errors, etc.
 	ADPN_STASH_JSON=""
 else
 	# stash open: this will output some variable settings
@@ -1094,7 +1096,10 @@ esac
 ### CLEANUP: remove temporary output files and exit. #####################################
 ##########################################################################################
 
-if [[ "${CMD}" != "stash" ]] ; then
+if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
+	# avoid infinite recursion, double-execution, unwanted errors, etc.
+	printf "NOOP" > /dev/null
+else
 	eval $( adpn stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
 fi
 
