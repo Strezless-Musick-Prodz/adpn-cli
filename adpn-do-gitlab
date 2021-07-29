@@ -167,9 +167,9 @@ case "${CMD}" in
 				echo "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}" 1>&2
 			fi
 			
-			"${ME}" get "/projects?membership=1" ${_LINESWITCH[token]} ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
+			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
 		else
-			"${ME}" get "/projects?membership=1" ${_LINESWITCH[token]} ${DDBG} | adpn-json.py --parse --key=id:path_with_namespace
+			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace
 		fi
 		EXITCODE="$?"
 		;;
