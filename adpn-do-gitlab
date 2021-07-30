@@ -489,9 +489,11 @@ case "${CMD}" in
 		GITLAB_ISSUE=""
 		for PACKET_SOURCE in "${_ARGV[@]:2}" ; do
 
-			if [[ "${PACKET_SOURCE}" =~ ^(!|@)$ ]] ; then
-				TOKEN="${_LINESWITCH[token]}"
-				GITLAB_ISSUE="$( adpn gitlab opened ${TOKEN} )"
+			if [[ "${PACKET_SOURCE}" =~ ^(!|@)(([A-Za-z0-9].*)?)$ ]] ; then
+				declare -a ADPN_GITLAB_OPENED_SW=( "opened" )
+				[[ -n "${_LINESWITCH[token]}" ]] && ADPN_GITLAB_OPENED_SW+=( "${_LINESWITCH[token]}" )
+				[[ -n "${BASH_REMATCH[2]}" ]] && ADPN_GITLAB_OPENED_SW+=( "$(printf -- "--labels=Content Ingest,WAITING: %s" "${BASH_REMATCH[2]//_/ }" )" )
+				GITLAB_ISSUE="$( ${ADPN} gitlab "${ADPN_GITLAB_OPENED_SW[@]}" )"
 			elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
 				GITLAB_ISSUE="${BASH_REMATCH[1]}"
 			elif [[ "${PACKET_SOURCE}" =~ ^(([A-Za-z0-9/]|-)+)[#]([0-9]+)$ ]] ; then
