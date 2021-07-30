@@ -4,13 +4,10 @@
 #
 # @version 2021.0730
 
-PATH=${SCRIPTDIR}:${PATH}
+PATH="${SCRIPTDIR}:${PATH}"
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 
-SCRIPTPATH="$(which "$0")"
-SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
-SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
 SCRIPT="$(basename "${SCRIPTPATH}")"
 ME="${SCRIPTPATH}"
 ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
@@ -27,7 +24,7 @@ ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
 # TEXT: use the literal text provided as a default value if previous sources have failed
 # \TEXT: use the literal text provided as a default value if previous sources have failed; the backslash allows for text beginning with special characters like "--", ".", "<" or "\"
 #
-# @version 2021.0708
+# @version 2021.0730
 
 function adpn_parameter_from() {
 	RESULT="" ; EXITCODE=2
@@ -107,6 +104,12 @@ adpnprop() {
 	return "${JSONEXIT}"
 }
 
+# pluginprop: retrieve and echo a property from the text output of adpn-ingest-test, adpn-plugin-info
+# and related tools that plug AU data into LOCKSS plugin parameters.
+# 
+# @param string txt tab-separated value text containing Key <tab> Text values
+# @param string key name of field to retrieve from plugin data
+# @return int exit code from lockss-plugin-props-print-parameter.py
 function pluginprop() {
 	local txt="${1}" ; shift
 	local key="${1}" ; shift

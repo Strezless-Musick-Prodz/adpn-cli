@@ -7,8 +7,6 @@
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
 SCRIPTDIR="$( dirname "${SCRIPTPATH}" )"
-SCRIPT="$( basename "${SCRIPTPATH}" )"
-ME="${SCRIPTPATH}"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 
