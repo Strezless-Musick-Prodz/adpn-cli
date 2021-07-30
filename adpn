@@ -104,6 +104,8 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	_ARGV=( "help" "${_ARGV[@]}" )
 fi
 
+adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )" 1>&2
+
 ##########################################################################################
 ## COMMUNICATIONS: check for information to access encrypted persistent data #############
 ##########################################################################################
@@ -1100,5 +1102,7 @@ if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
 else
 	eval $( adpn stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
 fi
+
+adpn_debug 10 "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}

@@ -64,7 +64,7 @@ export ADPN_STASH_KEY
 ADPN_STASH_CLOSE=""
 
 # stash open: this will output some variable settings
-eval $( "${ADPN}" stash open --quiet --if-needed )
+eval $( "${ADPN}" stash open --quiet --if-needed ${DDBG} )
 
 ##########################################################################################
 ### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
@@ -106,6 +106,8 @@ if [[ -n "${CMD}" ]] ; then
 	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
 fi
 
+adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
+
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
 	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
@@ -120,9 +122,10 @@ fi
 if [[ "${CMD}" != "token" ]] ; then
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
-	declare -a ADG_TOKEN_ARGV=()
+	declare -a ADG_TOKEN_ARGV=( "token" )
 	[[ -n "${_LINESWITCH[token]}" ]] && ADG_TOKEN_ARGV+=( "${_LINESWITCH[token]}" )
-	PRIVATE_TOKEN=$( "${ME}" token "${ADG_TOKEN_ARGV[@]}" )
+	[[ -n "${DDBG}" ]] && ADG_TOKEN_ARGV+=( "${DDBG}" )
+	PRIVATE_TOKEN=$( "${ME}" "${ADG_TOKEN_ARGV[@]}" )
 	ADG_CODE="$?"
 	
 	# We should only have to retrieve this once, at the first request for the token.
@@ -131,7 +134,7 @@ if [[ "${CMD}" != "token" ]] ; then
 		export PRIVATE_TOKEN
 	elif [[ "${ADG_CODE}" -gt 0 ]] ; then
 		EXITCODE="${ADG_CODE}"
-		printf "[%s:%d] REQUIRED: Gitlab API access token.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT_CMD_NAME}" 1>&2
+		adpn_notice "${LINENO}" "REQUIRED: Gitlab API access token."
 	fi
 fi
 
@@ -158,14 +161,12 @@ case "${CMD}" in
 		
 		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] Gitlab HTTP API request (GET %s) failed, exit code=%d\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ADG_GET_ARGV[0]}" "${EXITCODE}" 1>&2
+			adpn_notice "${LINENO}" "Gitlab HTTP API request (GET %s) failed, exit code=%d" "${ADG_GET_ARGV[0]}" "${EXITCODE}"
 		elif [[ -n "${_ARGV[*]:2}" ]] ; then
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
 
-			if [[ -n "${DBG}" ]] ; then
-				echo "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}" 1>&2
-			fi
+			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}"
 			
 			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
 		else
@@ -234,11 +235,7 @@ case "${CMD}" in
 		[[ -n "${_PARAM[sort]}" ]] && SORT="$( rawurlencode "${_PARAM[sort]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "sort" "${SORT}" )" && SEP="&"
 		[[ -n "${_PARAM[assigneee]}" ]] && ASSIGNEE="$( rawurlencode "${_PARAM[assignee]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "assignee_username" "${ASSIGNEE}" ) )" && SEP="&"
 
-		if [[ -n "${DBG}" ]] ; then
-			printf "[%s:%d] ISSUE ID: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" 1>&2
-			printf "[%s:%d] GET %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${API_PATH}" 1>&2
-			declare -p _ARGV 1>&2
-		fi
+		adpn_debug 1 "${LINENO}" "ISSUE #%d -- GET %s (%s)" "${ISSUE_ID}" "${API_PATH}" "$( declare -p _ARGV )"
 		
 		if [[ -n "${_PARAM[key]}" ]] ; then
 			ADPN_JSON_SW+=( "--key=${_PARAM[key]}" )
@@ -265,7 +262,7 @@ case "${CMD}" in
 			cat "${F_JSON_OUT}" | adpn-json.py --parse "${ADPN_JSON_SW[@]}"
 			EXITCODE="$?"
 		else 
-			printf "[%s] Error from HTTP request (exit code=%d).\n" "${SCRIPT_CMD_NAME}" "${EXITCODE}" 1>&2
+			adpn_notice "${LINENO}" "Error from HTTP request (exit code=%d)." "${EXITCODE}"
 			cat "${F_JSON_OUT}" 1>&2
 		fi
 
@@ -291,9 +288,8 @@ case "${CMD}" in
 		ERR_DATA=""
 				
 		ISH="${_ARGV[2]}"
-		if [[ -n "${DBG}" ]] ; then
-			echo "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}" 1>&2
-		fi
+		
+		adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}"
 		
 		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${_LINESWITCH[token]} ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
@@ -542,9 +538,9 @@ fi
 ##########################################################################################
 
 if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
-	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
+	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet ${DDBG} )
 fi
 
-[[ -n "${DBG}" ]] && printf "[%s %s:%d] exit=%d\n" "${SCRIPT}" "${CMD}" "${LINENO}" "${EXITCODE}" 1>&2
+adpn_debug 10 "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}

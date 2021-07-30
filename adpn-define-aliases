@@ -367,6 +367,35 @@ function adpn_help_notes () {
 	return "${EXITCODE}"
 }
 
+function adpn_notice() {
+	local line="${1}" ; shift
+	declare -a DBG_MESSAGE=( "$@" )
+	
+	local message="$1"
+	if [[ "$#" -gt 1 ]] ; then
+		message="$( printf -- "$@" )"
+	fi
+	
+	printf "[%s] %s (%s:%d)\n" "${SCRIPT_CMD_NAME}" "${message}" "${SCRIPT}" "${line}" 1>&2
+}
+
+function adpn_debug() {
+	local level="${1}" ; shift
+	local line="${1}" ; shift
+	declare -a DBG_MESSAGE=( "$@" )
+	
+	local message="$1"
+	if [[ "$#" -gt 1 ]] ; then
+		message="$( printf -- "$@" )"
+	fi
+	
+	if [[ -n "${DBG}" ]] ; then
+		if [[ "${DBGLEVEL}" -ge "${level}" ]] ; then
+			printf "[%s|D%03d] %s (%s:%d)\n" "${SCRIPT_CMD_NAME}" "${level}" "${message}" "${SCRIPT}" "${line}" 1>&2
+		fi
+	fi
+}
+
 function echo_header() {
 	local title="${1}"
 	local underline="${2}"
@@ -389,7 +418,7 @@ function adpn_get_json_packets() {
 	declare -a AGGP_SW=()
 
 	AGJP_PACKETS="$(mktemp)"
-	GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" )
+	GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" ${DDBG} )
 	
 	if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
 		cat - > "${AGJP_PACKETS}"
