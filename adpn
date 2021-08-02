@@ -222,9 +222,13 @@ case "${CMD}" in
 #    --for=publish  	synonym for --for=ingest
 #   
 # @version 2021.0406
-		adpn-do-setup all ${_LINESWITCH[for]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[debug]} --context="${SCRIPT_CMD_NAME}" --script="${SCRIPTPATH}"
+		declare -a ADS_ARGV=()
+		[[ -z "${_ARGV[2]}" ]] && ADS_ARGV+=( "all" ) || ADS_ARGV+=( "${_ARGV[@]:2}" )
+		ADS_ARGV+=( "${_LINESWITCH[@]}" )
+		[[ -z "${_PARAM[context]}" ]] && ADS_ARGV+=( "--context=${SCRIPT_CMD_NAME}" )
+		[[ -z "${_PARAM[script]}" ]] && ADS_ARGV+=( "--script=${SCRIPTPATH}" )
 		
-		EXITCODE="$?"
+		adpn-do-setup "${ADS_ARGV[@]}" ; EXITCODE="$?"
 		
 		;;
 		
