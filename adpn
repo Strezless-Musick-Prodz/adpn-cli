@@ -879,8 +879,9 @@ case "${CMD}" in
 		AIIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_PACKETS}" )
 		AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
 		
-		adpn_get_json_packets "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_select_json_packet > "${AIIT_PACKETS}"
-		EXITCODE="$?"
+		declare -a AGJP_ARGV=( "${_ARGV[2]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )
+		adpn_debug 10 "${LINENO}" "$( printf "%s " "${AGJP_ARGV[@]}" )"
+		adpn_get_json_packets "${AGJP_ARGV[@]}" | adpn_select_json_packet > "${AIIT_PACKETS}" ; EXITCODE="$?"
 		
 		declare -a AF_PARAMS=( "${_ARGV[@]:3}" )
 		if [[ -n "${_PARAM[key]}" ]] ; then
@@ -901,10 +902,8 @@ case "${CMD}" in
 		fi
 		
 		if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_PACKETS}" ]] ; then
-			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
-			if [[ -n "${DBG}" ]] ; then
-				printf 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIIT_PACKETS}" "${PIPEDFROM}" 1>&2
-			fi
+			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one
+			adpn_debug 1 "${LINENO}" "$( printf 'cat "%s" | adpn-json.py --parse --output=application/json --where="Ingest Step:%s"' "${AIIT_PACKETS}" "${PIPEDFROM}" )"
 			
 			GREP=$( cat "${AIIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
 			if [[ -n "${GREP}" ]] ; then
