@@ -2,7 +2,7 @@
 #
 # adpn-do-gitlab: script to handle Gitlab API commands
 #
-# @version 2021.0730
+# @version 2021.0802
 
 SCRIPTPATH="$(which "$0")"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -119,7 +119,12 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	CMD="help"
 fi
 
-if [[ "${CMD}" != "token" ]] ; then
+
+declare -A _NO_RECURSE=( [token]="token|parse" )
+if [[ "${CMD}" =~ ^(${_NO_RECURSE[token]}) ]] ; then
+	# avoid infinite recursion, double-execution, unwanted prompts & errors, etc.
+	[[ -n "${_LINESWITCH[token]}" ]] && PRIVATE_TOKEN="${_LINESWITCH[token]}"
+else 
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
 	declare -a ADG_TOKEN_ARGV=( "token" )
