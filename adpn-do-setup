@@ -196,11 +196,12 @@ yum:python3-devel	%s system module	yum install python3-devel
 python3	%s scripting environment	apt install python3	yum install python3
 pip	%s package management tool	apt install python3-pip
 python:bs4	%s Python module	apt install python3-bs4	python3 -m pip install bs4
-python:socks	%s Python module	apt install python3-socks	python3 -m pip install pysocks
-mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysql-devel
-python:MySQLdb	%s Python module	python3 -m pip install mysqlclient
-python:pysftp	%s Python module	python3 -m pip install pysftp
-python:paramiko	%s Python module	python3 -m pip install paramiko
+python:socks	%s Python module	apt install python3-socks	python3 -m pip install pysocks #preserve
+mysql_config	%s development tool	apt install libmysqlclient-dev	yum install mysql-devel #accept
+python:MySQLdb	%s Python module	python3 -m pip install mysqlclient #accept
+python:cryptography	%s Python module	python3 -m pip install cryptography #preserve
+python:pysftp	%s Python module	python3 -m pip install pysftp #preserve
+python:paramiko	%s Python module	python3 -m pip install paramiko #preserve
 python:pykeepass	%s Python module	python3 -m pip install pykeepass
 python:Cryptodome	%s Python module	python3 -m pip install pycryptodomex
 """
