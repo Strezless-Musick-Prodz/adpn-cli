@@ -202,32 +202,52 @@ function adpn_check_dependencies () {
 	done
 	
 	local file="${acds_argv[1]}"
-	if [[ -z "${file}" ]] ; then
-		file=-
-	fi
+	[[ -z "${file}" ]] && file=- # default to stdin
+	
+	local my_feature="${acds_params[for]}"
+	[[ -z "${my_feature}" ]] && my_feature="any"
+	local -a my_features=()
+	IFS=$( printf ", " ) read -ra my_features<<<"${my_feature}"
 	
 	IFS=""
 	shopt -s lastpipe # allow export of variables from the last command in a pipeline
 	
 	cat "${file}" | while read -r LINE ; do
-		local dependency=$( printf "%s\n" "${LINE}" | cut --field=1 )
-		local description=$( printf "%s\n" "${LINE}" | cut --field=2 --only-delimited )
+		local CONTENT="$( printf "%s\n" "${LINE}" | cut --delimiter="#" --field=1 )"
+		local CONTEXT="$( printf "%s\n" "${LINE}" | cut --delimiter="#" --only-delimited --fields=2- )"
+		
+		local -a CONTEXTS=()
+		IFS=$( printf "# \t\n" ) read -ra CONTEXTS<<<"${CONTEXT}"
+		[[ "${#CONTEXTS[@]}" -gt 0 ]] && CONTEXTS+=( "any" )
+		[[ "${#CONTEXTS[@]}" -gt 0 ]] || CONTEXTS+=( ".*" )
+		
+		local dependency=$( printf "%s\n" "${CONTENT}" | cut --field=1 )
+		local description=$( printf "%s\n" "${CONTENT}" | cut --field=2 --only-delimited )
 		local instruction=""
 		
 		local i=3
-		local instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
+		local instruction_option=$( printf "%s\n" "${CONTENT}" | cut --field=${i} --only-delimited )
 		while [[ -n "${instruction_option}" ]] ; do
 			local packman=$( printf "%s\n" "${instruction_option}" | cut --field=1 --delimiter=" " )
 			which "${packman}" 2>/dev/null >/dev/null && instruction="${instruction_option}"
 			i=$(( i + 1 ))
-			instruction_option=$( printf "%s\n" "${LINE}" | cut --field=${i} --only-delimited )
+			instruction_option=$( printf "%s\n" "${CONTENT}" | cut --field=${i} --only-delimited )
 		done
-
-		local r=0
-		adpn_check_dependency "${dependency}" "${description}" "${instruction}" ${acds_switches[interactive]} ; r="$?"
-		if [[ "${r}" -gt "${result}" ]] ; then
-			result="${r}"
-		fi
+		
+		local r=-1
+		for FEATURE in "${my_features[@]}" ; do
+			local CHECK="$( join_by "|" "${CONTEXTS[@]}" )"
+			if [[ "${r}" -lt 0 ]] ; then
+				if [[ "${FEATURE}" =~ ^(${CHECK})$ ]] ; then
+					if [[ -n "${dependency}" ]] ; then
+						adpn_check_dependency "${dependency}" "${description}" "${instruction}" ${acds_switches[interactive]} ; r="$?"
+						if [[ "${r}" -gt "${result}" ]] ; then
+							result="${r}"
+						fi
+					fi
+				fi
+			fi
+		done
 		
 	done
 	return "${result}"
@@ -239,9 +259,9 @@ function adpn_check_dependencies () {
 # @version 2021.0407
 function adpn_check_dependency () {
 
-	declare -a acd_argv=("${0}")
-	declare -a acd_switches=()
-	declare -A acd_params=()
+	local -a acd_argv=("${0}")
+	local -a acd_switches=()
+	local -A acd_params=()
 	
 	while [[ "$#" -gt 0 ]] ; do
 		local param="${1}" ; shift
@@ -258,6 +278,8 @@ function adpn_check_dependency () {
 			acd_argv+=("${param}")
 		fi
 	done
+
+	adpn_debug 10 "${LINENO}" "%s(%s) %s" "adpn_check_dependency" "$( join_by ", " "${acd_argv[@]:1}" )" "$( join_by " " "${acd_switches[@]}" )"
 
 	local dependency="${acd_argv[1]}"
 	local description="${acd_argv[2]}" ; shift

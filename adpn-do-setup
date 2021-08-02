@@ -127,10 +127,18 @@ case "${CMD}" in
 #                   	options: preserve|verify|accept|promote
 #
 # @version 2021.0714
-		"${ME}" dependencies ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
-			"${ME}" path ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
-			"${ME}" settings ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]} &&
-			"${ME}" backups ${_LINESWITCH[for]} ${_LINESWITCH[context]} ${_LINESWITCH[verbose]} ${_LINESWITCH[quiet]} ${_LINESWITCH[script]}
+		declare -a ADS_SW=()
+		[[ "${_LINESWITCH[for]}" ]] && ADS_SW+=( "${LINESWITCH[for]}" )
+		[[ "${_LINESWITCH[context]}" ]] && ADS_SW+=( "${LINESWITCH[context]}" )
+		[[ "${_LINESWITCH[verbose]}" ]] && ADS_SW+=( "${LINESWITCH[verbose]}" )
+		[[ "${_LINESWITCH[quiet]}" ]] && ADS_SW+=( "${LINESWITCH[quiet]}" )
+		[[ "${_LINESWITCH[script]}" ]] && ADS_SW+=( "${LINESWITCH[script]}" )
+		[[ "${DDBG}" ]] && ADS_SW+=( "${DDBG}" )
+		
+		"${ME}" dependencies "${ADS_SW[@]}" &&
+			"${ME}" path "${ADS_SW[@]}" &&
+			"${ME}" settings "${ADS_SW[@]}" &&
+			"${ME}" backups "${ADS_SW[@]}"
 		EXITCODE="$?"
 		;;
 		
@@ -198,7 +206,12 @@ python:Cryptodome	%s Python module	python3 -m pip install pycryptodomex
 """
 
 		printf "* DEPENDENCIES: checking for dependencies.\n"
-		printf "%s\n" "${DEPENDENCIES}" | adpn_check_dependencies - --interactive
+
+		declare -a ACD_SW=( "-" )
+		[[ -z "${_LINESWITCH[batch]}" ]] && ACD_SW+=( "--interactive" )
+		[[ -n "${_LINESWITCH[for]}" ]] && ACD_SW+=( "${_LINESWITCH[for]}" )
+		printf "%s\n" "${DEPENDENCIES}" | adpn_check_dependencies "${ACD_SW[@]}"
+		
 		EXITCODE="$?"
 		;;
 
