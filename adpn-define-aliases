@@ -201,6 +201,8 @@ function adpn_check_dependencies () {
 		fi
 	done
 	
+	adpn_debug 10 "${LINENO}" "%s(%s) %s" "adpn_check_dependencies" "$( join_by ", " "${acds_argv[@]:1}" )" "$( join_by " " "${acds_switches[@]}" )"
+
 	local file="${acds_argv[1]}"
 	[[ -z "${file}" ]] && file=- # default to stdin
 	
@@ -240,7 +242,9 @@ function adpn_check_dependencies () {
 			if [[ "${r}" -lt 0 ]] ; then
 				if [[ "${FEATURE}" =~ ^(${CHECK})$ ]] ; then
 					if [[ -n "${dependency}" ]] ; then
-						adpn_check_dependency "${dependency}" "${description}" "${instruction}" ${acds_switches[interactive]} ; r="$?"
+						local -a acd_sw=( "${dependency}" "${description}" "${instruction}" )
+						[[ -n "${acds_switches[interactive]}" ]] && acd_sw+=("${acds_switches[interactive]}" )
+						adpn_check_dependency "${acd_sw[@]}" ; r="$?"
 						if [[ "${r}" -gt "${result}" ]] ; then
 							result="${r}"
 						fi
@@ -278,8 +282,8 @@ function adpn_check_dependency () {
 			acd_argv+=("${param}")
 		fi
 	done
-
-	adpn_debug 10 "${LINENO}" "%s(%s) %s" "adpn_check_dependency" "$( join_by ", " "${acd_argv[@]:1}" )" "$( join_by " " "${acd_switches[@]}" )"
+	
+	adpn_debug 15 "${LINENO}" "%s(%s) %s" "adpn_check_dependency" "$( join_by ", " "${acd_argv[@]:1}" )" "$( join_by " " "${acd_switches[@]}" )"
 
 	local dependency="${acd_argv[1]}"
 	local description="${acd_argv[2]}" ; shift

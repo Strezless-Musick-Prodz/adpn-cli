@@ -111,6 +111,8 @@ if [[ ! -z "${_PARAM[version]}" ]] ; then
 	CMD="version"
 fi
 
+adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )" 1>&2
+
 if [[ ! -z "${_PARAM[help]}" ]] ; then
 	echo "${__DOC__}"
 	CMD="help"
@@ -129,11 +131,11 @@ case "${CMD}" in
 #
 # @version 2021.0714
 		declare -a ADS_SW=()
-		[[ "${_LINESWITCH[for]}" ]] && ADS_SW+=( "${LINESWITCH[for]}" )
-		[[ "${_LINESWITCH[context]}" ]] && ADS_SW+=( "${LINESWITCH[context]}" )
-		[[ "${_LINESWITCH[verbose]}" ]] && ADS_SW+=( "${LINESWITCH[verbose]}" )
-		[[ "${_LINESWITCH[quiet]}" ]] && ADS_SW+=( "${LINESWITCH[quiet]}" )
-		[[ "${_LINESWITCH[script]}" ]] && ADS_SW+=( "${LINESWITCH[script]}" )
+		[[ "${_LINESWITCH[for]}" ]] && ADS_SW+=( "${_LINESWITCH[for]}" )
+		[[ "${_LINESWITCH[context]}" ]] && ADS_SW+=( "${_LINESWITCH[context]}" )
+		[[ "${_LINESWITCH[verbose]}" ]] && ADS_SW+=( "${_LINESWITCH[verbose]}" )
+		[[ "${_LINESWITCH[quiet]}" ]] && ADS_SW+=( "${_LINESWITCH[quiet]}" )
+		[[ "${_LINESWITCH[script]}" ]] && ADS_SW+=( "${_LINESWITCH[script]}" )
 		[[ "${DDBG}" ]] && ADS_SW+=( "${DDBG}" )
 		
 		"${ME}" dependencies "${ADS_SW[@]}" &&
