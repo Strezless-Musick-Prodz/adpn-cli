@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0807
+# @version 2021.0807-1321
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -290,7 +290,9 @@ case "${CMD}" in
 				fi
 				mv "${APS_OUTPUT}" "${JSONORIGINAL}"
 				if [[ -z "${_PARAM[quiet]}" ]] ; then
-					diff -u --color "${JSONBACKUP}" "${JSONORIGINAL}"
+					declare -a DIFF_SW=( "-u" )
+					( diff --color /dev/null /dev/null 2>/dev/null ) && DIFF_SW+=( "--color" )
+					diff "${DIFF_SW[@]}" "${JSONBACKUP}" "${JSONORIGINAL}"
 				fi
 				
 				EXITCODE=0
