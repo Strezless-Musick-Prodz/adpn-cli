@@ -134,7 +134,13 @@ case "${CMD}" in
 		[[ -n "${_SWITCHES[token]}" ]] && ADG_GET_ARGV+=( "${_SWITCHES[token]}" )
 		[[ -n "${DDBG}" ]] && ADG_GET_ARGV+=( "${DDBG}" )
 		
-		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
+		STASH_CACHE="gitlab/api/get-list"
+		OUT_JSON=$( adpn_parameter_from ".${STASH_CACHE}<(adpn stash)" )
+		if [[ -z "${OUT_JSON}" ]] ; then
+			OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
+		else
+			adpn_debug 20 "${LINENO}" "Retrieved JSON response from HTTP cache (%d chars)" $( printf "%s" "${OUT_JSON}" | wc -c )
+		fi
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			adpn_notice "${LINENO}" "Gitlab HTTP API request (GET %s) failed, exit code=%d" "${ADG_GET_ARGV[0]}" "${EXITCODE}"
 		elif [[ -n "${_ARGV[*]:2}" ]] ; then
@@ -147,6 +153,11 @@ case "${CMD}" in
 		else
 			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace
 		fi
+		
+		if [[ "${EXITCODE}" -eq 0 && -n "${OUT_JSON}" ]] ; then
+			"${ADPN}" stash post "${STASH_CACHE}" "${OUT_JSON}" ${DDBG}
+		fi 
+		
 		EXITCODE="$?"
 		;;
 	"opened")
@@ -251,7 +262,7 @@ case "${CMD}" in
 		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
 			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" )
 			EXITCODE="$?"
-			adpn stash post "gitlab/token" "${PRIVATE_TOKEN}"
+			"${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}"
 			printf "%s" "${PRIVATE_TOKEN}"
 		else
 			EXITCODE=1
@@ -313,6 +324,7 @@ case "${CMD}" in
 			
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
 				IFS=""
+				
 				cat "${F_GL_ISSUE}" | while read -r LINE ; do
 					NOTE_ID=$( echo "${LINE}" | cut --field=2 )
 					ENCBODY=$( echo "${LINE}" | cut --field=4 )
