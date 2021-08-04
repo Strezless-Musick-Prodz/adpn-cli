@@ -485,6 +485,7 @@ if __name__ == '__main__' :
 	scriptname = os.path.basename(scriptname)
 	(slug, ext) = os.path.splitext(scriptname)
 	defaultsFile = scriptdir + slug + ".defaults.conf"
+	configjson = "/".join([scriptdir, "adpnet.json"])
 	
 	try :
 		defaultArgv = sys.argv[0:0] + [ line.rstrip() for line in fileinput.input(files=defaultsFile) ]
@@ -503,7 +504,7 @@ if __name__ == '__main__' :
 		"test": ""
 	}, **defaultSwitches}
 
-	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches).parse()
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults=defaultSwitches, configfile=configjson, alias={ "mysql-host": "host", "mysql-db": "db", "mysql-user": "user", "mysql-password": "password" }, settingsgroup='mysql').parse()
 	
 	script = ADPNIngestSQL(scriptname, switches)
 	try :

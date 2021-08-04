@@ -65,7 +65,7 @@ class myPyCommandLine :
 	"""Parse a Unix-style shell command-line, separating out configuration parameters and files/objects.
 	"""
 	
-	def __init__ (self, argv: list = [], defaults: dict = {}, configfile: str = "", settingsgroup = "") :
+	def __init__ (self, argv: list = [], defaults: dict = {}, configfile: str = "", alias: dict = {}, settingsgroup = "") :
 		"""Initialize with a list of command-line arguments, and optionally a dictionary of default values for expected configuration switches."""
 		self._argv = argv
 		self._switches = {}
@@ -96,7 +96,9 @@ class myPyCommandLine :
 					overlay[subkey[1]] = self._defaults[key]
 			
 			self._defaults = {**self._defaults, **overlay}
-			
+		
+		self._alias = alias
+		
 		self._switchPattern = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
 
 	@property 
@@ -142,7 +144,14 @@ class myPyCommandLine :
 		
 		switches = dict([ self.KeyValuePair(arg) for arg in the_argv if re.match(self.pattern, arg) ])
 		switches = {**self._defaults, **defaults, **switches}
-
+		
+		for (primary, secondary) in self._alias.items() :
+			if switches.get(primary) is None :
+				if switches.get(secondary) is not None :
+					switches[primary] = switches.get(secondary)
+			if switches.get(primary) is not None :
+				switches[secondary] = switches.get(primary)
+		
 		argv = [ arg for arg in the_argv if not re.match(self.pattern, arg) ]
 		
 		self._argv = argv
