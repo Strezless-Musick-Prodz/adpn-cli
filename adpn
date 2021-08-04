@@ -34,10 +34,6 @@ Exit codes:
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
 
-declare -a _ARGV ; _ARGV=("$0")
-declare -a _CMDLINE ; _CMDLINE=("$0")
-declare -A _PARAM=( )
-
 shopt -s lastpipe
 
 declare -a SWITCHFILES ; SWITCHFILES=()
@@ -47,6 +43,7 @@ fi
 
 CMDLINETXT=$(mktemp)
 
+declare -a _CMDLINE=("$0")
 until [[ "$#" -lt 1 ]] ; do
 	_CMDLINE+=("$1")
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
@@ -66,30 +63,7 @@ rm "${CMDLINETXT}"
 EXITCODE=0
 CMD="${_ARGV[1]}"
 
-VV="${_LINESWITCH[verbose]}"
-QQ="${_LINESWITCH[quiet]}"
-V="${_LINESWITCH[verbose]}"
-Q=""
-
-DBG="${_LINESWITCH[debug]}"
-DBGLEVEL="${_PARAM[debug]}"
-if [[ "${DBGLEVEL}" == "debug" ]] ; then
-	DBGLEVEL=1
-fi
-if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-	DBGLEVEL=$(( DBGLEVEL - 1 ))
-	DDBG="--debug=${DBGLEVEL}"
-else
-	DDBG=""
-fi
-
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT}"
-	if [[ -n "${CMD}" ]] ; then
-		SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
-	fi
-fi
+adpn_set_display_settings # @see adpn-define-aliases
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
@@ -224,7 +198,7 @@ case "${CMD}" in
 # @version 2021.0406
 		declare -a ADS_ARGV=()
 		[[ -z "${_ARGV[2]}" ]] && ADS_ARGV+=( "all" ) || ADS_ARGV+=( "${_ARGV[@]:2}" )
-		ADS_ARGV+=( "${_LINESWITCH[@]}" )
+		ADS_ARGV+=( "${_SWITCHES[@]}" )
 		[[ -z "${_PARAM[context]}" ]] && ADS_ARGV+=( "--context=${SCRIPT_CMD_NAME}" )
 		[[ -z "${_PARAM[script]}" ]] && ADS_ARGV+=( "--script=${SCRIPTPATH}" )
 		
@@ -334,11 +308,11 @@ case "${CMD}" in
 				[[ -z "${QQ}" ]] && ADPN_STASH_SETTINGS_SHELL+=( "declare -p ADPN_STASH_FILE 1>&2" )
 				ADPN_STASH_SETTINGS="$( join_by "; " "${ADPN_STASH_SETTINGS_SHELL[@]}" )"
 			
-				[[ -z "${_LINESWITCH[output]}" ]] && ADPN_JSON_TEMPLATE=$( printf -- "--template=%s" "${ADPN_STASH_SETTINGS}" ) || ADPN_JSON_TEMPLATE=""
-				[[ -z "${_LINESWITCH[output]}" ]] && _LINESWITCH[output]="--output=text/plain"
+				[[ -z "${_SWITCHES[output]}" ]] && ADPN_JSON_TEMPLATE=$( printf -- "--template=%s" "${ADPN_STASH_SETTINGS}" ) || ADPN_JSON_TEMPLATE=""
+				[[ -z "${_SWITCHES[output]}" ]] && _SWITCHES[output]="--output=text/plain"
 				;;
 			"close")
-				if [[ -z "${_LINESWITCH[if-needed]}" || -n "${_PARAM[if-needed]}" ]] ; then
+				if [[ -z "${_SWITCHES[if-needed]}" || -n "${_PARAM[if-needed]}" ]] ; then
 					declare -a ADPN_STASH_CLEANUP=() # FIXME: fill from log file
 					for FILE in "${ADPN_STASH_FILE}" "${ADPN_STASH_CLEANUP[@]}" ; do
 						[[ -z "${QQ}" ]] && RM="rm -v" || RM="rm"
@@ -346,7 +320,7 @@ case "${CMD}" in
 					done
 					unset ADPN_STASH_JSON
 
-					[[ -z "${_LINESWITCH[output]}" ]] && printf "unset ADPN_STASH_FILE;\nunset ADPN_STASH_KEY;\nunset ADPN_STASH_CLOSE;\n"
+					[[ -z "${_SWITCHES[output]}" ]] && printf "unset ADPN_STASH_FILE;\nunset ADPN_STASH_KEY;\nunset ADPN_STASH_CLOSE;\n"
 				fi
 				;;
 			""|"get")
@@ -407,7 +381,7 @@ case "${CMD}" in
 			declare -a ADPN_JSON_ARGS=( )
 			[[ -n "${ADPN_SECRET_COUPLE_KEY}" ]] && ADPN_JSON_ARGS+=( "--key=${ADPN_SECRET_COUPLE_KEY}" )
 			[[ -n "${ADPN_JSON_TEMPLATE}" ]] && ADPN_JSON_ARGS+=( "${ADPN_JSON_TEMPLATE}" )
-			[[ -n "${_LINESWITCH[output]}" ]] && ADPN_JSON_ARGS+=( "${_LINESWITCH[output]}" )
+			[[ -n "${_SWITCHES[output]}" ]] && ADPN_JSON_ARGS+=( "${_SWITCHES[output]}" )
 			printf "%s" "${ADPN_STASH_JSON}" | adpn-json.py "${ADPN_JSON_ARGS[@]}"
 		fi
 		;;
@@ -427,13 +401,13 @@ case "${CMD}" in
 		
 		declare -a ADP_ARGV=( "${_ARGV[@]:2}" )
 		declare -A ADP_SWITCHES=( )
-		for SWITCH in "${!_LINESWITCH[@]}" ; do
+		for SWITCH in "${!_SWITCHES[@]}" ; do
 			case "${SWITCH}" in 
 				"output")
 					# DROP IT -- WE'LL SET IT OURSELVES BELOW
 					;;
 				*)
-					ADP_SWITCHES[${SWITCH}]="${_LINESWITCH[$SWITCH]}"
+					ADP_SWITCHES[${SWITCH}]="${_SWITCHES[$SWITCH]}"
 					;;
 			esac
 		done
@@ -474,13 +448,13 @@ case "${CMD}" in
 
 		declare -a ASC_ARGV=( "${_ARGV[@]:2}" )
 		declare -A ASC_SWITCHES=( )
-		for SWITCH in "${!_LINESWITCH[@]}" ; do
+		for SWITCH in "${!_SWITCHES[@]}" ; do
 			case "${SWITCH}" in 
 				"output")
 					# DROP IT -- WE'LL SET IT OURSELVES BELOW
 					;;
 				*)
-					ASC_SWITCHES[${SWITCH}]="${_LINESWITCH[$SWITCH]}"
+					ASC_SWITCHES[${SWITCH}]="${_SWITCHES[$SWITCH]}"
 					;;
 			esac
 		done
@@ -574,7 +548,7 @@ case "${CMD}" in
 		JSON_PACKET=$(
 			"${ME}" package "${AU_LOCALPATH}" \
 				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_LINESWITCH[skip]}
+				${_SWITCHES[skip]}
 		) ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
@@ -586,7 +560,7 @@ case "${CMD}" in
 				printf "%s" "${JSON_PACKET}" \
 				| "${ME}" stage "${STAGING_AREA}" \
 				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_LINESWITCH[skip]}
+				${_SWITCHES[skip]}
 			) ; EXITCODE="$?"
 		fi
 		
@@ -620,19 +594,11 @@ case "${CMD}" in
 #
 # @version 2021.0608
 
-		if [[ -n "${_PARAM[pipeline]}" ]] ; then
-			PIPELINE="${_LINESWITCH[pipeline]}"
-			PIPEDFROMTO="${_PARAM[pipeline]}"
-		else
-			PIPEDFROMTO="staged:verified"
-			PIPELINE="--pipeline=${PIPEDFROMTO}"
-		fi
-		if [[ -n "${PIPEDFROMTO}" ]] ; then
-			PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
-			PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
-			if [[ "${DBGLEVEL}" -ge 2 ]] ; then
-				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
-			fi
+		PIPELINE="$( adpn_parameter_from "--pipeline" "staged:verified" )"
+		if [[ -n "${PIPELINE}" ]] ; then
+			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
+			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
+			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
 		fi
 		
 		declare -a TEMP_CLEANUP=()
@@ -646,20 +612,19 @@ case "${CMD}" in
 		
 		if [[ -r "${AIT_PACKETS}" ]] ; then	
 			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
-			if [[ -n "${DBG}" ]] ; then
-				printf 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIT_PACKETS}" "${PIPEDFROM}" 1>&2
-			fi
+			adpn_debug 01 "${LINENO}" 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIT_PACKETS}" "${PIPEDFROM}"
+			adpn_debug 50 "${LINENO}" 'adpn-json.py <<< ~~~\n%s\n~~~\n\n' "$( cat "${AIT_PACKETS}" )"
 			
 			GREP=$( cat "${AIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
+
+			adpn_debug 50 "${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
 			if [[ -n "${GREP}" ]] ; then
 				printf "%s" "${GREP}" | head -n 1 > "${AIT_INPUT}"
 			fi
 			
 			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
 			if [[ -z "${GREP}" ]] ; then
-				if [[ -n "${DBG}" ]] ; then
-					printf 'cat "%s" | adpn_select_json_packet | head -n 1\n' "${AIT_PACKETS}" 1>&2
-				fi
+				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_select_json_packet | head -n 1\n' "${AIT_PACKETS}"
 				
 				GREP=$( cat "${AIT_PACKETS}" | adpn_select_json_packet | head -n 1 )
 				if [[ "${GREP}" ]] ; then
@@ -667,10 +632,8 @@ case "${CMD}" in
 				fi
 			fi
 			
-			if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-				printf "* DBG: JSON source (%s) = <<<EOF\n%s\nEOF;\n" "${AIT_INPUT}" "${GREP}" 1>&2
-			fi
-			
+			adpn_debug 20 "${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
+
 		fi
 		
 		if [[ -r "${AIT_INPUT}" ]] ; then
@@ -682,11 +645,9 @@ case "${CMD}" in
 				PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
 			fi
 
-			if [[ -n "${DBG}" ]] ; then
-				printf '[DBG] $ adpn-ingest-test "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}" 1>&2 
-			fi
-		
-			adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" "${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
+			adpn_debug 01 "${LINENO}" '$ adpn-ingest-test "%s" --remote=1 "%s" --pipeline="%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}"
+
+			adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" --pipeline="${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
 			EXITCODE="$?"
 
 			cat "${AIT_OUTPUT}" ; echo
@@ -755,7 +716,7 @@ case "${CMD}" in
 			fi
 			
 			adpn-ingest-into-titlesdb.py --snapshot
-			printf "%s" "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py --from="${INGEST_FROM}" --to="${INGEST_TO}" ${_LINESWITCH[dry-run]} > "${AIIT_OUTPUT}" ; EXITCODE="$?"
+			printf "%s" "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py --from="${INGEST_FROM}" --to="${INGEST_TO}" ${_SWITCHES[dry-run]} > "${AIIT_OUTPUT}" ; EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -gt 0 ]] ; then
 				printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
@@ -862,7 +823,7 @@ case "${CMD}" in
 # @version 2021.0526
 
 		if [[ -n "${_PARAM[pipeline]}" ]] ; then
-			PIPELINE="${_LINESWITCH[pipeline]}"
+			PIPELINE="${_SWITCHES[pipeline]}"
 			PIPEDFROMTO="${_PARAM[pipeline]}"
 		else
 			PIPEDFROMTO="published:flagged"
@@ -872,7 +833,7 @@ case "${CMD}" in
 			PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
 			PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
 			if [[ "${DBGLEVEL}" -ge 2 ]] ; then
-				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_LINESWITCH[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+				printf "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
 			fi
 		fi
 		
@@ -946,12 +907,12 @@ case "${CMD}" in
 
 			AIIT_OUTPUT="${_PARAM[sqldump]}"
 			if [[ -z "${AIIT_OUTPUT}" ]] ; then
-				[[ -z "${_LINESWITCH[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+				[[ -z "${_SWITCHES[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
 			fi
 
 			adpn-titlesdb-diff --before "${FLAG_TO}" ${V}
 
-			adpn-ingest-into-titlesdb.py "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" --parameter="${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" ${_LINESWITCH[dry-run]} ${V} ${DDBG} > "${AIIT_OUTPUT}"
+			adpn-ingest-into-titlesdb.py "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" --parameter="${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" ${_SWITCHES[dry-run]} ${V} ${DDBG} > "${AIIT_OUTPUT}"
 			AIIT_ERRCODE="$?"
 			
 			if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
@@ -959,7 +920,7 @@ case "${CMD}" in
 				EXITCODE="${AIIT_ERRCODE}"
 			else
 				adpn-titlesdb-diff --after "${FLAG_TO}" ${V} ; ATD_ERRCODE="$?"
-				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_LINESWITCH[dry-run]}"  ]] ; then
+				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_SWITCHES[dry-run]}"  ]] ; then
 					printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 					EXITCODE="${ATD_ERRCODE}"
 				elif [[ -z "${_PARAM[context]}" ]] ; then
@@ -1085,7 +1046,7 @@ case "${CMD}" in
 		;;
 	
 	"echo")
-		declare -p _LINESWITCH
+		declare -p _SWITCHES
 		declare -p _ARGV
 		declare -p _PARAM
 		;;

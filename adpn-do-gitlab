@@ -71,40 +71,9 @@ eval $( "${ADPN}" stash open --quiet --if-needed ${DDBG} )
 ##########################################################################################
 
 EXITCODE=0
-
-VV="${_LINESWITCH[verbose]}"
-QQ="${_LINESWITCH[quiet]}"
-V="${_LINESWITCH[verbose]}"
-Q=""
-
-DBG="${_LINESWITCH[debug]}"
-DBGLEVEL="${_PARAM[debug]}"
-if [[ "${DBGLEVEL}" == "debug" ]] ; then
-	DBGLEVEL=1
-fi
-if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-	DBGLEVEL=$(( DBGLEVEL - 1 ))
-	DDBG="--debug=${DBGLEVEL}"
-else
-	DDBG=""
-fi
-
-if [[ -z "${_PARAM[verbose]}" ]] ; then
-	Q="--quiet"
-fi
-if [[ -n "${QQ}" ]] ; then
-	Q="--quiet"
-fi
-
 CMD="${_ARGV[1]}"
 
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT}"
-fi
-if [[ -n "${CMD}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
-fi
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
 adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
 
@@ -123,12 +92,12 @@ fi
 declare -A _NO_RECURSE=( [token]="token|parse" )
 if [[ "${CMD}" =~ ^(${_NO_RECURSE[token]}) ]] ; then
 	# avoid infinite recursion, double-execution, unwanted prompts & errors, etc.
-	[[ -n "${_LINESWITCH[token]}" ]] && PRIVATE_TOKEN="${_LINESWITCH[token]}"
+	[[ -n "${_SWITCHES[token]}" ]] && PRIVATE_TOKEN="${_SWITCHES[token]}"
 else 
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
 	declare -a ADG_TOKEN_ARGV=( "token" )
-	[[ -n "${_LINESWITCH[token]}" ]] && ADG_TOKEN_ARGV+=( "${_LINESWITCH[token]}" )
+	[[ -n "${_SWITCHES[token]}" ]] && ADG_TOKEN_ARGV+=( "${_SWITCHES[token]}" )
 	[[ -n "${DDBG}" ]] && ADG_TOKEN_ARGV+=( "${DDBG}" )
 	PRIVATE_TOKEN=$( "${ME}" "${ADG_TOKEN_ARGV[@]}" )
 	ADG_CODE="$?"
@@ -160,8 +129,8 @@ case "${CMD}" in
 		fi
 		
 		declare -a ADG_GET_ARGV=( "/projects?membership=1" )
-		[[ -z "${_LINESWITCH[no-fail]}" ]] && ADG_GET_ARGV+=( "--fail" )
-		[[ -n "${_LINESWITCH[token]}" ]] && ADG_GET_ARGV+=( "${_LINESWITCH[token]}" )
+		[[ -z "${_SWITCHES[no-fail]}" ]] && ADG_GET_ARGV+=( "--fail" )
+		[[ -n "${_SWITCHES[token]}" ]] && ADG_GET_ARGV+=( "${_SWITCHES[token]}" )
 		[[ -n "${DDBG}" ]] && ADG_GET_ARGV+=( "${DDBG}" )
 		
 		OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
@@ -192,7 +161,7 @@ case "${CMD}" in
 		[[ -n "${STATE}" ]] && ADG_ISSUE_ARGV+=( "--state=${STATE}" )
 		[[ -n "${ORDER_BY}" ]] && ADG_ISSUE_ARGV+=( "--order_by=${ORDER_BY}" )
 		[[ -n "${SORT}" ]] && ADG_ISSUE_ARGV+=( "--sort=${SORT}" )
-		[[ -n "${_LINESWITCH[token]}" ]] && ADG_ISSUE_ARGV+=( "${_LINESWITCH[token]}" )
+		[[ -n "${_SWITCHES[token]}" ]] && ADG_ISSUE_ARGV+=( "${_SWITCHES[token]}" )
 		
 		IID="$( "${ME}" issue "${ADG_ISSUE_ARGV[@]}" | head -n 1 )"
 		[[ -n "${IID}" ]] && printf "%s#%d" "${PROJECT}" "${IID}" || EXITCODE=1
@@ -220,7 +189,7 @@ case "${CMD}" in
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
 
 		if [[ -n "${PROJECT}" ]] ; then
-			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${_LINESWITCH[token]} ${DDBG} | cut --field=2 )
+			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${_SWITCHES[token]} ${DDBG} | cut --field=2 )
 		fi
 		
 		if [[ -n "${_ARGV[3]}" ]] ; then
@@ -296,9 +265,9 @@ case "${CMD}" in
 		
 		adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}"
 		
-		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${_LINESWITCH[token]} ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
-		RE_PACKET="^JSON\s+PACKET:\s*"
+		RE_PACKET="${ADPN_JSON_PACKET_REGEX}"
 		
 		if [[ "${EXITCODE}" -eq 0 ]] ; then
 			ALL_GREPS=1 # assume failure until we find a match
@@ -331,7 +300,8 @@ case "${CMD}" in
 		
 			# 2. Scan for the JSON packet, if any, in issue/notes.body
 			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_LINESWITCH[token]} > "${F_GL_ISSUE}"
+			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_SWITCHES[token]} ${DDBG} ">" "${F_GL_ISSUE}"
+			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}"
 			EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
@@ -371,22 +341,22 @@ case "${CMD}" in
 		if [[ "${OBJECT}" == "packet" ]] ; then
 		# Treat this as a request for a JSON packet encoded within a given Gitlab Issue
 		
-			"${ME}" packet "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
+			"${ME}" packet "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "issue" ]] ; then
 		# Treat this as a request for a Gitlab Issue object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/issues.html>
 			
-			"${ME}" issue "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
+			"${ME}" issue "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "project" ]] ; then
 		# Treat this as a request for a Gitlab Project object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/projects.html>
 			
-			"${ME}" project "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
+			"${ME}" project "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "token" ]] ; then
 		# Treat this as a request for the Gitlab private access token as stored in adpnet.json or the encrypted KeePass database
 			
-			"${ME}" token "${_CMDLINE[@]:3}" ${_LINESWITCH[token]} ; EXITCODE="$?"
+			"${ME}" token "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
 			
 		else 
 		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
@@ -492,7 +462,7 @@ case "${CMD}" in
 
 			if [[ "${PACKET_SOURCE}" =~ ^(!|@)(([A-Za-z0-9].*)?)$ ]] ; then
 				declare -a ADPN_GITLAB_OPENED_SW=( "opened" )
-				[[ -n "${_LINESWITCH[token]}" ]] && ADPN_GITLAB_OPENED_SW+=( "${_LINESWITCH[token]}" )
+				[[ -n "${_SWITCHES[token]}" ]] && ADPN_GITLAB_OPENED_SW+=( "${_SWITCHES[token]}" )
 				[[ -n "${BASH_REMATCH[2]}" ]] && ADPN_GITLAB_OPENED_SW+=( "$(printf -- "--labels=Content Ingest,WAITING: %s" "${BASH_REMATCH[2]//_/ }" )" )
 				[[ -n "${DDBG}" ]] && ADPN_GITLAB_OPENED_SW+=( "${DDBG}" )
 				GITLAB_ISSUE="$( ${ADPN} gitlab "${ADPN_GITLAB_OPENED_SW[@]}" )"

@@ -31,9 +31,7 @@ Exit codes:
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
 
-declare -a _ARGV ; _ARGV=("$0")
 declare -a _CMDLINE ; _CMDLINE=("$0")
-declare -A _PARAM=()
 
 shopt -s lastpipe
 
@@ -61,22 +59,9 @@ rm "${CMDLINETXT}"
 ##########################################################################################
 
 EXITCODE=0
-
-V="${_LINESWITCH[verbose]}"
-Q=""
-if [[ -z "${_PARAM[verbose]}" ]] ; then
-	Q="--quiet"
-fi
-
 CMD="${_ARGV[1]}"
 
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT}"
-fi
-if [[ -n "${CMD}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
-fi
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
@@ -256,7 +241,7 @@ case "${CMD}" in
 			MYSQL_PASSWORD_SWITCH=$(printf "%s--password=%s" "" "${MYSQL_PASSWORD}")
 		fi
 		
-		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" "${_LINESWITCH[execute]}"
+		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" "${_SWITCHES[execute]}"
 		EXITCODE="$?"
 		;;
 		

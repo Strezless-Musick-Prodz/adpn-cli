@@ -155,21 +155,25 @@ function adpn_getpassword_from() {
 	return "${EXITCODE}"
 }
 
-declare -A _LINESWITCH=()
+declare -a _ARGV=()
+declare -A _PARAM=()
+declare -A _SWITCHES=()
 
 function adpn_command_line() {
 	shopt -s lastpipe
 
+	[[ "${#_ARGV}" -eq 0 ]] && _ARGV+=( "$0" )
+	
 	cat "$@" 2>/dev/null | while IFS="" read -r SWITCH ; do
 		
 		if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
-			KEY="${BASH_REMATCH[1]}"
-			VALUE="${BASH_REMATCH[3]}"
+			local KEY="${BASH_REMATCH[1]}"
+			local VALUE="${BASH_REMATCH[3]}"
 			if [[ -z "${BASH_REMATCH[2]}" ]] ; then
 				VALUE="$KEY"
 			fi
 			_PARAM[$KEY]="${VALUE}"
-			_LINESWITCH[$KEY]="${SWITCH}"
+			_SWITCHES[$KEY]="${SWITCH}"
 
 		elif [[ ! -z "${SWITCH}" ]] ; then
 			_ARGV+=("${SWITCH}")
@@ -178,6 +182,35 @@ function adpn_command_line() {
 		
 	done
 	
+}
+
+function adpn_set_display_settings() {
+	VV="${_SWITCHES[verbose]}"
+	QQ="${_SWITCHES[quiet]}"
+	V="${_SWITCHES[verbose]}"
+	Q=""
+
+	DBG="${_SWITCHES[debug]}"
+	DBGLEVEL="${_PARAM[debug]}"
+	if [[ "${DBGLEVEL}" == "debug" ]] ; then
+		DBGLEVEL=1
+	fi
+	if [[ "${DBGLEVEL}" -gt 1 ]] ; then
+		DBGLEVEL=$(( DBGLEVEL - 1 ))
+		DDBG="--debug=${DBGLEVEL}"
+	else
+		DDBG=""
+	fi
+
+	if [[ -z "${_PARAM[verbose]}" ]] ; then
+		Q="--quiet"
+	fi
+	if [[ -n "${QQ}" ]] ; then
+		Q="--quiet"
+	fi
+	
+	local script_cmd=$( printf "%s" "${SCRIPT} ${CMD}" | sed -E 's/\s+$//' )
+	SCRIPT_CMD_NAME=$( adpn_parameter_from "--context" "\\${script_cmd}" )
 }
 
 # adpn_check_dependency: check a list of dependencies; if at least one fails,

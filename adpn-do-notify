@@ -12,17 +12,13 @@ SCRIPTPATH="$(readlink -f "${SCRIPTPATH}")"
 SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
 SCRIPTNAME="$(basename "${SCRIPTPATH}")"
 
-EXITCODE=0
-
 source "${SCRIPTDIR}/adpn-define-aliases"
 
 ##########################################################################################
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
-declare -a _ARGV ; _ARGV=("$0")
 declare -a _CMDLINE ; _CMDLINE=("$0")
-declare -A _PARAM=( )
 
 shopt -s lastpipe
 
@@ -54,29 +50,10 @@ fi
 ### PARAMETERS: GET PARAMETER VALUES FROM COMMAND LINE AND JSON INPUT ####################
 ##########################################################################################
 
-VV="${_LINESWITCH[verbose]}"
-QQ="${_LINESWITCH[quiet]}"
-V="${_LINESWITCH[verbose]}"
-Q=""
+EXITCODE=0
+CMD=""
 
-DBG="${_LINESWITCH[debug]}"
-DBGLEVEL="${_PARAM[debug]}"
-if [[ "${DBGLEVEL}" == "debug" ]] ; then
-	DBGLEVEL=1
-fi
-if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-	DBGLEVEL=$(( DBGLEVEL - 1 ))
-	DDBG="--debug=${DBGLEVEL}"
-else
-	DDBG=""
-fi
-
-if [[ -z "${_PARAM[verbose]}" ]] ; then
-	Q="--quiet"
-fi
-if [[ -n "${QQ}" ]] ; then
-	Q="--quiet"
-fi
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
 PIPED_TEXT="$( cat "${_ARGV[@]:1}" )"
 JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"

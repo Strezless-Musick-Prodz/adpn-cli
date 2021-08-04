@@ -66,44 +66,12 @@ rm "${CMDLINETXT}"
 ##########################################################################################
 
 EXITCODE=0
+CMD="${_ARGV[1]}"
 
 ADPNPATH="$( adpn_parameter_from "--script" "\\${SCRIPTPATH}" )"
 ADPN="$( basename "${ADPNPATH}" )"
 
-VV="${_LINESWITCH[verbose]}"
-QQ="${_LINESWITCH[quiet]}"
-V="${_LINESWITCH[verbose]}"
-Q=""
-
-DBG="${_LINESWITCH[debug]}"
-DBGLEVEL="${_PARAM[debug]}"
-if [[ "${DBGLEVEL}" == "debug" ]] ; then
-	DBGLEVEL=1
-fi
-if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-	DBGLEVEL=$(( DBGLEVEL - 1 ))
-	DDBG="--debug=${DBGLEVEL}"
-else
-	DDBG=""
-fi
-
-
-if [[ -z "${_PARAM[verbose]}" ]] ; then
-	Q="--quiet"
-fi
-if [[ -n "${QQ}" ]] ; then
-	Q="--quiet"
-fi
-
-CMD="${_ARGV[1]}"
-
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT}"
-fi
-if [[ -n "${CMD}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
-fi
+adpn_set_display_parameters
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
@@ -131,11 +99,11 @@ case "${CMD}" in
 #
 # @version 2021.0714
 		declare -a ADS_SW=()
-		[[ "${_LINESWITCH[for]}" ]] && ADS_SW+=( "${_LINESWITCH[for]}" )
-		[[ "${_LINESWITCH[context]}" ]] && ADS_SW+=( "${_LINESWITCH[context]}" )
-		[[ "${_LINESWITCH[verbose]}" ]] && ADS_SW+=( "${_LINESWITCH[verbose]}" )
-		[[ "${_LINESWITCH[quiet]}" ]] && ADS_SW+=( "${_LINESWITCH[quiet]}" )
-		[[ "${_LINESWITCH[script]}" ]] && ADS_SW+=( "${_LINESWITCH[script]}" )
+		[[ "${_SWITCHES[for]}" ]] && ADS_SW+=( "${_SWITCHES[for]}" )
+		[[ "${_SWITCHES[context]}" ]] && ADS_SW+=( "${_SWITCHES[context]}" )
+		[[ "${_SWITCHES[verbose]}" ]] && ADS_SW+=( "${_SWITCHES[verbose]}" )
+		[[ "${_SWITCHES[quiet]}" ]] && ADS_SW+=( "${_SWITCHES[quiet]}" )
+		[[ "${_SWITCHES[script]}" ]] && ADS_SW+=( "${_SWITCHES[script]}" )
 		[[ "${DDBG}" ]] && ADS_SW+=( "${DDBG}" )
 		
 		"${ME}" dependencies "${ADS_SW[@]}" &&
@@ -212,8 +180,8 @@ python:Cryptodome	%s Python module	python3 -m pip install pycryptodomex
 		printf "* DEPENDENCIES: checking for dependencies.\n"
 
 		declare -a ACD_SW=( "-" )
-		[[ -z "${_LINESWITCH[batch]}" ]] && ACD_SW+=( "--interactive" )
-		[[ -n "${_LINESWITCH[for]}" ]] && ACD_SW+=( "${_LINESWITCH[for]}" )
+		[[ -z "${_SWITCHES[batch]}" ]] && ACD_SW+=( "--interactive" )
+		[[ -n "${_SWITCHES[for]}" ]] && ACD_SW+=( "${_SWITCHES[for]}" )
 		printf "%s\n" "${DEPENDENCIES}" | adpn_check_dependencies "${ACD_SW[@]}"
 		
 		EXITCODE="$?"

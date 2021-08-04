@@ -61,22 +61,9 @@ rm "${CMDLINETXT}"
 ##########################################################################################
 
 EXITCODE=0
-
-V="${_LINESWITCH[verbose]}"
-Q=""
-if [[ -z "${_PARAM[verbose]}" ]] ; then
-	Q="--quiet"
-fi
-
 CMD="${_ARGV[1]}"
 
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT}"
-fi
-if [[ -n "${CMD}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPT_CMD_NAME} ${CMD}"
-fi
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
