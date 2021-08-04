@@ -184,21 +184,31 @@ function adpn_command_line() {
 	
 }
 
+declare -x DDBG DDBGLEVEL
+declare -a DBGTAGS=()
 function adpn_set_display_settings() {
 	VV="${_SWITCHES[verbose]}"
 	QQ="${_SWITCHES[quiet]}"
 	V="${_SWITCHES[verbose]}"
 	Q=""
 
-	DBG="${_SWITCHES[debug]}"
+	[[ -n "${DDBG}" ]] && DBG="${DDBG}" || DBG="${_SWITCHES[debug]}"
 	DBGLEVEL="${_PARAM[debug]}"
-	if [[ "${DBGLEVEL}" == "debug" ]] ; then
-		DBGLEVEL=1
+	if [[ "${DBGLEVEL}" =~ ^[0-9]+([,]|$) ]] ; then
+		DBGLEVEL="${DBGLEVEL}"
+	elif [[ -n "${DBGLEVEL}" ]] ; then
+		DBGLEVEL="1,${DBGLEVEL}"
 	fi
+	
+	DBGTAGS=( $( printf "%s" "${DBGLEVEL}" | tr "," "\n" | tail -n +2 ) )
+	DBGLEVEL=$( printf "%s" "${DBGLEVEL}" | cut --delimiter="," --field=1 )
+	
 	if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-		DBGLEVEL=$(( DBGLEVEL - 1 ))
-		DDBG="--debug=${DBGLEVEL}"
+		local -a d_levels_down=( $(( DBGLEVEL - 1 )) "${DBGTAGS[@]}" )
+		DDBGLEVEL=$( join_by "," "${d_levels_down[@]}" )
+		DDBG="--debug=${DDBGLEVEL}"
 	else
+		DDBGLEVEL=""
 		DDBG=""
 	fi
 
@@ -450,6 +460,9 @@ function adpn_debug() {
 	local line="${1}" ; shift
 	declare -a DBG_MESSAGE=( "$@" )
 	
+	local -a tags=( $( printf "%s" "${level}" | tr "," "\n" | tail -n +2 ) )
+	level=$( printf "%s" "${level}" | cut --delimiter="," --field=1 )
+
 	local message="$1"
 	if [[ "$#" -gt 1 ]] ; then
 		message="$( printf -- "$@" )"
@@ -464,8 +477,21 @@ function adpn_debug() {
 	fi
 	
 	if [[ -n "${DBG}" ]] ; then
-		if [[ "${DBGLEVEL}" -ge "${level}" ]] ; then
-			printf "[%s|D%03d] %s (%s)\n" "${cmd}" "${level}" "${message}" "${line_source}" 1>&2
+		local dbg_tag_list=$( join_by "|" "${DBGTAGS[@]}" )
+		local dbg_tag_regex=$( printf "(%s)" "${dbg_tag_list}" )
+		
+		local b_display=0
+		local s_why=""
+		[[ "${DBGLEVEL}" -ge "${level}" ]] && b_display=1 && s_why=$( printf "|D%03d" "${level}" )
+		for TAG in "${tags[@]}" ; do
+			[[ -n "${TAG}" && "${TAG}" =~ ^${dbg_tag_regex}$ ]] && b_display=1 && s_why=$( printf "%s/DBG=%s" "${s_why}" "${TAG}" )
+		done
+		for TAG in "${tags[@]}" ; do
+			[[ -n "${TAG}" && "-${TAG}" =~ ^${dbg_tag_regex}$ ]] && b_display=0
+		done
+
+		if [[ b_display -gt 0 ]] ; then
+			printf "[%s%s] %s (%s)\n" "${cmd}" "${s_why}" "${message}" "${line_source}" 1>&2
 		fi
 	fi
 }

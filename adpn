@@ -78,7 +78,7 @@ if [[ ! -z "${_PARAM[help]}" ]] ; then
 	_ARGV=( "help" "${_ARGV[@]}" )
 fi
 
-adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )" 1>&2
+adpn_debug 10,"${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )" 1>&2
 
 ##########################################################################################
 ## COMMUNICATIONS: check for information to access encrypted persistent data #############
@@ -592,7 +592,7 @@ case "${CMD}" in
 #    --to=<PEER>   	node to publish to (AUB1, AUB2, ADAH, ...; ALL=entire network)
 #    --peer=<PEER> 	synonym for --to=<PEER>
 #
-# @version 2021.0608
+# @version 2021.0807
 
 		PIPELINE="$( adpn_parameter_from "--pipeline" "staged:verified" )"
 		if [[ -n "${PIPELINE}" ]] ; then
@@ -1069,6 +1069,6 @@ else
 	eval $( adpn stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
 fi
 
-adpn_debug 10 "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
+adpn_debug 10,"${SCRIPT}","${CMD}" "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}

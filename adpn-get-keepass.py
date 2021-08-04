@@ -117,7 +117,7 @@ the user will be prompted to provide it interactively.
         return getpass(self.get_password_prompt())
     
     def get_password_prompt (self) :
-        return ( "Passphrase to access %(database)s: " % { "database": self.database_file } )
+        return ( "Passphrase to access %(database)s (%(title)s): " % { "database": self.database_file, "title": self.entry_title if self.entry_title else "KDBX" } )
     
     def get_password (self) :
         return self.switches.get('password') if self.switched('password') else self.read_password()

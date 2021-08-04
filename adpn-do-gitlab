@@ -75,7 +75,8 @@ CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
-adpn_debug 10 "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
+adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
+adpn_debug 400,"gitlab","stash" "${LINENO}" "ADPN_STASH_FILE='%s'" "${ADPN_STASH_FILE}"
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
@@ -283,8 +284,13 @@ case "${CMD}" in
 				ISH_TITLE=$( urldecode "${ENCTITLE}" )
 				ISH_BODY=$( urldecode "${ENCBODY}" )
 
-				printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}"
+				GREP=$( printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}" )
 				GREPEXIT="$?"
+				
+				if [[ -n "${GREP}" ]] ; then
+					adpn_debug 50 "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
+					printf "%s\n" "${GREP}"
+				fi
 				
 				# if not found, retain some data for possible error message
 				if [[ "${GREPEXIT}" -ge 0 ]] ; then
@@ -314,7 +320,10 @@ case "${CMD}" in
 					GREPEXIT="$?"
 
 					if [[ -n "${GREP}" ]] ; then
+						adpn_debug 50 "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
 						printf "%s\n" "${GREP}"
+					else
+						adpn_debug 100 "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
 					fi
 					
 					# if found, flag this as OK
@@ -383,9 +392,7 @@ case "${CMD}" in
 				
 				for SLUG in "${_ARGV[@]:2}" ; do
 					URL=$( printf "${API_URL}" "${SLUG#/}" )
-					if [[ -n "${DBG}" ]] ; then
-						echo "DBG:" curl "${CURL_SW[@]}" "${URL}" 1>&2
-					fi
+					adpn_debug 200 "${LINENO}" "%s " "HTTP>>>" curl "${CURL_SW[@]}" "${URL}"
 					curl "${CURL_SW[@]}" "${URL}"
 
 					CURLEXIT="$?"
@@ -517,6 +524,6 @@ if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
 	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet ${DDBG} )
 fi
 
-adpn_debug 10 "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
+adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}
