@@ -163,6 +163,7 @@ case "${CMD}" in
 		[[ -n "${ORDER_BY}" ]] && ADG_ISSUE_ARGV+=( "--order_by=${ORDER_BY}" )
 		[[ -n "${SORT}" ]] && ADG_ISSUE_ARGV+=( "--sort=${SORT}" )
 		[[ -n "${_SWITCHES[token]}" ]] && ADG_ISSUE_ARGV+=( "${_SWITCHES[token]}" )
+		[[ -n "${DDBG}" ]] && ADG_ISSUE_ARGV+=( "${DDBG}" )
 		
 		IID="$( "${ME}" issue "${ADG_ISSUE_ARGV[@]}" | head -n 1 )"
 		[[ -n "${IID}" ]] && printf "%s#%d" "${PROJECT}" "${IID}" || EXITCODE=1
@@ -339,7 +340,7 @@ case "${CMD}" in
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			if [[ -z "${QQ}" ]] ; then
-				printf "[%s] No JSON packet found for issue %s%s\n" "${SCRIPT_CMD_NAME}" "${ISH}" "${ERR_DATA}" 1>&2
+				adpn_notice "No JSON packet found for issue %s%s" "${ISH}" "${ERR_DATA}"
 			fi
 		fi
 		
@@ -373,7 +374,7 @@ case "${CMD}" in
 		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
 
 			if [[ -z "${PRIVATE_TOKEN}" ]] ; then
-				printf "[%s] WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>\n" "${SCRIPT_CMD_NAME}" 1>&2
+				adpn_notice "WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>"
 			else 
 			
 				API_URL=$( adpnprop "gitlab/base" )
@@ -408,7 +409,7 @@ case "${CMD}" in
 	
 	"post")
 		if [[ -z "${PRIVATE_TOKEN}" ]] ; then
-			printf "[%s] WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>\n" "${SCRIPT_CMD_NAME}" 1>&2
+			adpn_notice "WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>"
 		else 
 			
 			API_URL=$( adpnprop "gitlab/base" )
@@ -451,7 +452,7 @@ case "${CMD}" in
 			for SLUG in "${_ARGV[@]:2}" ; do
 				URL=$( printf "${API_URL}" "${SLUG#/}" )
 				if [[ -n "${DBG}" ]] ; then
-					echo "DBG:" curl "${CURL_SW[@]}" "${URL}" 1>&2
+					adpn_debug 20,gitlab,post,curl "%s " curl "${CURL_SW[@]}" "${URL}"
 				fi
 				if [[ -z "${_PARAM[dry-run]}" ]] ; then
 					curl "${CURL_SW[@]}" "${URL}"
@@ -510,7 +511,7 @@ case "${CMD}" in
 		;;
 		
 	*)
-		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		adpn_notice "'${CMD}' command not understood."
 		echo "${__HELP__}" 1>&2
 		EXITCODE=255
 		;;
@@ -526,6 +527,6 @@ if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
 	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet ${DDBG} )
 fi
 
-adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "cmd=%s, exit=%d" "${CMD}" "${EXITCODE}"
+adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}
