@@ -264,7 +264,7 @@ case "${CMD}" in
 				
 		ISH="${_ARGV[2]}"
 		
-		adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}"
+		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ">" "${F_GL_ISSUE}"
 		
 		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
@@ -288,7 +288,7 @@ case "${CMD}" in
 				GREPEXIT="$?"
 				
 				if [[ -n "${GREP}" ]] ; then
-					adpn_debug 50 "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
+					adpn_debug 50,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
 					printf "%s\n" "${GREP}"
 				fi
 				
@@ -306,8 +306,8 @@ case "${CMD}" in
 		
 			# 2. Scan for the JSON packet, if any, in issue/notes.body
 			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_SWITCHES[token]} ${DDBG} ">" "${F_GL_ISSUE}"
-			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output=urlencode ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}"
+			adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} ">" "${F_GL_ISSUE}"
+			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}"
 			EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
@@ -332,6 +332,8 @@ case "${CMD}" in
 					fi
 				done
 				EXITCODE="${ALL_GREPS}"
+			else 
+				adpn_debug 01,gitlab,packet "${LINENO}" "gitlab issue/notes request FAILED: %d" "${EXITCODE}"
 			fi
 		fi
 		
