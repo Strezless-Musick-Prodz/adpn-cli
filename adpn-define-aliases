@@ -2,7 +2,7 @@
 #
 # adpn-define-aliases: some basic subroutines used across many of the adpn suite of scripts
 #
-# @version 2021.0730
+# @version 2021.0807-1244
 
 PATH="${SCRIPTDIR}:${PATH}"
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
@@ -12,6 +12,7 @@ SCRIPT="$(basename "${SCRIPTPATH}")"
 ME="${SCRIPTPATH}"
 ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
 
+__ALIASFILE__="$( basename "${BASH_SOURCE}" )"
 
 # adpn_parameter_from: retrieve and echo a property that may be found in one of several possible sources for parameter data, including
 # command-line switches, JSON configuration files, live JSON data, user console input, and fall-back defaults.
@@ -28,12 +29,18 @@ ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
 
 function adpn_parameter_from() {
 	RESULT="" ; EXITCODE=2
-	
+
+	adpn_debug 500 "${__ALIASFILE__}:${LINENO}" "%s(%s)" "adpn_parameter_from" "$( join_by ', ' "${@:1}" )"
 	while [[ "$#" -gt 0 && "${EXITCODE}" -gt 0 ]] ; do
 		local source="${1}" ; shift
+		adpn_debug 600 "${__ALIASFILE__}:${LINENO}" "source='%s'" "$source" 
+
 		if [[ "${source}" =~ ^(--|!!)(.*)$ ]] ; then
 			KEY="${BASH_REMATCH[2]}"
-			if [[ -v _PARAM[$KEY] ]] ; then
+			# in a civilized version of batch we could use test -v
+			# but we're not always in civilized places...
+			# technique from <https://stackoverflow.com/questions/3601515/how-to-check-if-a-variable-is-set-in-bash/13864829#13864829>
+			if [[ -n "${_PARAM[$KEY]+SET}" ]] ;then
 				RESULT="${_PARAM[$KEY]}" ; EXITCODE=0
 			fi
 		elif [[ "${source}" =~ ^[.]([^\<]+)([\<](.*))?$ ]] ; then
@@ -201,7 +208,7 @@ function adpn_check_dependencies () {
 		fi
 	done
 	
-	adpn_debug 10 "${LINENO}" "%s(%s) %s" "adpn_check_dependencies" "$( join_by ", " "${acds_argv[@]:1}" )" "$( join_by " " "${acds_switches[@]}" )"
+	adpn_debug 10 "${__ALIASFILE__}:${LINENO}" "%s(%s) %s" "adpn_check_dependencies" "$( join_by ", " "${acds_argv[@]:1}" )" "$( join_by " " "${acds_switches[@]}" )"
 
 	local file="${acds_argv[1]}"
 	[[ -z "${file}" ]] && file=- # default to stdin
@@ -283,7 +290,7 @@ function adpn_check_dependency () {
 		fi
 	done
 	
-	adpn_debug 15 "${LINENO}" "%s(%s) %s" "adpn_check_dependency" "$( join_by ", " "${acd_argv[@]:1}" )" "$( join_by " " "${acd_switches[@]}" )"
+	adpn_debug 15 "${__ALIASFILE__}:${LINENO}" "%s(%s) %s" "adpn_check_dependency" "$( join_by ", " "${acd_argv[@]:1}" )" "$( join_by " " "${acd_switches[@]}" )"
 
 	local dependency="${acd_argv[1]}"
 	local description="${acd_argv[2]}" ; shift
@@ -415,9 +422,17 @@ function adpn_debug() {
 		message="$( printf -- "$@" )"
 	fi
 	
+	local cmd="${SCRIPT_CMD_NAME}"
+	[[ -z "${cmd}" ]] && cmd="${SCRIPT}"
+	
+	local line_source="${line}"
+	if [[ "${line_source}" =~ ^[0-9]+$ ]] ; then
+		line_source=$( printf "%s:%d" "${SCRIPT}" "${line}" )
+	fi
+	
 	if [[ -n "${DBG}" ]] ; then
 		if [[ "${DBGLEVEL}" -ge "${level}" ]] ; then
-			printf "[%s|D%03d] %s (%s:%d)\n" "${SCRIPT_CMD_NAME}" "${level}" "${message}" "${SCRIPT}" "${line}" 1>&2
+			printf "[%s|D%03d] %s (%s)\n" "${cmd}" "${level}" "${message}" "${line_source}" 1>&2
 		fi
 	fi
 }
