@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 #
-# adpn-json.py: utility script, pulls data elements from a JSON hash table
-# provided on stdin and outputs the value (a printed str or a serialized str equivalent)
-# from a given key-value pair, so that bash scripts can capture values from JSON packets.
+# adpn-json.py: utility script for handling JSON data in Python or in shell
+# The script pulls data elements from a JSON hash table provided on stdin and
+# then outputs the value (a printed str, a serialized str equivalent or new JSON)
+# from a key-value pair, so that scripts can capture and manipulate values in JSON packets.
 #
-# @version 2021.0525
+# @version 2021.0811
 
 import sys
 import os.path
@@ -34,12 +35,14 @@ Exit code:
 	"""
 	
 	def __init__ (self, scriptname, argv, switches) :
-		self.scriptname = scriptname		
+		self.scriptname = scriptname
 		self._argv = argv
 		self._switches = switches
 		self._output = []
 		self._flags = { "json_error": [], "key_error": [], "nothing_found": [], "output_error": [] }
 		self._default_mime = "text/plain"
+		self._json = None
+		
 		with open(argv[0], 'r') as f :
 			for line in f.readlines() :
 				ref = re.search(r'^#\s*@version\s*(.*)\s*$', line)
@@ -124,7 +127,13 @@ Exit code:
 			elif isinstance(item.get(key), int ) :
 				matched = ( item.get(key) == int(value) )
 		return matched
-
+	
+	@property
+	def json (self) :
+		if self._json is None :
+			self._json = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
+		return self._json
+	
 	@property
 	def selected (self) :
 		ok = lambda x: True
