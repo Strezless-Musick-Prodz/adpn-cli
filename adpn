@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0807-1321
+# @version 2021.0811
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -64,6 +64,11 @@ EXITCODE=0
 CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # @see adpn-define-aliases
+
+declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
+[[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
+[[ -n "${V}" ]] && CONTEXT_SW+=( "${V}" )
+[[ -n "${Q}" ]] && CONTEXT_SW+=( "${Q}" )
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
@@ -414,7 +419,7 @@ case "${CMD}" in
 		
 		adpn-do-package.py --output=application/json \
 			"${ADP_ARGV[@]}" \
-			"${ADP_SWITCHES[@]}" ${V} ${Q} ${DDBG} --context="${SCRIPT_CMD_NAME}"
+			"${ADP_SWITCHES[@]}" "${CONTEXT_SW[@]}"
 		EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -lt 255 ]] ; then
@@ -461,7 +466,7 @@ case "${CMD}" in
 		
 		adpn-stage-content.py --output=application/json \
 			"${ASC_SWITCHES[@]}" \
-			"${ASC_ARGV[@]}" ${V} ${Q} ${DDBG} --context="${SCRIPT_CMD_NAME}" > "${ASC_OUTPUT}"
+			"${ASC_ARGV[@]}" "${CONTEXT_SW[@]}" > "${ASC_OUTPUT}"
 			ASC_ERRCODE="$?"
 		
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
@@ -493,10 +498,10 @@ case "${CMD}" in
 #
 # @version 2021.0709
 
-		adpn-do-notify --from="${_PARAM[from]}" --subdirectory="${_PARAM[subdirectory]}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V}
+		adpn-do-notify --from="${_PARAM[from]}" --subdirectory="${_PARAM[subdirectory]}" "${CONTEXT_SW[@]}"
 		EXITCODE="$?"
 		;;
-		
+	
 	"preserve")
 # @method adpn preserve
 # ADPNet Member: Stage AU files on the local workstation to the staging area,
@@ -543,41 +548,41 @@ case "${CMD}" in
 		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"
 		AU_INSTITUTION="$( adpn_parameter_from "--institution" ".institution" )"
 		
-		[[ -z "${V}" ]] || printf "[%s:%d] 1. Packaging files into LOCKSS Archival Unit (AU).\n" "${SCRIPT_CMD_NAME}" "${LINENO}"
-		
+		[[ -z "${V}" ]] || adpn_notice "${LINENO}" "1. Packaging files into LOCKSS Archival Unit (AU)." 
+
 		JSON_PACKET=$(
 			"${ME}" package "${AU_LOCALPATH}" \
 				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_SWITCHES[skip]}
+				${_SWITCHES[skip]} \
+				"${CONTEXT_SW[@]}"
 		) ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] %s package FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
+			adpn_notice "${LINENO}" "%s package FAILED.\n" "${SCRIPT}"
 		else
-			[[ -z "${V}" ]] || printf "[%s:%d] 2. Staging content to drop server.\n" "${SCRIPT_CMD_NAME}" "${LINENO}"
-		
+			[[ -z "${V}" ]] || adpn_notice "${LINENO}" "2. Staging content to drop server." 
+
 			JSON_PACKET=$(
 				printf "%s" "${JSON_PACKET}" \
 				| "${ME}" stage "${STAGING_AREA}" \
 				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_SWITCHES[skip]}
+				${_SWITCHES[skip]} \
+				"${CONTEXT_SW[@]}"
 			) ; EXITCODE="$?"
 		fi
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] %s stage FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
+			adpn_notice "${LINENO}" "%s stage FAILED." "${SCRIPT}"
 		else 
 			DROP_ID=$( adpn_parameter_from ".Staged To<${JSON_PACKET}" "\\${FROM}" )
 
-			[[ -z "${V}" ]] || printf "[%s:%d] 3. Notifying ADPNet Tech of staged AU.\n" "${SCRIPT} ${CMD}" "${LINENO}"
-			printf "%s" "${JSON_PACKET}" | ${SCRIPTPATH} notify --from="${DROP_ID}" --subdirectory="${SUBDIRECTORY}" --context="${SCRIPT_CMD_NAME}" ${DDBG} ${V} ; ADN_ERRCODE="$?"
+			[[ -z "${V}" ]] || adpn_notice "${LINENO}" "3. Notifying ADPNet Tech of staged AU."
+			printf "%s" "${JSON_PACKET}" | "${SCRIPTPATH}" notify --from="${DROP_ID}" --subdirectory="${SUBDIRECTORY}" "${CONTEXT_SW[@]}" ; ADN_ERRCODE="$?"
 
 			EXITCODE="${ADN_ERRCODE}"
 		fi
 
-		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] %s notify FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
-		fi
+		[[ "${EXITCODE}" -gt 0 ]] && adpn_notice "${LINENO}" "%s notify FAILED." "${SCRIPT}"
 		;;
 	
 	"verify")

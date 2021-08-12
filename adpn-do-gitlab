@@ -75,6 +75,10 @@ CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
+declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
+[[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
+[[ -n "${_SWITCHES[token]}" ]] && CONTEXT_SW+=( "${_SWITCHES[token]}" )
+
 adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
 adpn_debug 400,"gitlab","stash" "${LINENO}" "ADPN_STASH_FILE='%s'" "${ADPN_STASH_FILE}"
 
@@ -97,10 +101,7 @@ if [[ "${CMD}" =~ ^(${_NO_RECURSE[token]}) ]] ; then
 else 
 	# Retrieve Gitlab token for ADPN script access to Gitlab
 	# This may produce an interactive prompt for the master password on a kdbx file
-	declare -a ADG_TOKEN_ARGV=( "token" )
-	[[ -n "${_SWITCHES[token]}" ]] && ADG_TOKEN_ARGV+=( "${_SWITCHES[token]}" )
-	[[ -n "${DDBG}" ]] && ADG_TOKEN_ARGV+=( "${DDBG}" )
-	PRIVATE_TOKEN=$( "${ME}" "${ADG_TOKEN_ARGV[@]}" )
+	PRIVATE_TOKEN=$( "${ME}" token "${CONTEXT_SW[@]}" )
 	ADG_CODE="$?"
 	
 	# We should only have to retrieve this once, at the first request for the token.
@@ -131,13 +132,11 @@ case "${CMD}" in
 		
 		declare -a ADG_GET_ARGV=( "/projects?membership=1" )
 		[[ -z "${_SWITCHES[no-fail]}" ]] && ADG_GET_ARGV+=( "--fail" )
-		[[ -n "${_SWITCHES[token]}" ]] && ADG_GET_ARGV+=( "${_SWITCHES[token]}" )
-		[[ -n "${DDBG}" ]] && ADG_GET_ARGV+=( "${DDBG}" )
 		
 		STASH_CACHE="gitlab/api/get-list"
 		OUT_JSON=$( adpn_parameter_from ".${STASH_CACHE}<(adpn stash)" )
 		if [[ -z "${OUT_JSON}" ]] ; then
-			OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" )" ; EXITCODE="$?"
+			OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" "${CONTEXT_SW[@]}" )" ; EXITCODE="$?"
 		else
 			adpn_debug 20 "${LINENO}" "Retrieved JSON response from HTTP cache (%d chars)" $( printf "%s" "${OUT_JSON}" | wc -c )
 		fi
@@ -155,7 +154,7 @@ case "${CMD}" in
 		fi
 		
 		if [[ "${EXITCODE}" -eq 0 && -n "${OUT_JSON}" ]] ; then
-			"${ADPN}" stash post "${STASH_CACHE}" "${OUT_JSON}" ${DDBG}
+			"${ADPN}" stash post "${STASH_CACHE}" "${OUT_JSON}" "${CONTEXT_SW[@]}"
 		fi 
 		
 		EXITCODE="$?"
@@ -173,8 +172,7 @@ case "${CMD}" in
 		[[ -n "${STATE}" ]] && ADG_ISSUE_ARGV+=( "--state=${STATE}" )
 		[[ -n "${ORDER_BY}" ]] && ADG_ISSUE_ARGV+=( "--order_by=${ORDER_BY}" )
 		[[ -n "${SORT}" ]] && ADG_ISSUE_ARGV+=( "--sort=${SORT}" )
-		[[ -n "${_SWITCHES[token]}" ]] && ADG_ISSUE_ARGV+=( "${_SWITCHES[token]}" )
-		[[ -n "${DDBG}" ]] && ADG_ISSUE_ARGV+=( "${DDBG}" )
+		ADG_ISSUE_ARGV+=( "${CONTEXT_SW[@]}" )
 		
 		IID="$( "${ME}" issue "${ADG_ISSUE_ARGV[@]}" | head -n 1 )"
 		[[ -n "${IID}" ]] && printf "%s#%d" "${PROJECT}" "${IID}" || EXITCODE=1
@@ -202,7 +200,7 @@ case "${CMD}" in
 		PROJECT=$( printf "%s" "${PROJECT}" | cut --field=1 --delimiter='#' )
 
 		if [[ -n "${PROJECT}" ]] ; then
-			PROJECT_ID=$( "${ME}" project "${PROJECT}" ${_SWITCHES[token]} ${DDBG} | cut --field=2 )
+			PROJECT_ID=$( "${ME}" project "${PROJECT}" "${CONTEXT_SW[@]}" | cut --field=2 )
 		fi
 		
 		if [[ -n "${_ARGV[3]}" ]] ; then
@@ -318,8 +316,8 @@ case "${CMD}" in
 		
 			# 2. Scan for the JSON packet, if any, in issue/notes.body
 			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-			adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} ">" "${F_GL_ISSUE}"
-			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" ${_SWITCHES[token]} ${DDBG} > "${F_GL_ISSUE}"
+			adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
+			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}"
 			EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
@@ -486,7 +484,7 @@ case "${CMD}" in
 				declare -a ADPN_GITLAB_OPENED_SW=( "opened" )
 				[[ -n "${_SWITCHES[token]}" ]] && ADPN_GITLAB_OPENED_SW+=( "${_SWITCHES[token]}" )
 				[[ -n "${BASH_REMATCH[2]}" ]] && ADPN_GITLAB_OPENED_SW+=( "$(printf -- "--labels=Content Ingest,WAITING: %s" "${BASH_REMATCH[2]//_/ }" )" )
-				[[ -n "${DDBG}" ]] && ADPN_GITLAB_OPENED_SW+=( "${DDBG}" )
+				ADPN_GITLAB_OPENED_SW+=( "${CONTEXT_SW[@]}" )
 				GITLAB_ISSUE="$( ${ADPN} gitlab "${ADPN_GITLAB_OPENED_SW[@]}" )"
 			elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
 				GITLAB_ISSUE="${BASH_REMATCH[1]}"
@@ -536,7 +534,7 @@ fi
 ##########################################################################################
 
 if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
-	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet ${DDBG} )
+	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet "${CONTEXT_SW[@]}" )
 fi
 
 adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"

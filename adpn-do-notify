@@ -41,11 +41,6 @@ adpn_command_line "${SWITCHFILES[@]}"
 
 rm "${CMDLINETXT}"
 
-SCRIPT_CMD_NAME="${_PARAM[context]}"
-if [[ -z "${SCRIPT_CMD_NAME}" ]] ; then
-	SCRIPT_CMD_NAME="${SCRIPTNAME}"
-fi
-
 ##########################################################################################
 ### PARAMETERS: GET PARAMETER VALUES FROM COMMAND LINE AND JSON INPUT ####################
 ##########################################################################################
