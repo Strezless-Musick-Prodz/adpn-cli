@@ -8,7 +8,7 @@
 
 import io, os, sys
 import fileinput, stat
-import re, json
+import re, json, numbers
 import urllib
 from paramiko import ssh_exception
 from datetime import datetime
@@ -70,15 +70,33 @@ command line with explicit switches.
         self.manifest_data = None
         self.exitcode = 0
         
-        self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
+        self.verbose = self.switches.get('verbose')
         if self.switches.get('quiet') :
-            self.verbose=0
+            self.verbose = 0
         
         # start out with defaults
         self._package = None
         self._plugin = None
         self._plugin_parameters = None
-        
+    
+    @property
+    def verbose (self) :
+        return self._verbose
+    
+    @verbose.setter
+    def verbose (self, rhs) :
+        if isinstance(rhs, numbers.Number) :
+            self._verbose = int(rhs)
+        elif type(rhs) is str :
+            try :
+                self._verbose = int(rhs)
+            except ValueError as e :
+                self._verbose = int(len(rhs) > 0)
+        elif rhs is None :
+            self._verbose = 0
+        else :
+            raise TypeError("verbose must be int, str or None")
+    
     @property
     def subdirectory (self) :
         return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')

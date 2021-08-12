@@ -357,6 +357,24 @@ command line with explicit switches.
         self.stage.authentication=self.get_authentication_method()
     
     @property
+    def verbose (self) :
+        return self._verbose
+    
+    @verbose.setter
+    def verbose (self, rhs) :
+        if isinstance(rhs, numbers.Number) :
+            self._verbose = int(rhs)
+        elif type(rhs) is str :
+            try :
+                self._verbose = int(rhs)
+            except ValueError as e :
+                self._verbose = int(len(rhs) > 0)
+        elif rhs is None :
+            self._verbose = 0
+        else :
+            raise TypeError("verbose must be int, str or None")
+    
+    @property
     def subdirectory_switch (self) :
         return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')
         
