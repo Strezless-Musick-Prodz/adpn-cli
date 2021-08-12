@@ -380,6 +380,18 @@ else
 	if [[ ! -z "${_PARAM[pipeline]}" ]] ; then
 		INGEST_STEP=$( printf "%s" "${_PARAM[pipeline]}" | cut --field=2 --delimiter=":" )
 		printf "Ingest Step\t%s\n" "${INGEST_STEP}" >> ${PLUGINTXT}
+	
+		declare -A PIPE_STEP_NAMES=(
+			[staged] => "Staged"
+			[ingested] => "Accepted"
+			[published] => "Promoted"
+		)
+		if [[ -n "${_PARAM[by]}" ]] ; then
+			KEY=$( strtotitle "${INGEST_STEP}" )
+			[[ -n "${PIPE_STEP_NAMES[$INGEST_STEP]}" ]] && KEY="${PIPE_STEP_NAMES[$INGEST_STEP]}"
+			printf "%s\t%s\n" "${KEY}" "${_PARAM[by]}"
+		fi
+	
 	fi
 	
 	######################################################################################

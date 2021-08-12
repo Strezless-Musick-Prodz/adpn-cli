@@ -7,7 +7,7 @@
 
 import io, os, sys
 import fileinput, stat
-import re, json
+import re, json, numbers
 import urllib, ftplib, pysftp, paramiko.agent
 import math, binascii
 from paramiko import ssh_exception
@@ -333,9 +333,7 @@ command line with explicit switches.
         self.switches = switches
         self.exitcode = 0
         
-        self.verbose = int(self.switches.get('verbose')) if self.switches.get('verbose') is not None else 0
-        if self.switches.get('quiet') :
-            self.verbose=0
+        self.verbose=(0 if self.switches.get('quiet') else self.switches.get('verbose'))
         
         # start out with defaults
         self.ftp = None

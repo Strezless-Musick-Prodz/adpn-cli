@@ -650,10 +650,14 @@ case "${CMD}" in
 				PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
 			fi
 
-			adpn_debug 01 "${LINENO}" '$ adpn-ingest-test "%s" --remote=1 "%s" --pipeline="%s" %s %s > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIT_OUTPUT}"
-
-			adpn-ingest-test "${AIT_INPUT}" --remote=1 "${PEER_TO}" --pipeline="${PIPELINE}" ${V} ${DDBG} > "${AIT_OUTPUT}"
-			EXITCODE="$?"
+			declare -a AIT_SW=( "--remote=1" )
+			[[ -n "${PIPELINE}" ]] && AIT_SW+=( "--pipeline=${PIPELINE}" )
+			[[ -n "$( adpn_get_user_email )" ]] && AIT_SW+=( "--by=$( adpn_get_user_email )" )
+			[[ -n "${V}" ]] && AIT_SW+=( "${V}" )
+			[[ -n "${DDBG}" ]] && AIT_SW+=( "${DDBG}" )
+			
+			adpn_debug 01 "${LINENO}" '$ adpn-ingest-test "%s" "%s" "%s" > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "$( join_by '" "' "${AIT_SW[@]}" )" "${AIT_OUTPUT}"
+			adpn-ingest-test "${AIT_INPUT}" "${PEER_TO}" "${AIT_SW[@]}" > "${AIT_OUTPUT}" ; EXITCODE="$?"
 
 			cat "${AIT_OUTPUT}" ; echo
 		fi

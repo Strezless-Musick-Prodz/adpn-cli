@@ -68,6 +68,22 @@ function adpn_parameter_from() {
 	return "${EXITCODE}"
 }
 
+function adpn_get_user_email () {
+	adpn_get_email_from ".user/email" ".user/realname"
+}
+
+function adpn_get_email_from () {
+	local email_from="${1}" ; shift
+	local realname_from="${1}" ; shift
+	
+	local email="$( adpn_parameter_from "${email_from}" )"
+	local realname="$( adpn_parameter_from "${realname_from}" )"
+	
+	[[ -n "${realname}" ]] && email=$( printf "%s <%s>" "${realname}" "${email}" )
+	
+	printf "%s" "${email}"
+}
+
 # adpnprop: retrieve and echo a property from the adpnet.json config file
 # example: FOOBAR=$( adpnprop "${KEY}" )
 #
@@ -549,6 +565,20 @@ function adpn_get_json_packets() {
 	
 }
 
+function adpn_write_json_packets_from () {
+	local web_url="${1}" ; shift
+	local -a json=( "$@" )
+	local json_overlay="$( adpn-json.py --key="Gitlab Issue" --value="${web_url}" --prolog )"
+
+	if [[ -n "${_PARAM[raw]}" ]] ; then
+		printf "%s\n" "${json[@]}"
+	else
+		for json_packet in "${json[@]}" ; do
+			printf "%s\n%s\n" "${json_packet}" "${json_overlay}" | adpn-json.py --cascade --output="application/json" --prolog ; printf "\n"
+		done
+	fi
+}
+
 ( which python3 2>/dev/null >/dev/null ) && export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
 
 # adpn_select_json_packet: filter an input stream for JSON packets, based on regex
@@ -608,3 +638,9 @@ function urldecode() { : "${*//+/ }"; echo -e "${_//%/\\x}"; }
 # join_by: Joins a list of parameters using a delimiter string
 # one-liner solution provided by @Nicholas Sushkin at https://stackoverflow.com/a/17841619
 function join_by { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
+
+function strtotitle {
+	for WORD in "$@" ; do
+		printf "%s%s\n" "$( printf "%s" "${WORD:0:1}" | tr "[:lower:]" "[:upper:]" )" "${WORD:1}"
+	done
+}

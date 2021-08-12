@@ -53,19 +53,41 @@ adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME /
 PIPED_TEXT="$( cat "${_ARGV[@]:1}" )"
 JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"
 PRETTY_JSON="$( printf "%s" "${JSON}" | adpn-json.py --output=application/json --indent=2 )"
-STAGED_TO="$( adpn_parameter_from "--from" ".Staged To<${JSON}" )"
-DEFAULT_REPOSITORY="$( adpn_parameter_from ".gitlab/repository" )"
-USER_NAME="$( adpn_parameter_from ".Staged By<${JSON}" )"
-EXTENT="$( adpn_parameter_from ".File Size<${JSON}" )"
-LOCATION="$( adpn_parameter_from ".Staged To<${JSON}" )"
-SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" )"
+INGEST_STEP="$( adpn_parameter_from "--step" ".Ingest Step<${JSON}" "staged" )"
+STAGED_TO=$( adpn_parameter_from "--from" ".Staged To<${JSON}" "\\${USER_FULLMAIL}")
+
+USER_EMAIL=$( adpn_parameter_from ".user/email" )
+USER_REALNAME=$( adpn_parameter_from ".user/realname" )
+USER_FULLMAIL=$( printf "%s <%s>" "${USER_REALNAME}" "${USER_EMAIL}" )
+USER_NAME=$( adpn_parameter_from ".Staged By<${JSON}" "\\${USER_FULLMAIL}" )
+STAGED_BY=$( adpn_parameter_from "--by" ".Staged By<${JSON}" "\\${USER_FULLMAIL}")
+ACCEPTED_BY=$( adpn_parameter_from "--by" ".Accepted By<${JSON}" ".Staged By<${JSON}" "\\${USER_FULLMAIL}" )
+PROMOTED_BY=$( adpn_parameter_from "--by" ".Promoted By<${JSON}" ".Accepted By<${JSON}" ".Staged By<${JSON}" "\\${USER_FULLMAIL}")
+ADMIN_EMAIL=$( adpn_parameter_from "--admin-email" ".preserve/admin-email" )
+
+GITLAB_ISSUE=$( adpn_parameter_from "--gitlab" ".Gitlab Issue<${JSON}" )
+DEFAULT_REPOSITORY=$( adpn_parameter_from ".gitlab/repository" )
+EXTENT=$( adpn_parameter_from ".File Size<${JSON}" )
+LOCATION=$( adpn_parameter_from ".Staged To<${JSON}" )
+SUBDIRECTORY=$( adpn_parameter_from "--subdirectory" "--directory" )
 AU_START_URL="$( adpn_parameter_from ".Start URL<${JSON}" )"
 AU_TITLE="$( adpn_parameter_from ".Ingest Title<${JSON}" )"
 LABELS="$( adpn_parameter_from "--labels" "Content Ingest" )"
 
+declare -A STEP_TEMPLATE=(
+	[staged]=notify
+	[published]=announce
+	[default]=notify
+)
+
 declare -A TEMPLATE_PARAMS=(
 	[cmd]="${SCRIPT_CMD_NAME}"
 	[staged_to]="${STAGED_TO}"
+	[staged_by]="${STAGED_BY}"
+	[accepted_by]="${ACCEPTED_BY}"
+	[promoted_by]="${PROMOTED_BY}"
+	[admin_email]="${ADMIN_EMAIL}"
+	[gitlab_issue]="${GITLAB_ISSUE}"
 	[timestamp]="$( date )"
 	[user_name]="${USER_NAME}"
 	[extent]="${EXTENT}"
@@ -82,7 +104,13 @@ declare -A TEMPLATE_PARAMS=(
 ## FORMAT TEMPLATE TEXT #######################################################
 ###############################################################################
 
-TEMPLATE_FILE="${SCRIPTDIR}/templates/adpn.notify.md.sprintf"
+declare -a TEMPLATE_SOURCES=( "--template" )
+[[ -n "${STEP_TEMPLATE[$INGEST_STEP]}" ]] && TEMPLATE_SOURCES+=( "\\${STEP_TEMPLATE[$INGEST_STEP]}" )
+[[ -n "${STEP_TEMPLATE[default]}" ]] && TEMPLATE_SOURCES+=( "\\${STEP_TEMPLATE[default]}" )
+
+TEMPLATE_SLUG="$( adpn_parameter_from "${TEMPLATE_SOURCES[@]}" )"
+TEMPLATE_FILE="${SCRIPTDIR}/templates/adpn.${TEMPLATE_SLUG}.md.sprintf"
+
 if [[ -r "${TEMPLATE_FILE}" ]] ; then
 
 	TEMPLATE_TEXT="$( cat "${TEMPLATE_FILE}" )"
@@ -138,19 +166,27 @@ fi
 
 ADPN_GITLAB_POST_JSON=$(mktemp)
 
-printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
+if [[ "staged" == "${INGEST_STEP}" ]] ; then
+	printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
 
-if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
-	if [[ "${DBG}" ]] ; then
-		printf "[%s:%d] adpn-do-gitlab result: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "$( cat "${ADPN_GITLAB_POST_JSON}" )" 1>&2
+	if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
+		if [[ "${DBG}" ]] ; then
+			printf "[%s:%d] adpn-do-gitlab result: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "$( cat "${ADPN_GITLAB_POST_JSON}" )" 1>&2
+		fi
+
+		ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
+		ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
+		printf "[%s:%d] OK: Issue # %d, URL: <%s>\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" "${ISSUE_URL}"
+	else
+		printf "[%s:%d] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${DEFAULT_REPOSITORY}" 1>&2
+		cat "${ADPN_GITLAB_POST_JSON}" 1>&2
 	fi
 
-	ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
-	ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
-	printf "[%s:%d] OK: Issue # %d, URL: <%s>\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" "${ISSUE_URL}"
 else
-	printf "[%s:%d] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${DEFAULT_REPOSITORY}" 1>&2
-	cat "${ADPN_GITLAB_POST_JSON}" 1>&2
+
+	printf "%s\n" "${BODY_TEXT}"
+	ADGIP_EXITCODE=0
+
 fi
 
 rm "${ADPN_GITLAB_POST_JSON}"

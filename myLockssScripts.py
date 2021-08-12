@@ -169,7 +169,8 @@ class myPyJSON :
 	
 	def __init__ (self, splat=True, cascade=False, where=None) :
 		"""Initialize the JSON extractor pattern."""
-		self._jsonProlog = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
+		self._jsonPrologRE = r'^JSON(?:\s+(?:PACKET|DATA))?:\s*'
+		self._jsonPrologText = 'JSON: '
 		self._jsonBraces = r'^\s*([{].*[}]|\[.*\])\s*'
 		self._jsonRaw = ''
 		self._jsonText = [ ]
@@ -180,8 +181,13 @@ class myPyJSON :
 	@property
 	def prolog (self) :
 		"""Regex that matches and parses out the JSON representation from a line of text."""
-		return self._jsonProlog
+		return self._jsonPrologRE
 	
+	@property
+	def prologText (self) :
+		"""Plain text that will match against the myPyJSON.prolog regex."""
+		return self._jsonPrologText
+		
 	@property
 	def braces (self) :
 		"""Regex that matches and parses out a likely JSON hashtable or array from a line of text."""
@@ -265,7 +271,7 @@ class myPyJSON :
 		if re.match(self.prolog, line, flags=re.I) :
 			output=line
 		else :
-			output=( "JSON: %(line)s" % { "line": line } )
+			output=( "%(prolog)s%(line)s" % { "prolog": self.prologText, "line": line } )
 		return output
 		
 	def is_acceptable (self, line) :

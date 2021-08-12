@@ -247,9 +247,11 @@ Exit code:
 			self.add_output(table, table=table, context=context)
 
 	def display_regex (self) :
-		jsonTest = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
 		# Replace non-capturing (?: ... ) with widely supported, grep -E compliant ( ... )
-		print(re.sub(r'[(][?][:]', '(', jsonTest.prolog), end="")
+		print(re.sub(r'[(][?][:]', '(', self.json.prolog), end="")
+	
+	def format_line (self, line, jsonInput) :
+		return line if not self.switched('prolog') else jsonInput.add_prolog(line)
 	
 	def display_keyvalue (self) :
 		self._default_mime = "application/json"
@@ -258,14 +260,14 @@ Exit code:
 			table[self.switches.get('key')] = self.switches.get('value')
 		self.display_data(table, table, parse=True, depth=0)
 		if len(self.output) > 0 :
-			print("\n".join(self.output), end=self.get_output_terminator())
-		
+			print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
+	
 	def execute (self) :
 		try :
 			
 			try :
 				lineInput = [ line for line in fileinput.input() ]
-				jsonInput = myPyJSON(splat=self.wants_splat(), cascade=self.wants_cascade())
+				jsonInput = self.json
 				jsonInput.accept( lineInput )
 				jsonInput.select_where(self.selected)
 				table = jsonInput.allData
@@ -277,7 +279,7 @@ Exit code:
 			
 			self.display_data(table, table, self.switches.get('parse'))
 			if len(self.output) > 0 :
-				print("\n".join(self.output), end=self.get_output_terminator())
+				print("\n".join([ self.format_line(line, jsonInput) for line in self.output ]), end=self.get_output_terminator())
 				
 		except json.decoder.JSONDecodeError as e :
 	
@@ -301,10 +303,10 @@ if __name__ == '__main__' :
 	script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
 	if script.switched('help') :
 		script.display_usage()
-	elif script.switched('regex') :
-		script.display_regex()
 	elif script.switched('version') :
 		script.display_version()
+	elif script.switched('regex') :
+		script.display_regex()
 	elif script.switched('key') and script.switched('value', just_present=True) :
 		script.display_keyvalue()
 	else :
