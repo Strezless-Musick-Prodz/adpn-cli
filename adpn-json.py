@@ -218,6 +218,8 @@ Exit code:
 			for key in keys :
 				if self.wants_json_output() :
 					out[key] = table[key]
+				elif len(keys) < 2 and type(table[key]) is list :
+					self.display_data_list(table[key], context, parse, depth+1)
 				else :
 					out.extend( self.get_output(table[key], key, pair=paired, table=table, context=context ) )
 		except KeyError as e :
@@ -243,6 +245,9 @@ Exit code:
 			if self.selected(item) :
 				if parse :
 					self.display_data(item, context, 0, depth=depth+1)
+				elif type(item) is list :
+					line = "\t".join(item)
+					self.output.extend([ line ])
 				else :
 					self.add_output(item, table=table, context=context)
 				i = i + 1
