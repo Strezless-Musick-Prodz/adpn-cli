@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0811
+# @version 2021.0812-1621
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -767,7 +767,7 @@ case "${CMD}" in
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
-		JSON_PACKET=$(grep "^JSON PACKET:" "${AI_OUTPUT}" | cut --fields=2-)
+		JSON_PACKET=$(grep -E "${ADPN_JSON_PACKET_REGEX}" "${AI_OUTPUT}" | cut --fields=2-)
 		
 		rm "${AI_OUTPUT}"
 
@@ -778,40 +778,15 @@ case "${CMD}" in
 		else
 			printf "\n" 1>&2
 			printf "[%s:%d] DONE: Archival Unit published to titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-
-			TDB_XML=$( adpnprop "props/titlesdb.xml" )
-			if [[ -r "${TDB_XML}" ]] ; then
-
-				TDB_PATH=$( readlink -f "${TDB_XML}" )
-				TDB_DIR=$( dirname "${TDB_PATH}" )
-				TDB_FILE=$( basename "${TDB_PATH}" )
-				
-				printf "\n"
-				printf "* Generating new static %s for network..." "${TDB_FILE}"
-
-				cd "${TDB_DIR}"
-				adpn-titlesdb-diff --before="${TDB_PATH}" --stype=1
-
-				printf " (ok)\n"
-
-				printf "* Comparing new %s to prior revision...\n\n"
-				
-				if [[ -z "${_PARAM[batch]}" ]] ; then
-					git add --patch "${TDB_FILE}" < /dev/tty
-				else
-					git add "${TDB_FILE}"
-				fi
-
-				AU_TITLE=$(echo "${JSON_PACKET}" | adpn-json.py --key="Ingest Title")
-				GC_MESSAGE=$( printf "Promoted new AU (%s)" "${AU_TITLE}" )
-
-				git commit --message "${GC_MESSAGE}" 
-
-			else 
 			
-				printf "[%s:%d] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${SCRIPT_CMD_NAME}" "${LINENO}" "${TDB_XML}" 1>&2
-				
-			fi
+			AU_TITLE="$( adpn_parameter_from "--au_title" ".Ingest Title<${JSON_PACKET}" )"
+
+			declare -a AC_SW=()
+			AC_SW+=( "$( printf -- "--message=Promoted new AU (%s)" "${AU_TITLE}" )" )
+			[[ -n "${_PARAM[batch]}" ]] && AC_SW+=( "${_SWITCHES[batch]}" )
+			
+			"${ADPN}" commit "${AC_SW[@]}" "${CONTEXT_SW[@]}"
+			EXITCODE="$?"
 			
 		fi
 		;;
@@ -880,7 +855,38 @@ case "${CMD}" in
 
 		[[ "${EXITCODE}" -gt 0 ]] && adpn_notice "${LINENO}" "adpn_packet2daemonstatustable FAILED." 
 		;;
+	"commit")
+		TDB_XML=$( adpnprop "props/titlesdb.xml" )
+		if [[ -r "${TDB_XML}" ]] ; then
 
+			TDB_PATH=$( readlink -f "${TDB_XML}" )
+			TDB_DIR=$( dirname "${TDB_PATH}" )
+			TDB_FILE=$( basename "${TDB_PATH}" )
+				
+			printf "\n"
+			printf "* Generating new static %s for network..." "${TDB_FILE}"
+
+			cd "${TDB_DIR}"
+			adpn-titlesdb-diff --before="${TDB_PATH}" --stype=1
+
+			printf " (ok)\n"
+
+			printf "* Comparing new %s to prior revision...\n\n"
+				
+			if [[ -z "${_PARAM[batch]}" ]] ; then
+				git add --patch "${TDB_FILE}" < /dev/tty
+			else
+				git add "${TDB_FILE}"
+			fi
+
+			git commit --message "${_PARAM[message]}" 
+
+		else 
+			
+			printf "[%s:%d] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${SCRIPT_CMD_NAME}" "${LINENO}" "${TDB_XML}" 1>&2
+				
+		fi
+		;;
 	"flag")
 # @method adpn flag
 # Config Manager: add or remove a parameter to an AU in titlesdb.
@@ -1000,6 +1006,16 @@ case "${CMD}" in
 				elif [[ -z "${_PARAM[context]}" ]] ; then
 					printf "\n" 1>&2
 					printf "[%s:%d] DONE: Archival Unit flagged with %s='%s' on %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${FLAG_TO}" 1>&2
+					if [[ "${PEER_TO}" == "--to=ALL" ]] ; then
+						JSON_PACKET="$( cat "${AIIT_INPUT}" )"
+						AU_TITLE="$( adpn_parameter_from "--au_title" ".Ingest Title<${JSON_PACKET}" )"
+
+						declare -a AC_SW=()
+						AC_SW+=( "$( printf -- "--message=Flagged AU (%s) with %s%s%s" "${AU_TITLE}" "${AIIT_PARAM_OP}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE+=}${AIIT_PARAM_VALUE}" )" )
+						[[ -n "${_PARAM[batch]}" ]] && AC_SW+=( "${_SWITCHES[batch]}" )
+						"${ADPN}" commit "${AC_SW[@]}" "${CONTEXT_SW[@]}"
+						EXITCODE="$?"
+					fi
 				fi
 			fi
 
