@@ -11,7 +11,7 @@ from pykeepass import PyKeePass
 from getpass import getpass
 import re, json
 import urllib.parse
-from myLockssScripts import myPyCommandLine, myPyJSON
+from myLockssScripts import myPyCommandLine, myPyPipeline, myPyJSON
 
 class ADPNDoKeePassScript :
     """
@@ -108,19 +108,49 @@ the user will be prompted to provide it interactively.
     @property
     def entry_title_use_regex (self) :
         return self.switched("regex")
-        
+    
+    @property
+    def has_piped_data (self) :
+        mode = os.fstat(sys.stdin.fileno()).st_mode
+        return ( stat.S_ISFIFO(mode) or stat.S_ISREG(mode) )
+    
     def switched (self, key) :
         got = not not self.switches.get(key, None)
         return got
         
     def read_password (self) :
-        return getpass(self.get_password_prompt())
+        password = None
+        if self.has_piped_data :
+            if not self.switched('interactive') :
+                password = sys.stdin.readline()
+        
+        if password is None : # still
+            password=getpass(self.get_password_prompt())
+        
+        if self.switched('stash') and password is not None :
+            try :
+                cmdline = self.switches.get('stash')
+                argv = [ arg for arg in re.split(r"\s+", cmdline) ]
+                pipe = myPyPipeline( [ argv ] )
+                (out, err, code) = pipe.siphon(stdin=str(password))
+            except Exception as e :
+                print("[%(cmd)s --stash] error: %(e)s" % { "cmd": self.name, "e": e}, file=sys.stderr)
+        return password
     
     def get_password_prompt (self) :
         return ( "Passphrase to access %(database)s (%(title)s): " % { "database": self.database_file, "title": self.entry_title if self.entry_title else "KDBX" } )
     
     def get_password (self) :
-        return self.switches.get('password') if self.switched('password') else self.read_password()
+        password = self.switches.get('password')
+        if password is not None :
+            if password == 'password' or len(password) == 0 :
+                if self.has_piped_data :
+                    password = sys.stdin.readline()
+
+        if password is None :
+            password = self.read_password()
+
+        return password
             
     def write_error (self, code, message, prefix="") :
         self.exitcode = code

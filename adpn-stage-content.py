@@ -18,6 +18,7 @@ from getpass import getpass, getuser
 from myLockssScripts import myPyCommandLine, myPyJSON, align_switches, shift_args
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 from myFTPStaging import myFTPStaging
+from contextlib import contextmanager
 
 python_std_input = input
 def input (*args) :
