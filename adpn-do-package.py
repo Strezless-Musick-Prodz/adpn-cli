@@ -70,9 +70,7 @@ command line with explicit switches.
         self.manifest_data = None
         self.exitcode = 0
         
-        self.verbose = self.switches.get('verbose')
-        if self.switches.get('quiet') :
-            self.verbose = 0
+        self.verbose=(0 if self.switches.get('quiet') else self.switches.get('verbose'))
         
         # start out with defaults
         self._package = None
