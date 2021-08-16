@@ -64,7 +64,11 @@ export ADPN_STASH_KEY
 ADPN_STASH_CLOSE=""
 
 # stash open: this will output some variable settings
-eval $( "${ADPN}" stash open --quiet --if-needed ${DDBG} )
+if [[ -z "${ADPN_STASH_FILE}" || -z "${ADPN_STASH_KEY}" ]] ; then
+
+	eval $( "${ADPN}" stash open --quiet --if-needed ${DDBG} )
+
+fi
 
 ##########################################################################################
 ### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################

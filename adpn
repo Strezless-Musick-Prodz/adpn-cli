@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0812-1621
+# @version 2021.0813
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -98,7 +98,7 @@ declare -A _NO_RECURSE=( [stash]=stash [setup]=stash [version]=stash [help]=stas
 if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
 	# avoid infinite recursion, double-execution, unwanted errors, etc.
 	ADPN_STASH_JSON=""
-else
+elif [[ -z "${ADPN_STASH_FILE}" || -z "${ADPN_STASH_KEY}" ]] ; then
 	# stash open: this will output some variable settings
 	eval $( "${ME}" stash open --quiet --if-needed )
 fi
