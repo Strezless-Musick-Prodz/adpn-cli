@@ -177,12 +177,15 @@ declare -A _SWITCHES=()
 
 function adpn_command_line() {
 	shopt -s lastpipe
-
+	
+	local switches_on=1
+	
 	[[ "${#_ARGV}" -eq 0 ]] && _ARGV+=( "$0" )
 	
 	cat "$@" 2>/dev/null | while IFS="" read -r SWITCH ; do
-		
-		if [[ "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
+		if [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--$ ]] ; then
+			switches_on=0
+		elif [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
 			local KEY="${BASH_REMATCH[1]}"
 			local VALUE="${BASH_REMATCH[3]}"
 			if [[ -z "${BASH_REMATCH[2]}" ]] ; then
