@@ -262,10 +262,11 @@ case "${CMD}" in
 		
 		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token<(adpn stash)" ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" )
 		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
-			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" )
-			EXITCODE="$?"
-			"${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}"
-			printf "%s" "${PRIVATE_TOKEN}"
+			adpn_debug 500,gitlab,token "${LINENO}" "Source/Contents for Private Token: %s" "$( obscure_password "${PRIVATE_TOKEN}" )"
+			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" ); EXITCODE="$?"
+			adpn_debug 500,gitlab,token "${LINENO}" "Stashing gitlab/token for future reference..."
+			[[ "${EXITCODE}" -eq 0 ]] && "${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}" "${CONTEXT_SW[@]}" ; EXITCODE="$?"
+			[[ "${EXITCODE}" -eq 0 ]] && printf "%s" "${PRIVATE_TOKEN}"
 		else
 			EXITCODE=1
 		fi

@@ -191,7 +191,12 @@ the user will be prompted to provide it interactively.
                         entries = [ entries[0] ]
                     for entry in entries :
                         if self.switched('set') :
-                            next_line = sys.stdin.readline()
+                        
+                            if self.has_piped_data :
+                                next_line = sys.stdin.readline()
+                            else :
+                                next_line = getpass("Password for %(key)s: " % {"key": entry.title})
+                            
                             if next_line :
                                 next_line.strip("\n")
                                 entry.password = next_line
@@ -206,9 +211,8 @@ the user will be prompted to provide it interactively.
                     group = kp.find_groups(name="ADPNet", first=True)
                     if group is None :
                         group = kp.root_group
-
-                    mode = os.fstat(sys.stdin.fileno()).st_mode
-                    if stat.S_ISFIFO(mode) or stat.S_ISREG(mode) :
+                    
+                    if self.has_piped_data :
                         # Piped or redirected stdin
                         received_username = self.entry_title
                         received_password = sys.stdin.readline()

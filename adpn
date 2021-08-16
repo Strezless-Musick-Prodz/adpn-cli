@@ -355,9 +355,11 @@ case "${CMD}" in
 				fi
 				if [[ -n "${_PARAM[value]}" ]] ; then
 					ADPN_SECRET_COUPLE_VALUE="${_PARAM[value]}"
-				else
+				elif [[ "${#ADPN_SECRETS_ARGS[@]}" -gt 0 ]] ; then
 					ADPN_SECRET_COUPLE_VALUE="${ADPN_SECRETS_ARGS[0]}"
 					ADPN_SECRETS_ARGS=( "${ADPN_SECRETS_ARGS[@]:1}" )
+				elif [[ -n "${ADPN_SECRET_COUPLE_KEY}" ]] ; then
+					ADPN_SECRET_COUPLE_VALUE="$( cat - )"
 				fi
 				
 				declare -a JSON_OVERLAYS=( "${ADPN_STASH_KEY}" )

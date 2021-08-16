@@ -155,7 +155,24 @@ function adpn_getpassword_from() {
 	while [[ "$#" -gt 0 && "${EXITCODE}" -gt 0 ]] ; do
 		local source="${1}" ; shift
 		if [[ "${source}" =~ ^${KDBX_SCHEME}:/*(/([^/]+)+) ]] ; then
-			RESULT="$( adpn-get-keepass.py --single "${source}" )"
+			local FILENAME="$( printf "%s" "${source}" | sed -E 's/^[^:]+[:]\/+/\//' | sed -E 's/[?].*$//' )"
+			FILENAME="$( basename "${FILENAME}" )"
+			MD5=$( printf "%s" "${FILENAME}" | md5sum | sed -E 's/\s+.*$//g' )
+			PASSKEY="$( printf "AGK-Pass-%s" "${MD5}" )"
+			PASSPHRASE="$( adpn stash get "${PASSKEY}" )"
+
+			local -a AGK_SW=( "adpn-get-keepass.py" "--single" )
+			AGK_SW+=("${source}")
+			if [[ -n "${PASSPHRASE}" ]] ; then
+				adpn_debug 500,adpn,stash "${LINENO}" "adpn_get_password_from: Using stashed passphrase: %s" "$( obscure_password "${PASSPHRASE}" )"
+				RESULT="$( printf "%s" "${PASSPHRASE}" | "${AGK_SW[@]}" )"
+			else 
+				adpn_debug 500,adpn,stash "${LINENO}" "adpn_get_password_from: Using interactive request"
+				AGK_SW+=( "--interactive" )
+				AGK_SW+=( "--stash=adpn stash post ${PASSKEY}" )
+				[[ -n "${DDBG}" ]] && AGK_SW+=( "${DDBG}" )
+				RESULT="$(  "${AGK_SW[@]}" )"
+			fi
 			EXITCODE="$?"
 		elif [[ "${source}" =~ ^[\<](.*)$ ]] ; then
 			IFS='' read -s -p "${BASH_REMATCH[1]}" RESULT 1>&2 ; EXITCODE="$?"
@@ -684,6 +701,13 @@ function adpn_packet2daemonstatustable() {
 	[[ "${LATER}" -gt 0 ]] || result=1
 
 	return "${result}"
+}
+
+function obscure_password() {
+	local text=""
+	for text in "$@" ; do
+		printf "%s" "${text}" | sed -E 's/./*/g'
+	done
 }
 
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
