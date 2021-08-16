@@ -627,6 +627,51 @@ function adpn_get_json_packets() {
 	return "${result}"
 }
 
+function adpn_select_json_packet() {
+	local piped_from="${1}"
+
+	local packets_from="${2}"
+	[[ -z "${packets_in}" ]] && packets_in="-"
+	
+	local -a filter=()
+	IFS=" " read -ra filter <<< "${3}"
+	[[ "${#filter[@]}" -eq 0 ]] && filter=( "head" "-n" "1" )
+	
+	if [[ "-" == "${packets_from}" || -r "${packets_from}" ]] ; then
+		local GREP=""
+		local packets_recvd="$( cat "${packets_from}" )"
+
+		# 1. Are we looking for a packet with a specific "Ingest Step" setting? If so, look for that one & prefer it.
+		if [[ -n "${piped_from}" ]] ; then
+			adpn_debug 01 "${LINENO}" 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${packets_from}" "${piped_from}"
+			adpn_debug 50 "${LINENO}" 'adpn-json.py <<< ~~~\n%s\n~~~\n\n' "${packets_recvd}"
+			
+			GREP="$( printf "%s" "${packets_recvd}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${piped_from}" )"
+			result="$?"
+			
+			adpn_debug 50 "${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
+			[[ -n "${GREP}" ]] && printf "%s" "${GREP}" | "${filter[@]}"
+		fi
+		
+		# 2. If not, or if we haven't got that step, let's take one of the packets that seems to be available
+		# -- Use FIRST for early (verify); LAST for late (promote, etc.); parameter provides a filter command,
+		# e.g. head -n 1 or tail -n 1
+		if [[ -z "${GREP}" ]] ; then
+			adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_get_json_packets | head -n 1\n' "${packets_from}"
+			
+			GREP="$( printf "%s" "${packets_recvd}" | adpn_get_json_packets | "${filter[@]}" )"
+			result="$?"
+			
+			[[ "${GREP}" ]] && printf "%s" "${GREP}" || result=1
+		fi
+		
+		adpn_debug 20 "${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
+	else
+		result=2
+	fi
+	return "${result}"
+}
+
 function adpn_opened_get_labels() {
 	local tag=""
 	local -a labels=()
