@@ -162,12 +162,10 @@ case "${CMD}" in
 # @version 2019.0715
 
 		TESTDIR="${SCRIPTDIR}/json/tests"
-		if [[ "${_ARGV[2]}" == "adpnprop" ]] ; then
-			SETTING_VALUE="$( adpnprop "${_ARGV[@]:3}" )" ; EXITCODE="$?"
-			printf "adpnprop: exit=%d, value='%s'\n" "${EXITCODE}" "${SETTING_VALUE}"
-		elif [[ "${_ARGV[2]}" == "adpn_parameter_from" ]] ; then
-			SETTING_VALUE="$( adpn_parameter_from "${_ARGV[@]:3}" )"
-			printf "adpn_parameter_from: exit=%d, value='%s'\n" "${EXITCODE}" "${SETTING_VALUE}"
+		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels)$ ]] ; then
+			TEST_FUNCTION="${_ARGV[2]}"
+			SETTING_VALUE="$( "${TEST_FUNCTION}" "${_ARGV[@]:3}" )" ; EXITCODE="$?"
+			adpn_notice "${LINENO}" "%s: exit=%d, value='%s'" "${TEST_FUNCTION}" "${EXITCODE}" "${SETTING_VALUE}"
 		elif [[ ! -z "${_CMDLINE[2]}" ]] ; then
 			TESTFILE=${TESTDIR}/${_CMDLINE[2]}.json
 			if [[ -r "${TESTFILE}" ]] ; then

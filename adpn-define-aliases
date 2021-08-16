@@ -610,6 +610,27 @@ function adpn_select_json_packet() {
 	return "${result}"
 }
 
+function adpn_opened_get_labels() {
+	local tag=""
+	local -a labels=()
+	for tag in "$@" ; do
+		if [[ "${tag}" =~ ^[/](.*)$ ]] ; then
+			label_prefix="DONE:"
+			label_content="${BASH_REMATCH[1]//_/ }"
+		elif [[ "${tag}" =~ crawl ]] ; then
+			label_prefix="WAITING:"
+			label_content="${tag//_/ }"
+		else
+			label_prefix="TODO:"
+			label_content="${tag//_/ }"
+		fi
+		
+		labels+=( "$(join_by " " "${label_prefix}" "${label_content}" )" )
+	done
+	
+	join_by "," "${labels[@]}"
+}
+
 function adpn_packet2lockssid() {
 	local JSON_PACKET=$( cat - | adpn-json.py --output="application/json" )
 	local PLUGIN_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Plugin ID" )
