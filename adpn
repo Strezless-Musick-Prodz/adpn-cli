@@ -423,7 +423,7 @@ case "${CMD}" in
 		EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -lt 255 ]] ; then
-			JSON_PACKET="$( adpn_select_json_packet "${ADP_OUTPUT}" )"
+			JSON_PACKET="$( adpn_get_json_packets "${ADP_OUTPUT}" )"
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -470,7 +470,7 @@ case "${CMD}" in
 			ASC_ERRCODE="$?"
 		
 		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
-			JSON_PACKET="$( adpn_select_json_packet "${ASC_OUTPUT}" )"
+			JSON_PACKET="$( adpn_get_json_packets "${ASC_OUTPUT}" )"
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -612,7 +612,7 @@ case "${CMD}" in
 		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
 		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 
-		adpn_get_json_packets "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_select_json_packet > "${AIT_PACKETS}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets > "${AIT_PACKETS}"
 		EXITCODE="$?"
 		
 		if [[ -r "${AIT_PACKETS}" ]] ; then	
@@ -629,9 +629,9 @@ case "${CMD}" in
 			
 			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
 			if [[ -z "${GREP}" ]] ; then
-				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_select_json_packet | head -n 1\n' "${AIT_PACKETS}"
+				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_get_json_packets | head -n 1\n' "${AIT_PACKETS}"
 				
-				GREP=$( cat "${AIT_PACKETS}" | adpn_select_json_packet | head -n 1 )
+				GREP=$( cat "${AIT_PACKETS}" | adpn_get_json_packets | head -n 1 )
 				if [[ "${GREP}" ]] ; then
 					printf "%s" "${GREP}" > "${AIT_INPUT}"
 				fi
@@ -810,7 +810,7 @@ case "${CMD}" in
 		DST_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_INPUT}" )
 		DST_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_OUTPUT}" )
 		
-		adpn_get_json_packets "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_select_json_packet > "${DST_PACKETS}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets > "${DST_PACKETS}"
 		EXITCODE="$?"
 		
 		if [[ -s "${DST_PACKETS}" ]] ; then
@@ -827,9 +827,9 @@ case "${CMD}" in
 			
 			# 2. If not, let's take the LAST packet that seems to be available. (confirm=late)
 			if [[ -z "${GREP}" ]] ; then
-				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_select_json_packet | tail -n 1\n' "${DST_PACKETS}"
+				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_get_json_packets | tail -n 1\n' "${DST_PACKETS}"
 				
-				GREP=$( cat "${DST_PACKETS}" | adpn_select_json_packet | tail -n 1 )
+				GREP=$( cat "${DST_PACKETS}" | adpn_get_json_packets | tail -n 1 )
 				if [[ "${GREP}" ]] ; then
 					printf "%s" "${GREP}" > "${DST_INPUT}"
 				fi
@@ -924,7 +924,7 @@ case "${CMD}" in
 		
 		declare -a AGJP_ARGV=( "${_ARGV[2]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )
 		adpn_debug 10 "${LINENO}" "$( printf "%s " "${AGJP_ARGV[@]}" )"
-		adpn_get_json_packets "${AGJP_ARGV[@]}" | adpn_select_json_packet > "${AIIT_PACKETS}" ; EXITCODE="$?"
+		adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets > "${AIIT_PACKETS}" ; EXITCODE="$?"
 		
 		declare -a AF_PARAMS=( "${_ARGV[@]:3}" )
 		if [[ -n "${_PARAM[key]}" ]] ; then
@@ -956,10 +956,10 @@ case "${CMD}" in
 			# 2. If not, let's take the LAST packet that seems to be available. (flag=late)
 			if [[ -z "${GREP}" ]] ; then
 				if [[ -n "${DBG}" ]] ; then
-					printf 'cat "%s" | adpn_select_json_packet | tail -n 1\n' "${AIIT_PACKETS}" 1>&2
+					printf 'cat "%s" | adpn_get_json_packets | tail -n 1\n' "${AIIT_PACKETS}" 1>&2
 				fi
 				
-				GREP=$( cat "${AIIT_PACKETS}" | adpn_select_json_packet | tail -n 1 )
+				GREP=$( cat "${AIIT_PACKETS}" | adpn_get_json_packets | tail -n 1 )
 				if [[ "${GREP}" ]] ; then
 					printf "%s" "${GREP}" > "${AIIT_INPUT}"
 				fi

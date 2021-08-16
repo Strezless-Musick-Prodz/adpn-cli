@@ -544,7 +544,7 @@ function echo_header() {
 	echo "${UNDERLINE}"
 }
 
-function adpn_get_json_packets() {
+function adpn_read_json_packet_source() {
 	local PACKET_SOURCE="${1}"
 	local ME="${2}"
 	local CONTEXT="${3}"
@@ -601,7 +601,7 @@ function adpn_write_json_packets_from () {
 
 ( which python3 2>/dev/null >/dev/null ) && export ADPN_JSON_PACKET_REGEX="$( adpn-json.py --regex )"
 
-# adpn_select_json_packet: filter an input stream for JSON packets, based on regex
+# adpn_get_json_packets: filter an input stream for JSON packets, based on regex
 # for a JSON packet or prolog from adpn-json.py 
 # example: FOOBAR=$( adpnprop "${KEY}" )
 #
@@ -610,7 +610,7 @@ function adpn_write_json_packets_from () {
 #
 # @version 2021.0407
 
-function adpn_select_json_packet() {
+function adpn_get_json_packets() {
 	local file="${1}"
 	local packet=""
 	local result=0
