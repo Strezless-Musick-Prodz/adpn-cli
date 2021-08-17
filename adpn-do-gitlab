@@ -495,7 +495,7 @@ case "${CMD}" in
 				[[ -n "${BASH_REMATCH[2]}" ]] && ADPN_GITLAB_OPENED_LABEL="$( adpn_opened_get_labels "${BASH_REMATCH[2]}" )" || ADPN_GITLAB_OPENED_LABEL=""
 				[[ -n "${ADPN_GITLAB_OPENED_LABEL}" ]] && ADPN_GITLAB_OPENED_SW+=( "$(printf -- "--labels=Content Ingest,%s" "${ADPN_GITLAB_OPENED_LABEL}" )" )
 				ADPN_GITLAB_OPENED_SW+=( "${CONTEXT_SW[@]}" )
-				GITLAB_ISSUE="$( ${ADPN} gitlab "${ADPN_GITLAB_OPENED_SW[@]}" )"
+				GITLAB_ISSUE="$( "${ME}" "${ADPN_GITLAB_OPENED_SW[@]}" )"
 			elif [[ "${PACKET_SOURCE}" =~ ^gitlab:(.*)$ ]] ; then
 				GITLAB_ISSUE="${BASH_REMATCH[1]}"
 			elif [[ "${PACKET_SOURCE}" =~ ^(([A-Za-z0-9/]|-)+)[#]([0-9]+)$ ]] ; then
