@@ -748,6 +748,65 @@ function adpn_packet2daemonstatustable() {
 	return "${result}"
 }
 
+function adpn_check_au_status() {
+	local LINE=""
+	local -a switches=()
+	local -A params=()
+	local key
+	local value
+	
+	for switch in "$@" ; do
+		if [[ "${switch}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
+			key="${BASH_REMATCH[1]}"
+			[[ -z "${BASH_REMATCH[2]}" ]] && value="${key}" || value="${BASH_REMATCH[3]}"
+			
+			switches+=( "${switch}" )
+			params["${switch}"]="${value}"
+		fi
+	done
+	
+	shopt -s lastpipe
+	local result=0
+	local piped_input="$( cat - )"
+	IFS="" printf "%s\n" "${piped_input}" | while read -r LINE ; do
+		key="$( printf "%s" "${LINE}" | cut --field=1 )"
+		value="$( printf "%s" "${LINE}" | cut -s --fields=2- )"
+		if [[ -n "${key}" ]] ; then
+			
+			local status=""
+			
+			if [[ "${key}" =~ ^Last[^A-Za-z0-9] ]] ; then
+				local TS=""
+				local TS_EXIT=0
+				if [[ "${value}" =~ ^[0-9]+$ ]] ; then
+					TS=$(( "${value}" / 1000 ))
+					TS="$( date --date="@${TS}" )" ; TS_EXIT="$?"
+					[[ "${TS_EXIT}" -eq 0 ]] && { value="${TS}" ; status="(ok!) " ; }
+				fi
+			fi
+			
+			case "${key}" in
+			"Status")
+				[[ "${value}" == "100.00% Agreement" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
+				;;
+			"Last Crawl Result")
+				[[ "${value}" == "Successful" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
+				;;
+			"Last Poll Result")
+				[[ "${value}" == "Complete" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
+				;;
+			*)
+				# NOOP
+				;;
+			esac
+
+			printf "%s%s:\t%s\n" "${status}" "${key}" "${value}"
+		fi
+	done
+	
+	return "${result}"
+}
+
 function obscure_password() {
 	local text=""
 	for text in "$@" ; do
