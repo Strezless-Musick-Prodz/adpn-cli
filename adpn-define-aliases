@@ -814,6 +814,13 @@ function adpn_check_au_status() {
 			"Last Poll Result")
 				[[ "${value}" == "Complete" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
 				;;
+			"Available From Publisher")
+				[[ -n "${switches[down]}" ]] && DOWN_STATUS=0 || DOWN_STATUS=1
+				[[ -n "${switches[down]}" ]] && ISUP_STATUS=1 || ISUP_STATUS=0
+				local -a STATUS_REPORT=( "(ok!) " "(??) " )
+				[[ "${value}" == "No" ]] && result="${DOWN_STATUS}" || result="${ISUP_STATUS}"
+				status="${STATUS_REPORT[${result}]}"
+				;;
 			*)
 				# NOOP
 				;;

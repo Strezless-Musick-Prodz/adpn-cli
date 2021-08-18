@@ -827,17 +827,31 @@ case "${CMD}" in
 			declare -a DST_GREP_OPT=( "Volume" )
 			[[ "${_PARAM[crawled]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" )
 			[[ "${_PARAM[preserved]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl Result" "Last Completed Poll" "Last Poll Result" )
+			[[ "${_PARAM[down]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" "Available From Publisher" )
 			[[ "${#_ARGV[@]}" -gt 3 ]] && DST_GREP_OPT+=( "${_ARGV[@]:3}" )
 			[[ "${#DST_GREP_OPT[@]}" -le 1 ]] && DST_GREP_OPT+=( ".*" )
 			
 			DST_GREP="$( join_by "|" "${DST_GREP_OPT[@]}" )"
 			
-			if [[ -n "${_PARAM[preserved]}${_PARAM[crawled]}" ]] ; then
-				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" | sed -E 's/\t/    /' | sed -E 's/^([^=]+)=(.*)$/\1\t\2/' | adpn_check_au_status "${_SWITCHES[@]}"
+			if [[ -n "${_PARAM[preserved]}${_PARAM[crawled]}${_PARAM[down]}" ]] ; then
+				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" | sed -E 's/\t/    /' | sed -E 's/^([^=]+)=(.*)$/\1\t\2/' | adpn_check_au_status "${_SWITCHES[@]}" ; EXITCODE="$?"
 			elif [[ "${_PARAM[output]}" == "text/tab-separated-values" ]] ; then
 				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" | sed -E 's/\t/    /' | sed -E 's/^([^=]+)=(.*)$/\1\t\2/'
 			else
 				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" ; echo
+			fi
+			
+			if [[ "${EXITCODE}" -eq 0 && "${_PARAM[passthru]}" ]] ; then
+				declare -a AC_TESTS=()
+				[[ -n "${_PARAM[crawled]}" ]] && AC_TESTS+=( "crawled" )
+				[[ -n "${_PARAM[preserved]}" ]] && AC_TESTS+=( "preserved" )
+				[[ -n "${_PARAM[down]}" ]] && AC_TESTS+=( "down" )
+				AC_S_TESTS="$( join_by "/" "${AC_TESTS[@]}" )"
+				
+				printf "\n"
+				printf "%s\n%s\n" "$( cat "${DST_INPUT}" )" "$( adpn-json.py --output=application/json --key="Ingest Step" --value="confirmed-${AC_S_TESTS}" )" | adpn-json.py --cascade --output="application/json" --prolog
+				printf "\n"
+			
 			fi
 		fi
 		
