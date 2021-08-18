@@ -554,7 +554,7 @@ function adpn_read_json_packet_source() {
 	declare -a AGGP_SW=()
 
 	AGJP_PACKETS="$(mktemp)"
-	GITLAB_ISSUE=$( "${ME}" gitlab parse "${PACKET_SOURCE}" ${DDBG} )
+	GITLAB_ISSUE=$( "${ADPN}" gitlab parse "${PACKET_SOURCE}" ${DDBG} )
 	
 	if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
 		cat - > "${AGJP_PACKETS}"
@@ -562,7 +562,7 @@ function adpn_read_json_packet_source() {
 		if [[ -n "${V}" ]] ; then
 			printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
 		fi
-		"${ME}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" ${DDBG} > "${AGJP_PACKETS}"
+		"${ADPN}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" ${DDBG} > "${AGJP_PACKETS}"
 		result="$?"
 	elif [[ "${PACKET_SOURCE}" =~ ^https?:// ]] ; then
 		if [[ -n "${V}" ]] ; then
