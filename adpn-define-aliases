@@ -693,6 +693,25 @@ function adpn_opened_get_labels() {
 	join_by "," "${labels[@]}"
 }
 
+function adpn_plugin_parameter_from_json() {
+	local parameter="${1}"
+	local input_file="${2}"
+	[[ -z "${input_file}" ]] && input_file="-"
+	local delimiter="${3}"
+	local JSON_PACKET="$( cat "${input_file}" )"
+	local result=1
+	
+	local -A FOUND=()
+	printf "%s" "${JSON_PACKET}" | adpn-json.py --key="parameters" | while read -r LINE ; do
+		local KEY=$( printf "%s\n" "${LINE}" | cut --field=1 )
+		local VALUE=$( printf "%s\n" "${LINE}" | cut --field=2- )
+		[[ "${KEY}" =~ ^${parameter}$ ]] && FOUND["${KEY}"]="${VALUE}" && result=0
+	done
+	
+	join_by "${delimiter}" "${FOUND[@]}"
+	return "${result}"
+}
+
 function adpn_packet2lockssid() {
 	local JSON_PACKET=$( cat - | adpn-json.py --output="application/json" )
 	local PLUGIN_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Plugin ID" )

@@ -162,7 +162,7 @@ case "${CMD}" in
 # @version 2019.0715
 
 		TESTDIR="${SCRIPTDIR}/json/tests"
-		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status)$ ]] ; then
+		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json)$ ]] ; then
 			TEST_FUNCTION="${_ARGV[2]}"
 			if [[ -n "${_PARAM[pipe]}" ]] ; then
 				PIPED_INPUT="$( cat "-" )"
