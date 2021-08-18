@@ -122,7 +122,11 @@ Exit code:
 		matched = True
 		if isinstance(item, dict) :
 			matched = False
-			if isinstance(item.get(key), str ) :
+			m=re.match(r"^[/](.*)[/]$", value)
+			if m :
+				match_re = ( re.match(m[1], item.get(key) ) )
+				matched = not not match_re
+			elif isinstance(item.get(key), str ) :
 				matched = ( item.get(key) == str(value) )
 			elif isinstance(item.get(key), int ) :
 				matched = ( item.get(key) == int(value) )
@@ -138,7 +142,7 @@ Exit code:
 	def selected (self) :
 		ok = lambda x: True
 		if self.switches.get("where") :
-			(key,value)=self.switches.get('where').split(":", 1)		
+			(key,value)=self.switches.get('where').split(":", 1)
 			ok = lambda x: self.data_matches(x, key, value)
 		return ok
 	
