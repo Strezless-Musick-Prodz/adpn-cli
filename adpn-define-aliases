@@ -164,10 +164,10 @@ function adpn_getpassword_from() {
 			local -a AGK_SW=( "adpn-get-keepass.py" "--single" )
 			AGK_SW+=("${source}")
 			if [[ -n "${PASSPHRASE}" ]] ; then
-				adpn_debug 500,adpn,stash "${LINENO}" "adpn_get_password_from: Using stashed passphrase: %s" "$( obscure_password "${PASSPHRASE}" )"
+				adpn_debug 500,adpn,stash "${__ALIASFILE__}:${LINENO}" "adpn_get_password_from: Using stashed passphrase: %s" "$( obscure_password "${PASSPHRASE}" )"
 				RESULT="$( printf "%s" "${PASSPHRASE}" | "${AGK_SW[@]}" )"
 			else 
-				adpn_debug 500,adpn,stash "${LINENO}" "adpn_get_password_from: Using interactive request"
+				adpn_debug 500,adpn,stash "${__ALIASFILE__}:${LINENO}" "adpn_get_password_from: Using interactive request"
 				AGK_SW+=( "--interactive" )
 				AGK_SW+=( "--stash=adpn stash post ${PASSKEY}" )
 				[[ -n "${DDBG}" ]] && AGK_SW+=( "${DDBG}" )
@@ -643,13 +643,13 @@ function adpn_select_json_packet() {
 
 		# 1. Are we looking for a packet with a specific "Ingest Step" setting? If so, look for that one & prefer it.
 		if [[ -n "${piped_from}" ]] ; then
-			adpn_debug 01 "${LINENO}" 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${packets_from}" "${piped_from}"
-			adpn_debug 50 "${LINENO}" 'adpn-json.py <<< ~~~\n%s\n~~~\n\n' "${packets_recvd}"
+			adpn_debug 01 "${__ALIASFILE__}:${LINENO}" 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${packets_from}" "${piped_from}"
+			adpn_debug 50 "${__ALIASFILE__}:${LINENO}" 'adpn-json.py <<< ~~~\n%s\n~~~\n\n' "${packets_recvd}"
 			
 			GREP="$( printf "%s" "${packets_recvd}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${piped_from}" )"
 			result="$?"
 			
-			adpn_debug 50 "${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
+			adpn_debug 50 "${__ALIASFILE__}:${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
 			[[ -n "${GREP}" ]] && printf "%s" "${GREP}" | "${filter[@]}"
 		fi
 		
@@ -657,7 +657,7 @@ function adpn_select_json_packet() {
 		# -- Use FIRST for early (verify); LAST for late (promote, etc.); parameter provides a filter command,
 		# e.g. head -n 1 or tail -n 1
 		if [[ -z "${GREP}" ]] ; then
-			adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_get_json_packets | head -n 1\n' "${packets_from}"
+			adpn_debug 10 "${__ALIASFILE__}:${LINENO}" 'cat "%s" | adpn_get_json_packets | head -n 1\n' "${packets_from}"
 			
 			GREP="$( printf "%s" "${packets_recvd}" | adpn_get_json_packets | "${filter[@]}" )"
 			result="$?"
@@ -665,7 +665,7 @@ function adpn_select_json_packet() {
 			[[ "${GREP}" ]] && printf "%s" "${GREP}" || result=1
 		fi
 		
-		adpn_debug 20 "${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
+		adpn_debug 20 "${__ALIASFILE__}:${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
 	else
 		result=2
 	fi
