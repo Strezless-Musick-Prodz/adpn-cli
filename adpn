@@ -680,38 +680,11 @@ case "${CMD}" in
 		
 		declare -a TEMP_CLEANUP=()
 
-		AIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_PACKETS}" )
 		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
 		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets > "${AIT_PACKETS}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AIT_INPUT}"
 		EXITCODE="$?"
-		
-		if [[ -r "${AIT_PACKETS}" ]] ; then	
-			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one.
-			adpn_debug 01 "${LINENO}" 'cat "%s" | adpn-json.py --output=application/json --where="Ingest Step:%s"\n' "${AIT_PACKETS}" "${PIPEDFROM}"
-			adpn_debug 50 "${LINENO}" 'adpn-json.py <<< ~~~\n%s\n~~~\n\n' "$( cat "${AIT_PACKETS}" )"
-			
-			GREP=$( cat "${AIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
-
-			adpn_debug 50 "${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
-			if [[ -n "${GREP}" ]] ; then
-				printf "%s" "${GREP}" | head -n 1 > "${AIT_INPUT}"
-			fi
-			
-			# 2. If not, let's take the FIRST packet that seems to be available. (verify=early)
-			if [[ -z "${GREP}" ]] ; then
-				adpn_debug 10 "${LINENO}" 'cat "%s" | adpn_get_json_packets | head -n 1\n' "${AIT_PACKETS}"
-				
-				GREP=$( cat "${AIT_PACKETS}" | adpn_get_json_packets | head -n 1 )
-				if [[ "${GREP}" ]] ; then
-					printf "%s" "${GREP}" > "${AIT_INPUT}"
-				fi
-			fi
-			
-			adpn_debug 20 "${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
-
-		fi
 		
 		if [[ -r "${AIT_INPUT}" ]] ; then
 			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
@@ -992,57 +965,16 @@ case "${CMD}" in
 		
 		declare -a TEMP_CLEANUP=()
 
-		AIIT_PACKETS="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_PACKETS}" )
 		AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
 		
 		declare -a AGJP_ARGV=( "${_ARGV[2]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )
 		adpn_debug 10 "${LINENO}" "$( printf "%s " "${AGJP_ARGV[@]}" )"
-		adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets > "${AIIT_PACKETS}" ; EXITCODE="$?"
+		adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" > "${AIIT_INPUT}" ; EXITCODE="$?"
 		
 		declare -a AF_PARAMS=( "${_ARGV[@]:3}" )
-		if [[ -n "${_PARAM[key]}" ]] ; then
-			AIIT_PARAM_KEY="${_PARAM[key]}"
-		else
-			AIIT_PARAM_KEY="${AF_PARAMS[0]}"
-			AF_PARAMS=( "${AF_PARAMS[@]:1}" )
-		fi
-		if [[ -n "${_PARAM[value]}" ]] ; then
-			AIIT_PARAM_VALUE="${_PARAM[value]}"
-		else
-			AIIT_PARAM_VALUE="${AF_PARAMS[0]}"
-			AF_PARAMS=( "${AF_PARAMS[@]:1}" )
-		fi
-		AIIT_PARAM_OP="+"
-		if [[ -n "${_PARAM[delete]}" ]] ; then
-			AIIT_PARAM_OP="-"
-		fi
-		
-		if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_PACKETS}" ]] ; then
-			# 1. Do we have a packet with "Ingest Step" = $PIPEDFROM? If so, prefer that one
-			adpn_debug 1 "${LINENO}" "$( printf 'cat "%s" | adpn-json.py --parse --output=application/json --where="Ingest Step:%s"' "${AIIT_PACKETS}" "${PIPEDFROM}" )"
-			
-			GREP=$( cat "${AIIT_PACKETS}" | adpn-json.py --parse --output=application/json --where="Ingest Step:${PIPEDFROM}" )
-			if [[ -n "${GREP}" ]] ; then
-				printf "%s" "${GREP}" | tail -n 1 > "${AIIT_INPUT}"
-			fi
-			
-			# 2. If not, let's take the LAST packet that seems to be available. (flag=late)
-			if [[ -z "${GREP}" ]] ; then
-				if [[ -n "${DBG}" ]] ; then
-					printf 'cat "%s" | adpn_get_json_packets | tail -n 1\n' "${AIIT_PACKETS}" 1>&2
-				fi
-				
-				GREP=$( cat "${AIIT_PACKETS}" | adpn_get_json_packets | tail -n 1 )
-				if [[ "${GREP}" ]] ; then
-					printf "%s" "${GREP}" > "${AIIT_INPUT}"
-				fi
-			fi
-			
-			if [[ "${DBGLEVEL}" -gt 1 ]] ; then
-				printf "* DBG: JSON source (%s) = <<<EOF\n%s\nEOF;\n" "${AIIT_INPUT}" "${GREP}" 1>&2
-			fi
-			
-		fi
+		[[ -n "${_PARAM[key]}" ]] && AIIT_PARAM_KEY="${_PARAM[key]}" || { AIIT_PARAM_KEY="${AF_PARAMS[0]}" ; AF_PARAMS=( "${AF_PARAMS[@]:1}" ) ; }
+		[[ -n "${_PARAM[value]}" ]] && AIIT_PARAM_VALUE="${_PARAM[value]}" || { AIIT_PARAM_VALUE="${AF_PARAMS[0]}" ; AF_PARAMS=( "${AF_PARAMS[@]:1}" ) ; }
+		[[ -z "${_PARAM[delete]}" ]] && AIIT_PARAM_OP="+" || AIIT_PARAM_OP="-"
 		
 		if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_INPUT}" ]] ; then
 			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
