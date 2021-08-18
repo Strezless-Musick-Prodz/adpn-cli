@@ -77,6 +77,7 @@ LABELS="$( adpn_parameter_from "--labels" "Content Ingest" )"
 declare -A STEP_TEMPLATE=(
 	[staged]=notify
 	[published]=announce
+	[unstaged]=unstage
 	[default]=notify
 )
 

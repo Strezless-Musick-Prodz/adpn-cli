@@ -483,7 +483,74 @@ case "${CMD}" in
 		
 		EXITCODE="${ASC_ERRCODE}"
 		;;
+	
+	"unstage")
+# @method adpn unstage
+# ADPNet Member: Unstage AU files from the staging server and replace with placeholder text
+#
+# Usage: adpn unstage [-|<JSONFILE>] [<OPTIONS>]...
+#
+# @version 2021.0817
 
+		declare -A TEMPFILES=()
+		TEMPFILES[STAGER_INPUT]="$( mktemp )"
+		TEMPFILES[STAGER_OUTPUT]="$( mktemp )"
+		TEMPFILES[STAGER_DIR]="$( mktemp -d )"
+		
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "staged" "-" "tail -n 1" > "${TEMPFILES[STAGER_INPUT]}"
+		EXITCODE="$?"
+		
+		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" )"
+		[[ -z "${SUBDIRECTORY}" ]] && SUBDIRECTORY="$( cat "${TEMPFILES[STAGER_INPUT]}" | adpn_plugin_parameter_from_json "subdirectory" )"
+		[[ -z "${SUBDIRECTORY}" ]] && SUBDIRECTORY="$( cat "${TEMPFILES[STAGER_INPUT]}" | adpn_plugin_parameter_from_json "directory" )"
+		
+		UNSTAGED_BY="$( adpn_get_user_email )"
+		
+		[[ -n "${V}" ]] && adpn_notice "${LINENO}" "Generating README.text for unstaged AU."
+		README_TXT="$( cat "${TEMPFILES[STAGER_INPUT]}" | adpn-do-notify --step=unstaged --subdirectory="${SUBDIRECTORY}" "${CONTEXT_SW[@]}" --template:unstaged_by="${UNSTAGED_BY}" )"
+
+		SUB_SUBDIRECTORY="$( printf "%s/%s" "${TEMPFILES[STAGER_DIR]}" "${SUBDIRECTORY}" )"
+		mkdir -p "${SUB_SUBDIRECTORY}"
+		printf "%s" "${README_TXT}" > "${SUB_SUBDIRECTORY}/README.text"
+
+		adpn_debug 40,adpn,unstage "${LINENO}" "README.text contents: <<<EOF\n%s\nEOF;" "$( cat "${SUB_SUBDIRECTORY}/README.text" )"
+		
+		declare -a ASC_ARGV=( "${_ARGV[@]:3}" )
+		declare -A ASC_SWITCHES=( )
+		for SWITCH in "${!_SWITCHES[@]}" ; do
+			case "${SWITCH}" in 
+				"output"|"local")
+					# DROP IT -- WE'LL SET IT OURSELVES BELOW
+					;;
+				*)
+					ASC_SWITCHES[${SWITCH}]="${_SWITCHES[$SWITCH]}"
+					;;
+			esac
+		done
+		ASC_SWITCHES[--unstage]="--unstage"
+		ASC_SWITCHES[--output]="--output=application/json"
+		ASC_SWITCHES[--local]="$( printf -- "--local=%s" "${SUB_SUBDIRECTORY}" )"
+		ASC_SWITCHES[--subdirectory]="--subdirectory=${SUBDIRECTORY}"
+
+		[[ -n "${V}" ]] && adpn_notice "${LINENO}" "Unstaging files from staging area."
+		
+		cat "${TEMPFILES[STAGER_INPUT]}" | adpn-stage-content.py "${ASC_SWITCHES[@]}" \
+			"${ASC_ARGV[@]}" "${CONTEXT_SW[@]}" > "${TEMPFILES[STAGER_OUTPUT]}"
+			ASC_ERRCODE="$?"
+		
+		if [[ "${ASC_ERRCODE}" -lt 255 ]] ; then
+			declare -a JSON_OVERLAYS=()
+			JSON_OVERLAYS+=( "$( adpn_get_json_packets "${TEMPFILES[STAGER_OUTPUT]}" )" )
+			JSON_PACKET="$( printf "%s\n" "${JSON_OVERLAYS[@]}" | adpn-json.py --cascade --output=application/json --prolog )"
+			printf "\n%s\n" "${JSON_PACKET}"
+		fi
+		
+		for TEMPFILE in "${TEMPFILES[@]}" ; do
+			rm -r "${TEMPFILE}"
+		done
+		EXITCODE="${ASC_ERRCODE}"
+		;;
+	
 	"notify")
 # @method adpn notify
 # ADPNet Member: Post a notification of a staged AU for the ADPNet Config Manager

@@ -1,0 +1,12 @@
+This AU (%(au_title)s)
+has been successfully harvested and preserved within the ADPNet LOCKSS network;
+the AU content can now be recovered at need from ADPNet preservation nodes.
+
+The AU has been marked as "down," and the manifest and content removed from staging,
+to reclaim storage space on the drop server. This container directory was retained
+to indicate the directory name has been used previously, and should not be reused
+except to update the preserved AU.
+
+AU history is available on the Gitlab Issue thread: <%(gitlab_issue)s>
+
+%(timestamp)s, %(unstaged_by)s
