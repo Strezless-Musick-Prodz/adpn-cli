@@ -5,18 +5,19 @@
 #
 # @version 2021.0629
 
-import io, os
+import io, os, sys, errno
 import ftplib, pysftp
 from io import BytesIO
 from ftplib import FTP
 
 class myFTPStaging :
 
-    def __init__ (self, ftp, user, host) :
+    def __init__ (self, ftp, user, host, dry_run=False) :
         self.ftp = ftp
         self.user = user
         self.host = host
-    
+        self.dry_run = dry_run
+        
     def is_sftp (self) :
         return isinstance(self.ftp, pysftp.Connection)
     
@@ -71,37 +72,45 @@ class myFTPStaging :
         return result
     
     def remove_item (self, file) :
-        if self.is_sftp() :
+        if self.dry_run :
+            pass
+        elif self.is_sftp() :
             self.ftp.remove(file)
         else :
             self.ftp.delete(file)
     
     def new_directoryitem (self, dir) :
-        if self.is_sftp() :
+        if self.dry_run :
+            pass
+        elif self.is_sftp() :
             self.ftp.mkdir(dir)
         else :
             self.ftp.mkd(dir)
     
     def remove_directoryitem (self, dir) :
-        if self.is_sftp() :
+        if self.dry_run :
+            pass
+        elif self.is_sftp() :
             self.ftp.rmdir(dir)
         else :
             self.ftp.rmd(dir)
     
     def set_location (self, dir=None, remote=None, make=False) :
-        rdir = remote if remote is not None else dir
-        rlast = self.set_remotelocation(dir=rdir, make=make)
         llast = self.get_location(local=True)
-
         try :
             if dir is not None :
                 os.chdir(dir)
         except FileNotFoundError as e :
-            if make :
+            if self.dry_run :
+                pass
+            elif make :
                 os.mkdir(dir)
                 os.chdir(dir)
             else :
                 raise
+        
+        rdir = remote if remote is not None else dir
+        rlast = self.set_remotelocation(dir=rdir, make=make)
         
         return (llast, rlast)
         
@@ -123,11 +132,12 @@ class myFTPStaging :
         
         if not exists :
             
-            if make :
+            if not self.dry_run and make :
                 self.new_directoryitem(dir)
                 self.set_remotelocation(dir, make=False)
             else :
-                raise FileNotFoundError
+                remote_file = "/".join([ self.url(), dir])
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), remote_file)
             
         return last
     
@@ -136,7 +146,9 @@ class myFTPStaging :
 
     def download_file (self, file = None) :
         try :
-            if self.is_sftp() :
+            if self.dry_run :
+                pass
+            elif self.is_sftp() :
                 self.ftp.get(file)
             else :
                 self.ftp.retrbinary("RETR %(file)s" % {"file": file}, open( file, 'wb' ).write)
@@ -149,6 +161,7 @@ class myFTPStaging :
         if self.is_directory(file) :
             
             if '.' != file :
+                
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
                 out(2, "chdir", self.get_location(local=True, remote=True))
 
@@ -157,21 +170,22 @@ class myFTPStaging :
                 if not exclude_this :
                     (level, type) = (1, "downloaded")
                     self.download(file=subfile, exclude=exclude, notification=notification)
-                        
+                    
                 else :
                     (level, type) = (2, "excluded")
-                    
+                
                 out(level, type, subfile)
 
             if '.' != file :
+
                 self.set_location(dir=lpwd, remote=rpwd, make=False)
                 out(2, "chdir", (lpwd, rpwd))
                 self.remove_directoryitem(file)
                 out(2, "remove_directoryitem", file)
-                
+        
         else :
             self.download_file(file=file)
-            if self.get_file_size(file) == os.stat(file).st_size :
+            if not self.dry_run and self.get_file_size(file) == os.stat(file).st_size :
                 self.remove_item(file)
                 out(2, "remove_item", file)
     
@@ -179,7 +193,9 @@ class myFTPStaging :
         if isinstance(blob, str) :
             blob = blob.encode("utf-8")
         
-        if self.is_sftp() :
+        if self.dry_run :
+            pass
+        elif self.is_sftp() :
             if blob is not None :
                 self.ftp.putfo(io.BytesIO(bytes(blob)), remotepath=file)
             else :
@@ -197,9 +213,15 @@ class myFTPStaging :
         elif os.path.isfile(file) :
             self.upload_file(blob=None, file=file)
         elif '.' == file or os.path.isdir(file) :
-            
+            (lpwd, rpwd) = self.get_location(local=True, remote=True)
             if '.' != file :
-                (lpwd, rpwd) = self.set_location(dir=file, make=True)
+                try :
+                    (lpwd, rpwd) = self.set_location(dir=file, make=True)
+                except FileNotFoundError as e :
+                    if self.dry_run :
+                        pass
+                    else :
+                        raise
                 out(2, "chdir", self.get_location(local=True, remote=True))
 
             for subfile in os.listdir() :
