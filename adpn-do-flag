@@ -1,0 +1,198 @@
+#!/bin/bash
+#
+# adpn-do-flag: script to handle adpn flag commands
+#
+# @version 2021.0302
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <OBJECT> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+  --key     	Provide the name of the flag to set
+  --value   	Provide the value of the flag to set
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _CMDLINE ; _CMDLINE=("$0")
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+CMD="${_ARGV[1]}"
+
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+declare -a TEMP_CLEANUP=()
+
+if [[ ! -z "${_PARAM[remote]}" ]] ; then
+	SSH_REMOTE="${_PARAM[remote]}"
+	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
+	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+	
+	if [[ -n "${SSH_HOST}" ]] ; then
+		if [[ -z "${SSH_CMD}" ]] ; then
+			SSH_CMD=bin/adpn-cli/adpn
+		fi
+		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
+		
+		SSH_CMDLINE="$( printf "%q %q" "${SSH_CMD}" "publisher" )"
+		for ARG in "${_CMDLINE[@]:1}" ; do
+			if [[ ! "${ARG}" =~ ^--remote\b ]] ; then
+				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
+			fi
+		done
+
+		if [[ -z "${QQ}" ]] ; then
+			adpn_notice "${LINENO}" "* Connecting to %s to execute: %s" "${SSH_HOST}" "${SSH_CMDLINE}"
+		fi
+		
+		ssh "${SSH_HOST}" "${SSH_CMDLINE}"
+	
+		if [[ -z "${QQ}" ]] ; then
+			adpn_notice "${LINENO}" "* Disconnected from %s" "${SSH_HOST}"
+		fi
+	fi
+
+else 
+	
+	if [[ -n "${_PARAM[pipeline]}" ]] ; then
+		PIPELINE="${_SWITCHES[pipeline]}"
+		PIPEDFROMTO="${_PARAM[pipeline]}"
+	else
+		PIPEDFROMTO="published:flagged"
+		PIPELINE="--pipeline=${PIPEDFROMTO}"
+	fi
+	if [[ -n "${PIPEDFROMTO}" ]] ; then
+		PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
+		PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
+		adpn_debug 100,adpn,flag,pipeline "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'" "${_SWITCHES[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}"
+	fi
+		
+	AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
+		
+	declare -a AGJP_ARGV=( "${_ARGV[1]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )
+	adpn_debug 10 "${LINENO}" "$( printf "%s " "${AGJP_ARGV[@]}" )"
+	adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" > "${AIIT_INPUT}" ; EXITCODE="$?"
+	
+	declare -a AF_PARAMS=( "${_ARGV[@]:2}" )
+	[[ -n "${_PARAM[key]}" ]] && AIIT_PARAM_KEY="${_PARAM[key]}" || { AIIT_PARAM_KEY="${AF_PARAMS[0]}" ; AF_PARAMS=( "${AF_PARAMS[@]:1}" ) ; }
+	[[ -n "${_PARAM[value]}" ]] && AIIT_PARAM_VALUE="${_PARAM[value]}" || { AIIT_PARAM_VALUE="${AF_PARAMS[0]}" ; AF_PARAMS=( "${AF_PARAMS[@]:1}" ) ; }
+	[[ -z "${_PARAM[delete]}" ]] && AIIT_PARAM_OP="+" || AIIT_PARAM_OP="-"
+		
+	if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_INPUT}" ]] ; then
+		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+		FLAG_TO="${PEER_TO}"
+		if [[ -z "${PEER_TO}" ]] ; then
+			PEER_TO=$( adpnprop "peer" )
+		fi
+		if [[ -n "${PEER_TO}" ]] ; then
+			PEER_TO=$( printf "%s--to=%s" "" "${PEER_TO}" )
+		fi
+
+		if [[ -n "${DBG}" ]] ; then
+			printf '[DBG] $ adpn-ingest-into-titlesdb.py "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIIT_OUTPUT}" 1>&2 
+		fi
+
+		AIIT_OUTPUT="${_PARAM[sqldump]}"
+		if [[ -z "${AIIT_OUTPUT}" ]] ; then
+			[[ -z "${_SWITCHES[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+		fi
+
+		adpn-titlesdb-diff --before "${FLAG_TO}" ${V}
+
+		adpn-ingest-into-titlesdb.py "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" --parameter="${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" ${_SWITCHES[dry-run]} ${V} ${DDBG} > "${AIIT_OUTPUT}"
+		AIIT_ERRCODE="$?"
+		
+		if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
+			EXITCODE="${AIIT_ERRCODE}"
+		else
+			adpn-titlesdb-diff --after "${FLAG_TO}" ${V} ; ATD_ERRCODE="$?"
+			if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_SWITCHES[dry-run]}"  ]] ; then
+				printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
+				EXITCODE="${ATD_ERRCODE}"
+			elif [[ -z "${_PARAM[context]}" ]] ; then
+				printf "\n" 1>&2
+				printf "[%s:%d] DONE: Archival Unit flagged with %s='%s' on %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${FLAG_TO}" 1>&2
+				if [[ "${PEER_TO}" == "--to=ALL" ]] ; then
+					JSON_PACKET="$( cat "${AIIT_INPUT}" )"
+					AU_TITLE="$( adpn_parameter_from "--au_title" ".Ingest Title<${JSON_PACKET}" )"
+
+					declare -a AC_SW=()
+					AC_SW+=( "$( printf -- "--message=Flagged AU (%s) with %s%s%s" "${AU_TITLE}" "${AIIT_PARAM_OP}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE+=}${AIIT_PARAM_VALUE}" )" )
+					[[ -n "${_PARAM[batch]}" ]] && AC_SW+=( "${_SWITCHES[batch]}" )
+					"${ADPN}" commit "${AC_SW[@]}" "${CONTEXT_SW[@]}"
+					EXITCODE="$?"
+				fi
+			fi
+		fi
+
+	fi
+	
+	if [[ "${EXITCODE}" -gt 0 ]] ; then
+		adpn_notice "${LINENO}" "%s FAILED" "${SCRIPT}"
+	fi
+	
+fi 
+
+##########################################################################################
+### CLEANUP: remove temporary output file. ###############################################
+##########################################################################################
+
+for TMP in "${TEMP_CLEANUP[@]}" ; do
+	rm "${TMP}"
+done
+
+
+exit ${EXITCODE}
