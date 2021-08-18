@@ -82,13 +82,12 @@ if [[ ! -z "${_PARAM[remote]}" ]] ; then
 	
 	if [[ -n "${SSH_HOST}" ]] ; then
 		if [[ -z "${SSH_CMD}" ]] ; then
-			SSH_CMD=bin/adpn-cli/adpn
+			SSH_CMD="$( printf "bin/adpn-cli/%s" "${SCRIPT}" )"
 		fi
 		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
-		
-		SSH_CMDLINE="$( printf "%q %q" "${SSH_CMD}" "publisher" )"
+		SSH_CMDLINE="$( printf "%q" "${SSH_CMD}" )"
 		for ARG in "${_CMDLINE[@]:1}" ; do
-			if [[ ! "${ARG}" =~ ^--remote\b ]] ; then
+			if [[ ! "${ARG}" =~ ^--remote($|[^A-Za-z_0-9]) ]] ; then
 				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
 			fi
 		done
@@ -97,7 +96,7 @@ if [[ ! -z "${_PARAM[remote]}" ]] ; then
 			adpn_notice "${LINENO}" "* Connecting to %s to execute: %s" "${SSH_HOST}" "${SSH_CMDLINE}"
 		fi
 		
-		ssh "${SSH_HOST}" "${SSH_CMDLINE}"
+		ssh -t "${SSH_HOST}" "${SSH_CMDLINE}"
 	
 		if [[ -z "${QQ}" ]] ; then
 			adpn_notice "${LINENO}" "* Disconnected from %s" "${SSH_HOST}"

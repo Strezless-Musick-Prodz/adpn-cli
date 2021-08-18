@@ -96,7 +96,7 @@ if [[ ! -z "${_PARAM[remote]}" ]] ; then
 			printf "[${SCRIPT} ${CMD}] * Connecting to %s to execute: %s\n" "${SSH_HOST}" "${SSH_CMDLINE}" 1>&2
 		fi
 		
-		ssh "${SSH_HOST}" "${SSH_CMDLINE}"
+		ssh -t "${SSH_HOST}" "${SSH_CMDLINE}"
 	
 		if [[ -z "${QQ}" ]] ; then
 			printf "[${SCRIPT} ${CMD}] * Disconnected from %s\n" "${SSH_HOST}" 1>&2
