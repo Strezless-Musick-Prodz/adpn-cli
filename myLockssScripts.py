@@ -25,7 +25,8 @@ class myPyPipeline :
 	"""
 	def __init__ (self, pipeline) :
 		self.pipeline = pipeline
-	
+		self.processes = []
+		
 	def process (self, cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, encoding="utf-8") :
 		if callable(cmd) :
 			res=cmd(stdin=stdin, stdout=stdout, stderr=stderr, encoding=encoding)
@@ -34,27 +35,25 @@ class myPyPipeline :
 		return res
 		
 	def siphon (self, encoding="utf-8", stdin=sys.stdin) :
-		processes = []
+		self.processes = []
 		piped_in = stdin if type(stdin) is str or type(stdin) is bytes else None
 		_stdin = stdin if piped_in is None else PIPE
 		for cmd in self.pipeline :
 			proc = self.process(cmd=cmd, stdin=_stdin, stdout=PIPE, encoding=encoding)
 			_stdin = proc.stdout
-			processes.append(proc)
+			self.processes.append(proc)
 		
-		_lastproc = None
-		for proc in processes :
-			if _lastproc is None :
-				if piped_in is not None :
-					proc.communicate(input=piped_in)
-			else :
-				_lastproc.stdout.close()
-			_lastproc = proc
+		if piped_in is not None :
+			print(piped_in, file=self.processes[0].stdin)
+			if len(self.processes) > 1 :
+				self.processes[0].stdin.close()
 		
-		(buf, errbuf) = _lastproc.communicate()
-		_lastproc.stdout.close()
+		for proc in self.processes[0:-1] :
+			proc.stdout.flush()
+			proc.wait()
 		
-		return (buf, errbuf, [proc.returncode for proc in processes])
+		(buf, errbuf) = self.processes[len(self.processes)-1].communicate()
+		return (buf, errbuf, [proc.returncode for proc in self.processes])
 
 def align_switches (left, right, switches, override=True) :
     if switches[left] is None :
