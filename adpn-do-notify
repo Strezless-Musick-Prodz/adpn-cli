@@ -50,10 +50,13 @@ CMD=""
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
+declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
+[[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
+
 PIPED_TEXT="$( cat "${_ARGV[@]:1}" )"
-JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json )"
+JSON="$( printf "%s" "${PIPED_TEXT}" | adpn-json.py --output=application/json --quiet )" || JSON="{}"
 PRETTY_JSON="$( printf "%s" "${JSON}" | adpn-json.py --output=application/json --indent=2 )"
-INGEST_STEP="$( adpn_parameter_from "--step" ".Ingest Step<${JSON}" "staged" )"
+INGEST_STEP="$( adpn_parameter_from "--step" ".Ingest Step<${JSON}" "output" )"
 STAGED_TO=$( adpn_parameter_from "--from" ".Staged To<${JSON}" "\\${USER_FULLMAIL}")
 
 USER_EMAIL=$( adpn_parameter_from ".user/email" )
@@ -80,11 +83,13 @@ declare -A STEP_TEMPLATE=(
 	[staged]=notify
 	[published]=announce
 	[unstaged]=unstage
+	[output]=output
 	[default]=notify
 )
 
 declare -A TEMPLATE_PARAMS=(
 	[cmd]="${SCRIPT_CMD_NAME}"
+	[post_cmd]="${SCRIPT_CMD_NAME}"
 	[staged_to]="${STAGED_TO}"
 	[staged_by]="${STAGED_BY}"
 	[accepted_by]="${ACCEPTED_BY}"
@@ -176,30 +181,58 @@ fi
 ADPN_GITLAB_POST_JSON=$(mktemp)
 
 if [[ "staged" == "${INGEST_STEP}" ]] ; then
+
 	printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
 
 	if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
-		if [[ "${DBG}" ]] ; then
-			printf "[%s:%d] adpn-do-gitlab result: %s\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "$( cat "${ADPN_GITLAB_POST_JSON}" )" 1>&2
-		fi
+		adpn_debug 10,adpn,notify,gitlab "${LINENO}" "adpn-do-gitlab result: %s"  "$( cat "${ADPN_GITLAB_POST_JSON}" )"
 
 		ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
 		ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
-		printf "[%s:%d] OK: Issue # %d, URL: <%s>\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${ISSUE_ID}" "${ISSUE_URL}"
+		
+		adpn_notice "${LINENO}" "OK: Issue # %d, URL: <%s>" "${ISSUE_ID}" "${ISSUE_URL}"
 	else
-		printf "[%s:%d] ERROR: Failed to post new issue to Gitlab [%s]\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${DEFAULT_REPOSITORY}" 1>&2
-		cat "${ADPN_GITLAB_POST_JSON}" 1>&2
+		adpn_notice "${LINENO}" "ERROR: Failed to post new issue to Gitlab [%s]" "${DEFAULT_REPOSITORY}"
+		adpn_notice "${LINENO}" "JSON: <<<EOF\n%s\nEOF;" "$( cat "${ADPN_GITLAB_POST_JSON}" )"
 	fi
+	EXITCODE="${ADGIP_EXITCODE}"
 
+elif [[ "output" == "${INGEST_STEP}" && -n "${GITLAB_RESOURCE}" ]] ; then
+	
+	declare -a ADG_POST_NOTE=( "adpn-do-gitlab" "post" "note" "${CONTEXT_SW[@]}" "${GITLAB_RESOURCE}" )
+	
+	DBG_BODY="$( printf "%s" "${BODY_TEXT}" | head -c 10 )"
+	[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
+	adpn_debug 10,adpn,notify,gitlab,output "${LINENO}" "printf '%%s' '%s' | %s" "${DBG_BODY}" "${ADG_POST_NOTE[*]}"
+	
+	printf "%s" "${BODY_TEXT}" | "${ADG_POST_NOTE[@]}" > "${ADPN_GITLAB_POST_JSON}"
+	EXITCODE="$?"
+	
+	if [[ "${EXITCODE}" -eq 0 ]] ; then
+		GL_ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=noteable_iid )"
+		GL_NOTE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=id )"
+		GL_CREATED_AT="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=created_at )"
+		GL_AUTHOR_USERNAME="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=author | grep -E '^username\s' | cut -s --fields=2- )"
+		GL_AUTHOR_REALNAME="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=author | grep -E '^name\s' | cut -s --fields=2- )"
+		[[ -z "${GL_AUTHOR_REALNAME}" ]] && GL_AUTHOR_REALNAME="${GL_AUTHOR_USERNAME}"
+		[[ -n "${GL_AUTHOR_USERNAME}" ]] && [[ "${GL_AUTHOR_REALNAME}" != "${GL_AUTHOR_USERNAME}" ]] &&GL_AUTHOR_REALNAME="${GL_AUTHOR_REALNAME} (@${GL_AUTHOR_USERNAME})"
+		
+		GL_NOTE_URL="${GITLAB_ISSUE}"
+		[[ -n "${GL_NOTE_ID}" ]] && GL_NOTE_URL="$( printf "%s#note_%s" "${GL_NOTE_URL}" "${GL_NOTE_ID}" )"
+		
+		adpn_notice "${LINENO}" "OK: Issue # %d, Note By %s at %s, URL: <%s>" "${GL_ISSUE_ID}" "${GL_AUTHOR_REALNAME}" "${GL_CREATED_AT}" "${GL_NOTE_URL}"
+	else
+		adpn_notice "${LINENO}" "ERROR: Failed to post new note to Gitlab Issue <%s>" "${GITLAB_ISSUE}"
+		adpn_notice "${LINENO}" "JSON: <<<EOF\n%s\nEOF;" "$( cat "${ADPN_GITLAB_POST_JSON}" )"
+	fi
+	
 else
 
 	printf "%s\n" "${BODY_TEXT}"
-	ADGIP_EXITCODE=0
+	EXITCODE=0
 
 fi
 
 rm "${ADPN_GITLAB_POST_JSON}"
-
-EXITCODE="${ADGIP_EXITCODE}"
 
 exit "${EXITCODE}"
