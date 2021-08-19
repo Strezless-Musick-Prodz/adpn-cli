@@ -951,9 +951,9 @@ case "${CMD}" in
 		MYSQL_HOST="$( adpnprop 'mysql/host' )"
 		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
 		if [[ -n "${MYSQL_HOST}"  ]] ; then
-			adpn-do-flag --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+			adpn-do-flag --context="${SCRIPT} ${CMD}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		elif [[ -n "${SSH_REMOTE}" ]] ; then
-			adpn-do-flag --remote="${SSH_REMOTE}" --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+			adpn-do-flag --remote="${SSH_REMOTE}" --context="${SCRIPT} ${CMD}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		fi
 		;;
 		
