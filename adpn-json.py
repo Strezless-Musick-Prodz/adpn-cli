@@ -221,7 +221,7 @@ Exit code:
         try :
             for key in l_keys :
                 if self.wants_json_output() :
-                    out[key] = table[key]
+                    out = { **out, **{ key: table[key] } } if not self.switched('without-key') else table[key]
                 elif len(l_keys) < 2 and type(table[key]) is list :
                     self.display_data_list(table[key], context, parse, depth=depth+1)
                 elif len(l_keys) < 2 and type(table[key]) is dict :
