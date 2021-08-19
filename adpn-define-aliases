@@ -591,14 +591,19 @@ function adpn_read_json_packet_source() {
 
 function adpn_write_json_packets_from () {
 	local web_url="${1}" ; shift
+	local gitlab_resource="${1}" ; shift
+	
 	local -a json=( "$@" )
-	local json_overlay="$( adpn-json.py --key="Gitlab Issue" --value="${web_url}" --prolog )"
+	local -a json_overlays=(
+		"$( adpn-json.py --key="Gitlab Issue" --value="${web_url}" --prolog )"
+		"$( adpn-json.py --key="Gitlab Resource" --value="${gitlab_resource}" --prolog )"
+	)
 
 	if [[ -n "${_PARAM[raw]}" ]] ; then
 		printf "%s\n" "${json[@]}"
 	else
 		for json_packet in "${json[@]}" ; do
-			printf "%s\n%s\n" "${json_packet}" "${json_overlay}" | adpn-json.py --cascade --output="application/json" --prolog ; printf "\n"
+			printf "%s\n" "${json_packet}" "${json_overlays[@]}" | adpn-json.py --cascade --output="application/json" --prolog ; printf "\n"
 		done
 	fi
 }

@@ -66,6 +66,8 @@ PROMOTED_BY=$( adpn_parameter_from "--by" ".Promoted By<${JSON}" ".Accepted By<$
 ADMIN_EMAIL=$( adpn_parameter_from "--admin-email" ".preserve/admin-email" )
 
 GITLAB_ISSUE=$( adpn_parameter_from "--gitlab" ".Gitlab Issue<${JSON}" )
+GITLAB_RESOURCE=$( adpn_parameter_from "--gitlab-api" ".Gitlab Resource<${JSON}" )
+
 DEFAULT_REPOSITORY=$( adpn_parameter_from ".gitlab/repository" )
 EXTENT=$( adpn_parameter_from ".File Size<${JSON}" )
 LOCATION=$( adpn_parameter_from ".Staged To<${JSON}" )

@@ -238,7 +238,9 @@ case "${CMD}" in
 		
 		F_JSON_OUT=$(mktemp)
 
-		if [[ -n "${_PARAM[pipe]}" ]] ; then
+		if [[ -n "${_PARAM[resource]}" ]] ; then
+			printf "%s\n" "$( adpn-json.py --output=application/json --key="resource" --value="${API_PATH}" )" "$( adpn-json.py --output=application/json --key="request" --value="${METHOD}" )" | adpn-json.py --cascade --output=application/json > "${F_JSON_OUT}"
+		elif [[ -n "${_PARAM[pipe]}" ]] ; then
 			printf "%s" "$( cat - )" | "${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${V} ${DBG} > "${F_JSON_OUT}"
 		else 
 			"${ME}" "${METHOD}" "${ADPN_GITLAB_SW[@]}" "${API_PATH}" ${V} ${DBG} > "${F_JSON_OUT}"
@@ -279,9 +281,10 @@ case "${CMD}" in
 				
 		ISH="${_ARGV[2]}"
 		
-		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description:web_url --output="multipart/form-data;table" ">" "${F_GL_ISSUE}"
+		PACKET_KEYS=id:title:description:web_url:project_id:iid
+		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key="${PACKET_KEYS}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
 		
-		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key=id:title:description:web_url --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key="${PACKET_KEYS}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
 		RE_PACKET="${ADPN_JSON_PACKET_REGEX}"
 		
@@ -298,17 +301,20 @@ case "${CMD}" in
 				ENCTITLE=$( printf "%s" "${LINE}" | cut --field=4 )
 				ENCBODY=$( printf "%s" "${LINE}" | cut --field=6 )
 				ENCWEBURL=$( printf "%s" "${LINE}" | cut --field=8 )
-
+				PROJECT_ID=$( printf "%s" "${LINE}" | cut --field=10 )
+				ISSUE_IID=$( printf "%s" "${LINE}" | cut --field=12 )
+				
 				ISH_TITLE=$( urldecode "${ENCTITLE}" )
 				ISH_BODY=$( urldecode "${ENCBODY}" )
 				WEB_URL=$( urldecode "${ENCWEBURL}" )
+				API_RESOURCE=$( printf "/projects/%d/issues/%d" "${PROJECT_ID}" "${ISSUE_IID}" )
 				
 				GREP="$( printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}" )"
 				GREPEXIT="$?"
 				
 				if [[ -n "${GREP}" ]] ; then
 					adpn_debug 50,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
-					adpn_write_json_packets_from "${WEB_URL}" "${GREP}"
+					adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
 				fi
 				
 				# if not found, retain some data for possible error message
@@ -341,7 +347,7 @@ case "${CMD}" in
 
 					if [[ -n "${GREP}" ]] ; then
 						adpn_debug 50 "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
-						adpn_write_json_packets_from "${WEB_URL}" "${GREP}"
+						adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
 					else
 						adpn_debug 100 "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
 					fi
