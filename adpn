@@ -570,7 +570,7 @@ case "${CMD}" in
 #
 # @version 2021.0709
 
-		adpn-do-notify --from="${_PARAM[from]}" --subdirectory="${_PARAM[subdirectory]}" "${CONTEXT_SW[@]}"
+		adpn-do-notify "${CONTEXT_SW[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
 		;;
 	
