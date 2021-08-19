@@ -214,16 +214,18 @@ Exit code:
         result = ( text_template % data )
         return result
 
-    def display_data_dict (self, table, context, parse, depth=0) :
-        keys = ( self.switches.get('key').split(":") ) if self.switches.get('key') is not None else table.keys()
+    def display_data_dict (self, table, context, parse, keys=None, depth=0) :
+        l_keys = ( table.keys() if keys is None else [ key for key in keys ] )
         out = {} if self.wants_json_output() else []
-        paired=( self.wants_table() or (len(keys) > 1) )
+        paired=( self.wants_table() or (len(l_keys) > 1) )
         try :
-            for key in keys :
+            for key in l_keys :
                 if self.wants_json_output() :
                     out[key] = table[key]
-                elif len(keys) < 2 and type(table[key]) is list :
-                    self.display_data_list(table[key], context, parse, depth+1)
+                elif len(l_keys) < 2 and type(table[key]) is list :
+                    self.display_data_list(table[key], context, parse, depth=depth+1)
+                elif len(l_keys) < 2 and type(table[key]) is dict :
+                    self.display_data_dict(table[key], context, parse, keys=None, depth=depth+1)
                 else :
                     out.extend( self.get_output(table[key], key, pair=paired, table=table, context=context ) )
         except KeyError as e :
@@ -256,9 +258,20 @@ Exit code:
                     self.add_output(item, table=table, context=context)
                 i = i + 1
 
+    @property
+    def data_keys (self) :
+        s_key = self.switches.get('key')
+        l_key = None
+        try :
+            m = re.match(r"^(\\|:)(.*)", s_key)
+            l_key = [ m.group(2) ] if m else s_key.split(":")
+        except TypeError as e: 
+            l_key = None
+        return l_key
+
     def display_data (self, table, context, parse, depth=0) :
         if ( isinstance(table, dict) ) :
-            self.display_data_dict(table, context, parse, depth=depth+1)
+            self.display_data_dict(table, context, parse, keys=self.data_keys, depth=depth+1)
         elif ( isinstance(table, list) ) :
             self.display_data_list(table, context, parse, depth=depth+1)
         elif ( ( table is not None ) or ( depth > 1 ) ) :
