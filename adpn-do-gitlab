@@ -81,6 +81,7 @@ adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME /
 
 declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
 [[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
+[[ -n "${_SWITCHES[dry-run]}" ]] && CONTEXT_SW+=( "${_SWITCHES[dry-run]}" )
 [[ -n "${_SWITCHES[token]}" ]] && CONTEXT_SW+=( "${_SWITCHES[token]}" )
 
 adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
