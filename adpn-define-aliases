@@ -191,6 +191,7 @@ function adpn_getpassword_from() {
 declare -a _ARGV=()
 declare -A _PARAM=()
 declare -A _SWITCHES=()
+declare -a _CMD_REST=()
 
 function adpn_command_line() {
 	shopt -s lastpipe
@@ -218,6 +219,9 @@ function adpn_command_line() {
 		
 	done
 	
+	_CMD_REST=()
+	[[ "${#_SWITCHES[@]}" -gt 0 ]] && _CMD_REST+=( "${_SWITCHES[@]}" )
+	[[ "${#_ARGV[@]}" -gt 2 ]] && _CMD_REST+=( "--" "${_ARGV[@]:2}" )
 }
 
 declare -x DDBG DDBGLEVEL
