@@ -435,8 +435,51 @@ case "${CMD}" in
 		;;
 	
 	"post")
+		
+		OBJECT="${_ARGV[2]}"
 		if [[ -z "${PRIVATE_TOKEN}" ]] ; then
+
 			adpn_notice "WARNING: Use of the Gitlab API requires an access token, and you don't seem to have one configured. See <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>"
+			EXITCODE=1
+		
+		elif [[ "${OBJECT}" == "note" ]] ; then
+		
+			[[ -n "${_PARAM[body]}" ]] && NOTE_BODY="${_PARAM[body]}" || NOTE_BODY="$( cat - )"
+			[[ -n "${_PARAM[issue]}" ]] && ISSUE="${_PARAM[issue]}" || ISSUE="${_ARGV[3]}"
+			# confidential=true|false, created_at=<iso8601 date/time>
+			
+			GITLAB_RESOURCE=""
+			REGEX_ISSUE='/*projects/[0-9]+/+issues/+[0-9]+/*'
+			if [[ -n "${ISSUE}" ]] ; then
+				
+				if [[ "${ISSUE}" =~ ^${REGEX_ISSUE}$ ]] ; then
+					GITLAB_RESOURCE="${ISSUE}"
+				else
+					GITLAB_RESOURCE="$( "${ME}" issue "${ISSUE}" "${CONTEXT_SW[@]}" --resource | grep -E '^resource\s+' | cut --field=2 )"
+				fi
+			fi
+			
+			if [[ "${GITLAB_RESOURCE}" =~ ^${REGEX_ISSUE}$ ]] ; then
+
+				GITLAB_RESOURCE=$( printf "%s/%s" "${GITLAB_RESOURCE}" "notes" )
+				
+				declare -a ADGP_SW=( "${ME}" post "${GITLAB_RESOURCE}" "${CONTEXT_SW[@]}" )
+				ADGP_SW+=( "--pipe=body" )
+				
+				DBG_BODY="$( printf "%s" "${NOTE_BODY}" | head -c 10 )"
+				[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
+				adpn_debug 25,adpn,gitlab,post,issue "${LINENO}" "printf '%%s' '%s' | %s" "${DBG_BODY}" "${ADGP_SW[*]}"
+				
+				printf "%s" "${NOTE_BODY}" | "${ADGP_SW[@]}"
+				EXITCODE="$?"
+				
+			else 
+			
+				adpn_notice "${LINENO}" "REQUIRED: You must provide an identifier for a Gitlab Issue to post a note; try using --issue=<REFERENCE>"
+				[[ -n "${GITLAB_RESOURCE}" ]] && adpn_notice "${LINENO}" "Invalid Format: '%s' does not match /%s/" "${GITLAB_RESOURCE}" "${REGEX_ISSUE}"
+				
+			fi
+			
 		else 
 			
 			API_URL=$( adpnprop "gitlab/base" )
