@@ -960,7 +960,54 @@ case "${CMD}" in
 	"gitlab")
 		adpn-do-gitlab "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
 		;;
+	
+	"pipe")
+		declare -a _CMD1=( "${ADPN}" "${CONTEXT_SW[@]}" "${_ARGV[@]:2}" )
+		declare -a _CMDLINE1=( "${SCRIPT}" "${_ARGV[@]:2}" )
+		declare -a _SUM1=( "${SCRIPT}" "${_ARGV[2]}" )
+		
+		declare -A TMPFILES=( [PIPE_OUT]="$( mktemp )" )
+		
+		AN_LABEL="$(adpn_parameter_from "--label" "<(${SCRIPT_CMD_NAME}) Issue Note Title (if any): " )"
+		[[ -n "${AN_LABEL}" ]] && AN_LABEL="$( printf '**%s:** ' "${AN_LABEL%%+(:)}" )"
+		AN_IN_ORDER_TO="$( adpn_parameter_from "--in-order-to" "<(${SCRIPT_CMD_NAME}) I'm using the '${_SUM1[*]}' command in order to: " )"
+		[[ -n "${AN_IN_ORDER_TO}" ]] && AN_IN_ORDER_TO="$( printf ' to %s' "${AN_IN_ORDER_TO%%.}" )"
 
+		declare -a AN_TEMPLATE=(
+			'--step=output'
+			'--template=output'
+			"$( printf -- "--template:cmd=%s" "${_SUM1[*]}" )"
+			"$( printf -- "--template:cmdline=%s" "${_CMDLINE1[*]}" )"
+			"$( printf -- "--template:label=%s" "${AN_LABEL}" )"
+			"$( printf -- "--template:executed_by=%s" "$( adpn_get_user_email )" )"
+			"$( printf -- "--template:start_time=%s" "$( date )" )"
+			"$( printf -- "--template:in_order_to=%s" "${AN_IN_ORDER_TO}" )"
+		)
+		
+		[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '$ %s' "${_CMDLINE1[*]}"
+		adpn_debug 100,adpn,pipe,"${SUM1[1]}" "${LINENO}" 'exact$ %s %s' "${_CMD1[0]}" "$( printf "%q " "${_CMD1[@]:1}" )"
+		if [[ -z "${Q}" ]] ; then
+			"${_CMD1[@]}" | tee "${TMPFILES[PIPE_OUT]}"
+			EXITCODE="${PIPESTATUS[0]}"
+		else 
+			"${_CMD1[@]}" > "${TMPFILES[PIPE_OUT]}"
+			EXITCODE="$?"
+		fi
+		
+		if [[ -n "${_PARAM[force]}" || "${EXITCODE}" -eq 0 ]] ; then
+			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s' "${ME} notify ${CONTEXT_SW[*]} ${AN_TEMPLATE[*]}"
+			cat "${TMPFILES[PIPE_OUT]}" | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}"
+			EXITCODE="$?"
+		else
+			[[ -n "${Q}" ]] && OUTPUT_NOTE=" Output below:" || OUTPUT_NOTE=""
+			adpn_notice "${LINENO}" 'FAILED: piped command `%s` returned EXIT CODE %d.%s' "${_CMD1[*]}" "${EXITCODE}" "${OUTPUT_NOTE}"
+			[[ -n "${OUTPUT_NOTE}" ]] && printf "~~~\n%s\n~~~\n" "$( cat "${TMPFILES[PIPE_OUT]}" )" 1>&2
+		fi
+		
+		for FILE in "${TMPFILES[@]}" ; do
+			rm "${FILE}"
+		done
+		;;
 	"serve")
 # @method adpn serve
 # Preservation Node Manager: Helps retrieve content preserved on a LOCKSS box.
