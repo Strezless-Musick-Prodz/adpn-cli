@@ -304,12 +304,13 @@ Exit code:
 			self.add_flag("json_error", jsonInput.raw)
 		
 		for err in self.flags["json_error"] :
-			print(
-				("[%(script)s] JSON encoding error. Could not extract data or key-value pairs from "
-					+ "the provided data: '%(json)s'")
-					% {"script": self.scriptname, "json": err.strip()},
-				file=sys.stderr
-			)
+			if not self.switched('quiet') :
+				print(
+					("[%(script)s] JSON encoding error. Could not extract data or key-value pairs from "
+						+ "the provided data: '%(json)s'")
+						% {"script": self.scriptname, "json": err.strip()},
+					file=sys.stderr
+				)
 				
 if __name__ == '__main__' :
 
