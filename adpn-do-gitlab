@@ -225,7 +225,8 @@ case "${CMD}" in
 		[[ -n "${_PARAM[sort]}" ]] && SORT="$( rawurlencode "${_PARAM[sort]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "sort" "${SORT}" )" && SEP="&"
 		[[ -n "${_PARAM[assigneee]}" ]] && ASSIGNEE="$( rawurlencode "${_PARAM[assignee]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "assignee_username" "${ASSIGNEE}" ) )" && SEP="&"
 
-		adpn_debug 1 "${LINENO}" "ISSUE #%d -- GET %s (%s)" "${ISSUE_ID}" "${API_PATH}" "$( declare -p _ARGV )"
+		[[ -n "${ISSUE_ID}" ]] && ISSUE_STR="$( printf "ISSUE #%d -- " "${ISSUE_ID}" )" || ISSUE_STR=""
+		adpn_debug 1 "${LINENO}" "%sGET %s (%s)" "${ISSUE_STR}" "${API_PATH}" "$( declare -p _ARGV )"
 		
 		if [[ -n "${_PARAM[key]}" ]] ; then
 			ADPN_JSON_SW+=( "--key=${_PARAM[key]}" )
@@ -478,7 +479,7 @@ case "${CMD}" in
 			for SLUG in "${_ARGV[@]:2}" ; do
 				URL=$( printf "${API_URL}" "${SLUG#/}" )
 				if [[ -n "${DBG}" ]] ; then
-					adpn_debug 20,gitlab,post,curl "%s " curl "${CURL_SW[@]}" "${URL}"
+					adpn_debug 30,gitlab,post,curl "${LINENO}" "%s " curl "${CURL_SW[@]}" "${URL}"
 				fi
 				if [[ -z "${_PARAM[dry-run]}" ]] ; then
 					curl "${CURL_SW[@]}" "${URL}"
