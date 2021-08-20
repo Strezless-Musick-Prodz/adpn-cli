@@ -165,7 +165,9 @@ class myFTPStaging :
                 (lpwd, rpwd) = self.set_location(dir=file, make=True)
                 out(2, "chdir", self.get_location(local=True, remote=True))
 
-            for subfile in self.get_childitem() :
+            listing = [ item for item in self.get_childitem() ]
+            listing.sort(key=lambda name: not re.match(r'^[Mm]anifest.*$', name))
+            for subfile in listing :
                 exclude_this = exclude(subfile) if exclude is not None else False
                 if not exclude_this :
                     (level, type) = (1, "downloaded")
