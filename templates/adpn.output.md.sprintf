@@ -1,0 +1,13 @@
+%(label)s%(executed_by)s used the `%(cmd)s` script on this AU at %(start_time)s%(in_order_to)s. Here's the full command line:
+
+~~~
+$ %(cmdline)s
+~~~
+
+Here's the output that resulted:
+
+~~~
+%(piped_text)s
+~~~
+
+*<small>This note was posted automatically by the `%(post_cmd)s` command on %(timestamp)s</small>*
