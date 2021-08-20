@@ -2,7 +2,7 @@
 #
 # adpn-do-flag: script to handle adpn flag commands
 #
-# @version 2021.0302
+# @version 2021.0820
 
 SCRIPTPATH="$(which "$0")"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -128,9 +128,9 @@ else
 		PEER_TO=$( adpn_parameter_from "--to" "--peer" ".peer" "ALL" )
 		PEER_TO_SW=$( printf -- "--to=%s" "${PEER_TO}" )
 
-		AIIT_OUTPUT="${_PARAM[sqldump]}"
-		if [[ -z "${AIIT_OUTPUT}" ]] ; then
-			[[ -z "${_SWITCHES[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+		AIIT_SQLOUT="${_PARAM[sqldump]}"
+		if [[ -z "${AIIT_SQLOUT}" ]] ; then
+			AIIT_SQLOUT="$( mktemp )" ; TEMP_CLEANUP+=( "${AIIT_SQLOUT}" )
 		fi
 
 		adpn-titlesdb-diff --before "${PEER_TO}" ${V}
@@ -138,19 +138,36 @@ else
 		declare -a AIIT_CMDLINE=( "adpn-ingest-into-titlesdb.py" "${AIIT_INPUT}" )
 		AIIT_CMDLINE+=( "${CONTEXT_SW[@]}" )
 		AIIT_CMDLINE+=( "--parameter=${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" )
+		[[ -n "${_SWITCHES[passthru]}" ]] && AIIT_CMDLINE+=( "${_SWITCHES[passthru]}" )
 		[[ -n "${PEER_TO_SW}" ]] && AIIT_CMDLINE+=( "${PEER_TO_SW}" )
 		[[ -n "${PIPELINE_SW}" ]] && AIIT_CMDLINE+=( "${PIPELINE_SW}" )
 		
 		adpn_debug 20,adpn,flag,ingest,sql "${LINENO}" '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_OUTPUT}"
-		"${AIIT_CMDLINE[@]}" > "${AIIT_OUTPUT}" ; EXITCODE="$?"
-		
+		"${AIIT_CMDLINE[@]}" > "${AIIT_SQLOUT}" ; EXITCODE="$?"
+
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			adpn_notice "adpn-ingest-into-titlesdb.py FAILED, exit code=%d" "${EXITCODE}"
+			if [[ -z "${Q}" && -r "${AIIT_SQLOUT}" ]] ; then
+				printf "\n" 1>&2
+				cat "${AIIT_SQLOUT}" 1>&2
+				printf "\n" 1>&2
+			fi
+			adpn_notice "${LINENO}" "FAILED: adpn-ingest-into-titlesdb.py exited with error code=%d" "${EXITCODE}"
 		else
 			[[ -z "${_SWITCHES[dry-run]}" ]] && { adpn-titlesdb-diff --after "${PEER_TO}" "${CONTEXT_SW[@]}" ; EXITCODE="$?" ; }
 			if [[ "${EXITCODE}" -gt 0 ]] ; then
-				adpn_notice "adpn-titlesdb-diff FAILED, exit code=%d." "${EXITCODE}"
+				if [[ -z "${Q}" && -r "${AIIT_SQLOUT}" ]] ; then
+					printf "\n" 1>&2
+					cat "${AIIT_SQLOUT}" 1>&2
+					printf "\n" 1>&2
+				fi
+				adpn_notice "${LINENO}" "FAILED: adpn-titlesdb-diff exited with error code=%d." "${EXITCODE}"
 			else
+
+				if [[ -n "${_SWITCHES[dry-run]}" ]] ; then
+					cat "${AIIT_SQLOUT}"
+				elif [[ -n "${_PARAM[passthru]}" ]] ; then
+					cat "${AIIT_SQLOUT}" | grep -E "${ADPN_JSON_PACKET_REGEX}"
+				fi
 				
 				if [[ -z "${QQ}" ]] ; then
 					printf "\n" 1>&2

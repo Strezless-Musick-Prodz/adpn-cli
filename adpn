@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0817
+# @version 2021.0820
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -743,16 +743,14 @@ case "${CMD}" in
 #
 # @version 2021.0420
 
-		AV_OUTPUT="$(mktemp)"
+		AV_OUTPUT="$(mktemp)" ; declare -a TEMP_CLEANUP=( "${AV_OUTPUT}" )
 		
 		PIPELINE="$( adpn_parameter_from "--pipeline" "verified:ingested" )"
-		"${ME}" verify "${_CMDLINE[@]:2}" --pipeline="${PIPELINE}" > "${AV_OUTPUT}"
+		"${ME}" verify --pipeline="${PIPELINE}" "${_CMD_REST[@]}" > "${AV_OUTPUT}"
 		EXITCODE="$?"
 
-		cat "${AV_OUTPUT}" ; echo
-		JSON_PACKET=$(grep "^JSON PACKET:" "${AV_OUTPUT}" | cut --fields=2-)
-		
-		rm "${AV_OUTPUT}"
+		cat "${AV_OUTPUT}" | grep -E -v "${ADPN_JSON_PACKET_REGEX}" ; echo
+		JSON_PACKET=$(grep -E "${ADPN_JSON_PACKET_REGEX}" "${AV_OUTPUT}" | cut --fields=2-)
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			printf "[%s:%d] %s verify FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
@@ -762,28 +760,49 @@ case "${CMD}" in
 			INGEST_FROM="$( adpn_parameter_from "--from" ".From Peer<${JSON_PACKET}" "<From (<PEER>): " )"
 			INGEST_TO="$( adpn_parameter_from "--for" "--to" "--peer" ".To Peer<${JSON_PACKET}" "<To (ALL|<PEER>): " )"
 			
-			adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
+			[[ -z "${_PARAM[dry-run]}" ]] && adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
 			
-			AIIT_OUTPUT="${_PARAM[sqldump]}"
-			if [[ -z "${AIIT_OUTPUT}" ]] ; then
-				[[ -z "${_PARAM[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
+			AIIT_SQLOUT="${_PARAM[sqldump]}"
+			if [[ -z "${AIIT_SQLOUT}" ]] ; then
+				AIIT_SQLOUT="$( mktemp )" ; TEMP_CLEANUP+=( "${AIIT_SQLOUT}" )
 			fi
+
+			[[ -z "${_PARAM[dry-run]}" ]] && adpn-ingest-into-titlesdb.py --snapshot
 			
-			adpn-ingest-into-titlesdb.py --snapshot
-			printf "%s" "${JSON_PACKET}" | adpn-ingest-into-titlesdb.py --from="${INGEST_FROM}" --to="${INGEST_TO}" ${_SWITCHES[dry-run]} > "${AIIT_OUTPUT}" ; EXITCODE="$?"
+			declare -a AIIT_CMDLINE=( "adpn-ingest-into-titlesdb.py" )
+			AIIT_CMDLINE+=( "${CONTEXT_SW[@]}" )
+			AIIT_CMDLINE+=( "--from=${INGEST_FROM}" "--to=${INGEST_TO}" )
+			AIIT_CMDLINE+=( "--passthru" )
+			[[ -n "${_SWITCHES[dry-run]}" ]] && AIIT_CMDLINE+=( "${_SWITCHES[dry-run]}" )
+			[[ -n "${PIPELINE}" ]] && AIIT_CMDLINE+=( "--pipeline=${PIPELINE}" )
+
+			printf "%s" "${JSON_PACKET}" | "${AIIT_CMDLINE[@]}" > "${AIIT_SQLOUT}" ; EXITCODE="$?"
 			
 			if [[ "${EXITCODE}" -gt 0 ]] ; then
 				printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 			else
-				adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; ATD_ERRCODE="$?"
-				if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_PARAM[dry-run]}"  ]] ; then
+				[[ -z "${_PARAM[dry-run]}" ]] && { adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; EXITCODE="$?" ; }
+				if [[ "${EXITCODE}" -gt 0 ]] ; then
 					printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
 					EXITCODE="${ATD_ERRCODE}"
-				elif [[ -z "${_PARAM[context]}" ]] ; then
-					printf "\n[%s:%d] DONE: Archival Unit posted to %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${INGEST_TO}" 1>&2
+				else 
+					if [[ -n "${_SWITCHES[dry-run]}" ]] ; then
+						cat "${AIIT_SQLOUT}"
+					else
+						cat "${AIIT_SQLOUT}" | grep -E "${ADPN_JSON_PACKET_REGEX}"
+					fi
+
+					# Display final notice if this was called in its own right, not if by adpn promote &c.
+					if [[ -z "${_PARAM[context]}" ]] ; then
+						adpn_notice "${LINENO}" "DONE: Archival Unit posted to %s titlesdb." "${INGEST_TO}"
+					fi
 				fi
 			fi
 		fi
+		
+		for TMP in "${TEMP_CLEANUP[@]}" ; do
+			rm "${TMP}"
+		done
 		;;
 		
 	"promote"|"publish")
