@@ -62,6 +62,12 @@ CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
+declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
+[[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
+[[ -n "${V}" ]] && CONTEXT_SW+=( "${V}" )
+[[ -n "${Q}" ]] && CONTEXT_SW+=( "${Q}" )
+[[ -n "${_SWITCHES[dry-run]}" ]] && CONTEXT_SW+=( "${_SWITCHES[dry-run]}" )
+
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
 	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
@@ -119,41 +125,39 @@ else
 	[[ -z "${_PARAM[delete]}" ]] && AIIT_PARAM_OP="+" || AIIT_PARAM_OP="-"
 		
 	if [[ "${EXITCODE}" -eq 0 && -s "${AIIT_INPUT}" ]] ; then
-		PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-		FLAG_TO="${PEER_TO}"
-		if [[ -z "${PEER_TO}" ]] ; then
-			PEER_TO=$( adpnprop "peer" )
-		fi
-		if [[ -n "${PEER_TO}" ]] ; then
-			PEER_TO=$( printf "%s--to=%s" "" "${PEER_TO}" )
-		fi
-
-		if [[ -n "${DBG}" ]] ; then
-			printf '[DBG] $ adpn-ingest-into-titlesdb.py "%s" --remote=1 "%s" "%s" %s %s > "%s"\n' "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" "${V}" "${DDBG}" "${AIIT_OUTPUT}" 1>&2 
-		fi
+		PEER_TO=$( adpn_parameter_from "--to" "--peer" ".peer" "ALL" )
+		PEER_TO_SW=$( printf -- "--to=%s" "${PEER_TO}" )
 
 		AIIT_OUTPUT="${_PARAM[sqldump]}"
 		if [[ -z "${AIIT_OUTPUT}" ]] ; then
 			[[ -z "${_SWITCHES[dry-run]}" ]] && AIIT_OUTPUT="/dev/null" || AIIT_OUTPUT="/dev/tty"
 		fi
 
-		adpn-titlesdb-diff --before "${FLAG_TO}" ${V}
+		adpn-titlesdb-diff --before "${PEER_TO}" ${V}
 
-		adpn-ingest-into-titlesdb.py "${AIIT_INPUT}" "${PEER_TO}" "${PIPELINE}" --parameter="${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" ${_SWITCHES[dry-run]} ${V} ${DDBG} > "${AIIT_OUTPUT}"
-		AIIT_ERRCODE="$?"
+		declare -a AIIT_CMDLINE=( "adpn-ingest-into-titlesdb.py" "${AIIT_INPUT}" )
+		AIIT_CMDLINE+=( "${CONTEXT_SW[@]}" )
+		AIIT_CMDLINE+=( "--parameter=${AIIT_PARAM_OP}${AIIT_PARAM_KEY}:${AIIT_PARAM_VALUE}" )
+		[[ -n "${PEER_TO_SW}" ]] && AIIT_CMDLINE+=( "${PEER_TO_SW}" )
+		[[ -n "${PIPELINE_SW}" ]] && AIIT_CMDLINE+=( "${PIPELINE_SW}" )
 		
-		if [[ "${AIIT_ERRCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-			EXITCODE="${AIIT_ERRCODE}"
+		adpn_debug 20,adpn,flag,ingest,sql '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_OUTPUT}"
+		"${AIIT_CMDLINE[@]}" > "${AIIT_OUTPUT}" ; EXITCODE="$?"
+		
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			adpn_notice "adpn-ingest-into-titlesdb.py FAILED, exit code=%d" "${EXITCODE}"
 		else
-			adpn-titlesdb-diff --after "${FLAG_TO}" ${V} ; ATD_ERRCODE="$?"
-			if [[ "${ATD_ERRCODE}" -gt 0 && -z "${_SWITCHES[dry-run]}"  ]] ; then
-				printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-				EXITCODE="${ATD_ERRCODE}"
-			elif [[ -z "${_PARAM[context]}" ]] ; then
-				printf "\n" 1>&2
-				printf "[%s:%d] DONE: Archival Unit flagged with %s='%s' on %s titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${FLAG_TO}" 1>&2
-				if [[ "${PEER_TO}" == "--to=ALL" ]] ; then
+			[[ -z "${_SWITCHES[dry-run]}" ]] && { adpn-titlesdb-diff --after "${PEER_TO}" "${CONTEXT_SW[@]}" ; EXITCODE="$?" ; }
+			if [[ "${EXITCODE}" -gt 0 ]] ; then
+				adpn_notice "adpn-titlesdb-diff FAILED, exit code=%d." "${EXITCODE}"
+			else
+				
+				if [[ -z "${QQ}" ]] ; then
+					printf "\n" 1>&2
+					adpn_notice "DONE: Archival Unit flagged with %s='%s' on %s titlesdb." "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${PEER_TO}"
+				fi
+				
+				if [[ "${PEER_TO}" == "ALL" && -z "${_PARAM[no-commit]}" ]] ; then
 					JSON_PACKET="$( cat "${AIIT_INPUT}" )"
 					AU_TITLE="$( adpn_parameter_from "--au_title" ".Ingest Title<${JSON_PACKET}" )"
 
