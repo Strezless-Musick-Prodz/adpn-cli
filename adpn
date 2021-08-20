@@ -1022,8 +1022,8 @@ case "${CMD}" in
 		fi
 		
 		if [[ -n "${_PARAM[force]}" || "${EXITCODE}" -eq 0 ]] ; then
-			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s' "${ME} notify ${CONTEXT_SW[*]} ${AN_TEMPLATE[*]}"
-			cat "${TMPFILES[PIPE_OUT]}" | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}"
+			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s | %s' "convertto_plain_text" "$( printf -- "%q " "${ME}" "notify" "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" )"
+			cat "${TMPFILES[PIPE_OUT]}" | convertto_plain_text | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}"
 			EXITCODE="$?"
 		else
 			[[ -n "${Q}" ]] && OUTPUT_NOTE=" Output below:" || OUTPUT_NOTE=""

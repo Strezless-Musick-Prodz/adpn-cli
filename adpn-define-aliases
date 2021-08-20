@@ -907,3 +907,23 @@ function strtotitle {
 		printf "%s%s\n" "$( printf "%s" "${WORD:0:1}" | tr "[:lower:]" "[:upper:]" )" "${WORD:1}"
 	done
 }
+
+# convertto_plain_text: Filters console output maybe including ANSI CSI control sequences
+# (e.g. color codes, cursor control sequences, scroll and clear control sequences, etc.)
+# Outputs plain, grey, boring text.
+#
+# Q: Why don't GNU command-line environments already have a standard tool to do this?
+#
+# Regex solution based in part on suggestions from answers to, e.g.:
+# * <https://stackoverflow.com/questions/19296667/remove-ansi-color-codes-from-a-text-file-using-bash>
+# * <https://unix.stackexchange.com/questions/4527/program-that-passes-stdin-to-stdout-with-color-codes-stripped>
+# and reference to:
+# * <https://en.wikipedia.org/wiki/ANSI_escape_code#CSIsection>
+function convertto_plain_text() {
+	# \x1B - matches ESC control code (^[, character 27, etc.)
+	# \x1B\[ - matches ANSI CSI (Control Sequence Introducer) prefix (^[[)
+	# ([0-9:;<=>?]*) - matches a sequence of 0-N "parameter bytes" (e.g. 38;1;32)
+	# ([ !-/]*) - matches a sequence of 0-N "intermediate bytes"
+	# [@-~] - matches exactly one (1) "final byte" of @, A-Z, [, /, ], ^, _, `, a-z, {, |, }, ~
+	cat - | sed -E 's/\x1B\[([0-9:;<=>?]*)([ !-/]*)[@-~]//g'
+}
