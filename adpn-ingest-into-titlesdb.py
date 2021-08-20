@@ -108,19 +108,19 @@ Returns exit code 0 on success.
 	def accept_json (self, jsonLines) :
 		self._data = None
 		
-		jsonInput = myPyJSON(splat=True, cascade=True)
-		jsonInput.accept(jsonLines)
+		self.jsonInput = myPyJSON(splat=True, cascade=True)
+		self.jsonInput.accept(jsonLines)
 
 		rescan=False
 		try :
-			jsonData = jsonInput.allData
+			jsonData = self.jsonInput.allData
 		except json.decoder.JSONDecodeError as e :
 			rescan=True
 
 		if rescan :
 			try :
-				jsonInput.accept(jsonLines, screen=rescan)
-				jsonData = jsonInput.allData
+				self.jsonInput.accept(jsonLines, screen=rescan)
+				jsonData = self.jsonInput.allData
 			except json.decoder.JSONDecodeError as e:
 				jsonData = {}
 		
@@ -269,6 +269,17 @@ USE adpn;
 			
 		return ( au_param, op )
 	
+	def get_au_name (self) :
+		name = None
+		
+		au_id = self.get_au_id()
+		au_names = []
+		if au_id : 
+			self.cur.execute("SELECT au_name FROM au_titlelist WHERE au_id=%d" % int(au_id))
+			au_names = [ row[0] for row in self.cur.fetchall() ]
+			name = au_names[0] if len(au_names) > 0 else None
+		return name
+	
 	def get_au_id(self) :
 		# Is au_id explicitly provided on the command line?
 		au_ids = [ ]
@@ -391,7 +402,7 @@ USE adpn;
 		au_titlelist_values['au_journal_title'] = au_titlelist_values['au_title']
 		au_titlelist_values['au_name'] = self.au_name(au_titlelist_values['au_title'] if au_titlelist_values['au_title'] else "")
 		raw_au_titlelist_values = au_titlelist_values
-        
+		
 		au_titlelist_values = [(key, au_titlelist_values[key]) for key in au_titlelist_values.keys()]
 		au_titlelist_values = map(lambda kv: (kv[0], json.dumps(kv[1])), au_titlelist_values)
 		au_titlelist_values = dict(au_titlelist_values)
@@ -405,8 +416,11 @@ USE adpn;
 		else :
 			if self.switches['insert_title'] :
 				self.initial_ingest(au_titlelist_values)
+				self.data['Ingest Step'] = self.switches.get('step', 'ingested')
 			if self.switches['insert_peer_title'] :
 				self.publish_ingest(peer_to, au_titlelist_values)
+				if 'ALL' == peer_to :
+					self.data['Ingest Step'] = self.switches.get('step', 'published')
 			
 			if 'parameter' in self.switches :
 				param_parts = re.match(string=self.switches['parameter'], pattern='^([+\-]?)(.*)$')
@@ -414,10 +428,18 @@ USE adpn;
 				param_pair = param_parts[2]
 				param_pair = ( re.split(string=param_pair, pattern="[:]", maxsplit=1) + [ "" ] )[0:2]
 				self.parameter_ingest(peer_to, param_op, param_pair, au_titlelist_values)
+				self.data['Ingest Step'] = self.switches.get('step', 'flagged')
 			
+			self.data['au_id'] = self.get_au_id()
+			self.data['AU Name'] = self.get_au_name()
 			self.db.commit()
 			self.db.close()
-	
+		
+		if self.switches.get("passthru") and self.wants_json() :
+			print("/*")
+			print(self.jsonInput.prologText, json.dumps(self.data))
+			print("*/")
+		
 	def display_peers (self) :
 		self.do_connect_to_db()
 		
