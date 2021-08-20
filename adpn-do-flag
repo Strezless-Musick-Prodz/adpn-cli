@@ -141,7 +141,7 @@ else
 		[[ -n "${PEER_TO_SW}" ]] && AIIT_CMDLINE+=( "${PEER_TO_SW}" )
 		[[ -n "${PIPELINE_SW}" ]] && AIIT_CMDLINE+=( "${PIPELINE_SW}" )
 		
-		adpn_debug 20,adpn,flag,ingest,sql '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_OUTPUT}"
+		adpn_debug 20,adpn,flag,ingest,sql "${LINENO}" '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_OUTPUT}"
 		"${AIIT_CMDLINE[@]}" > "${AIIT_OUTPUT}" ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
@@ -154,7 +154,7 @@ else
 				
 				if [[ -z "${QQ}" ]] ; then
 					printf "\n" 1>&2
-					adpn_notice "DONE: Archival Unit flagged with %s='%s' on %s titlesdb." "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${PEER_TO}"
+					adpn_notice "${LINENO}" "DONE: Archival Unit flagged with %s='%s' on %s titlesdb." "${AIIT_PARAM_KEY}" "${AIIT_PARAM_VALUE}" "${PEER_TO}"
 				fi
 				
 				if [[ "${PEER_TO}" == "ALL" && -z "${_PARAM[no-commit]}" ]] ; then
