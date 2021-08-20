@@ -105,19 +105,8 @@ if [[ ! -z "${_PARAM[remote]}" ]] ; then
 
 else 
 	
-	if [[ -n "${_PARAM[pipeline]}" ]] ; then
-		PIPELINE="${_SWITCHES[pipeline]}"
-		PIPEDFROMTO="${_PARAM[pipeline]}"
-	else
-		PIPEDFROMTO="published:flagged"
-		PIPELINE="--pipeline=${PIPEDFROMTO}"
-	fi
-	if [[ -n "${PIPEDFROMTO}" ]] ; then
-		PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
-		PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
-		adpn_debug 100,adpn,flag,pipeline "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'" "${_SWITCHES[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}"
-	fi
-		
+	adpn_set_pipeline_step "published:flagged" "flag"
+	
 	AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
 		
 	declare -a AGJP_ARGV=( "${_ARGV[1]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )

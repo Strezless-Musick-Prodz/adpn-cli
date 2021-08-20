@@ -263,6 +263,27 @@ function adpn_set_display_settings() {
 	SCRIPT_CMD_NAME=$( adpn_parameter_from "--context" "\\${script_cmd}" )
 }
 
+function adpn_set_pipeline_step () {
+
+	local default="${1}"
+	local context="${2}"
+	
+	if [[ -n "${_PARAM[pipeline]}" ]] ; then
+		PIPELINE_SW="${_SWITCHES[pipeline]}"
+		PIPEDFROMTO="${_PARAM[pipeline]}"
+	else
+		PIPEDFROMTO="${default}"
+		PIPELINE_SW="--pipeline=${PIPEDFROMTO}"
+	fi
+	
+	if [[ -n "${PIPEDFROMTO}" ]] ; then
+		PIPEDFROM=$( printf "%s" "${PIPEDFROMTO}" | cut --field=1 --delimiter=":" )
+		PIPEDTO=$( printf "%s" "${PIPEDFROMTO}" | cut --field=2 --delimiter=":" )
+		adpn_debug 100,adpn,"${context}",pipeline "SWITCH='%s', PIPEDFROMTO='%s': PIPEDFROM='%s', PIPEDTO='%s'" "${_SWITCHES[pipeline]}" "${PIPEDFROMTO}" "${PIPEDFROM}" "${PIPEDTO}"
+	fi
+
+}
+
 # adpn_check_dependency: check a list of dependencies; if at least one fails,
 # maybe output instructions or suggestions about how to resolve the failure
 #
