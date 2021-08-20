@@ -881,6 +881,7 @@ case "${CMD}" in
 			declare -a DST_SW=( "table" )
 			
 			adpn_debug 01 "${LINENO}" '$ cat "%s" | adpn_packet2daemonstatustable "%s" > "%s"\n' "${DST_INPUT}" "$( join_by '" "' "${AIT_SW[@]}" )" "${DST_OUTPUT}"
+			LOCKSS_KEY="$( cat "${DST_INPUT}" | adpn_packet2lockssid )"
 			cat "${DST_INPUT}" | adpn_packet2daemonstatustable "${DST_SW[@]}" > "${DST_OUTPUT}" ; EXITCODE="$?"
 
 			declare -a DST_GREP_OPT=( "Volume" )
@@ -907,8 +908,13 @@ case "${CMD}" in
 				[[ -n "${_PARAM[down]}" ]] && AC_TESTS+=( "down" )
 				AC_S_TESTS="$( join_by "/" "${AC_TESTS[@]}" )"
 				
+				declare -a JSON_OVERLAYS=(
+					"$( cat "${DST_INPUT}" )"
+					"$( adpn-json.py --output=application/json --key="Ingest Step" --value="confirmed-${AC_S_TESTS}" --prolog )"
+					"$( adpn-json.py --output=application/json --key="AU LOCKSS Key" --value="${LOCKSS_KEY}" --prolog )"
+				)
 				printf "\n"
-				printf "%s\n%s\n" "$( cat "${DST_INPUT}" )" "$( adpn-json.py --output=application/json --key="Ingest Step" --value="confirmed-${AC_S_TESTS}" )" | adpn-json.py --cascade --output="application/json" --prolog
+				printf "%s\n" "${JSON_OVERLAYS[@]}" | adpn-json.py --cascade --output="application/json" --prolog
 				printf "\n"
 			
 			fi
