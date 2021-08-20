@@ -998,6 +998,7 @@ case "${CMD}" in
 		AN_IN_ORDER_TO="$( adpn_parameter_from "--in-order-to" "<(${SCRIPT_CMD_NAME}) I'm using the '${_SUM1[*]}' command in order to: " )"
 		[[ -n "${AN_IN_ORDER_TO}" ]] && AN_IN_ORDER_TO="$( printf ' to %s' "${AN_IN_ORDER_TO%%.}" )"
 
+		PIPE_CMDLINE="$( printf "%q " "${_CMDLINE[@]}" )"
 		declare -a AN_TEMPLATE=(
 			'--step=output'
 			'--template=output'
@@ -1007,6 +1008,7 @@ case "${CMD}" in
 			"$( printf -- "--template:executed_by=%s" "$( adpn_get_user_email )" )"
 			"$( printf -- "--template:start_time=%s" "$( date )" )"
 			"$( printf -- "--template:in_order_to=%s" "${AN_IN_ORDER_TO}" )"
+			"$( printf -- "--template:pipe_cmdline=%s" "${PIPE_CMDLINE%%*( )}" )"
 		)
 		
 		[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '$ %s' "${_CMDLINE1[*]}"

@@ -10,4 +10,4 @@ Here's the output that resulted:
 %(piped_text)s
 ~~~
 
-*<small>This note was posted automatically by the `%(post_cmd)s` command on %(timestamp)s</small>*
+*<small>This note was posted automatically by the `%(post_cmd)s` command on %(timestamp)s; full command line: `%(pipe_cmdline)s`</small>*
