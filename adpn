@@ -422,13 +422,16 @@ case "${CMD}" in
 			esac
 		done
 		
-		adpn-do-package.py --output=application/json \
-			"${ADP_ARGV[@]}" \
-			"${ADP_SWITCHES[@]}" "${CONTEXT_SW[@]}"
-		EXITCODE="$?"
+		declare -a ADPN_DO_PACKAGE_CMD=( adpn-do-package.py --output=application/json )
+		ADPN_DO_PACKAGE_CMD+=( "${ADP_ARGV[@]}" )
+		ADPN_DO_PACKAGE_CMD+=( "${ADP_SWITCHES[@]}" "${CONTEXT_SW[@]}" )
+		
+		adpn_debug 15,adpn,package "${LINENO}" '$ %s > %s' "$( printf "%q " "${ADPN_DO_PACKAGE_CMD[@]}" )" "${ADP_OUTPUT}"
+		"${ADPN_DO_PACKAGE_CMD[@]}" > "${ADP_OUTPUT}"; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -lt 255 ]] ; then
 			JSON_PACKET="$( adpn_get_json_packets "${ADP_OUTPUT}" )"
+			adpn_debug 35,adpn,package "${LINENO}" 'printf "%%s" "%s" | [...]' "${JSON_PACKET}"
 			printf "%s" "${JSON_PACKET}"
 		fi
 		
@@ -609,37 +612,50 @@ case "${CMD}" in
 		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
 		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
 		
+		MANIFEST_JSON="$( "${ME}" describe "${AU_LOCALPATH}" )"
+		[[ -n "${MANIFEST_JSON}" ]] && MANIFEST_JSON="$( printf "%s" "${MANIFEST_JSON}" | adpn-json.py --output=application/json )" || MANIFEST_JSON="{}"
+		
 		[[ -n "${_PARAM[local]}" ]] && N=2 || N=3
 		declare -a AU_STAGINGAREAS=( "${_ARGV[@]:$N}" )
 		AU_STAGINGAREAS=( "${AU_STAGINGAREAS[@]/#/\\}" )
 		STAGING_AREA="$( adpn_parameter_from "--remote" "${AU_STAGINGAREAS[@]}" ".stage/base" )"
 		
 		FROM="$( adpn_parameter_from "--from" "--publisher" "--peer" ".publisher"  ".peer" "<From (<PUBLISHER>): " )"
-		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
+		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" ".Directory name<${MANIFEST_JSON}" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
 		DEFAULT_AU="$( printf "AU from %s" "${SUBDIRECTORY}" )"
-		AU_TITLE="$( adpn_parameter_from "--au_title" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"
+		AU_TITLE="$( adpn_parameter_from "--au_title" ".AU Package<${MANIFEST_JSON}" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"
 		AU_INSTITUTION="$( adpn_parameter_from "--institution" ".institution" )"
 		
 		[[ -z "${V}" ]] || adpn_notice "${LINENO}" "1. Packaging files into LOCKSS Archival Unit (AU)." 
 
-		JSON_PACKET=$(
-			"${ME}" package "${AU_LOCALPATH}" \
-				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_SWITCHES[skip]} \
-				"${CONTEXT_SW[@]}"
-		) ; EXITCODE="$?"
+		declare -a ADPN_PACKAGE_CMD=( "${ME}" "package" "${AU_LOCALPATH}" )
+		ADPN_PACKAGE_CMD+=( "${CONTEXT_SW[@]}" )
+		ADPN_PACKAGE_CMD+=( --au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" )
+		[[ -n "${_SWITCHES[skip]}" ]] && ADPN_PACKAGE_CMD+=( "${_SWITCHES[skip]}" )
+		
+		adpn_debug 20,adpn,preserve,package "${LINENO}" '$ %s' "$( printf "%q " "${ADPN_PACKAGE_CMD[@]}" )"
+		
+		JSON_PACKET="$(
+			"${ADPN_PACKAGE_CMD[@]}"
+		)" ; EXITCODE="$?"
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			adpn_notice "${LINENO}" "%s package FAILED.\n" "${SCRIPT}"
 		else
 			[[ -z "${V}" ]] || adpn_notice "${LINENO}" "2. Staging content to drop server." 
 
+			declare -a ADPN_STAGE_CMD=( "${ME}" "stage" )
+			ADPN_STAGE_CMD+=( "${CONTEXT_SW[@]}" )
+			ADPN_STAGE_CMD+=( "${STAGING_AREA}" )
+			ADPN_STAGE_CMD+=(  --au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" )
+			[[ -n "${_SWITCHES[skip]}" ]] && ADPN_STAGE_CMD+=( "${_SWITCHES[skip]}" )
+			
+			adpn_debug 50,adpn,preserve,stage "${LINENO}" 'printf "%%s" "%s" | [...]'  "${JSON_PACKET}"
+			adpn_debug 20,adpn,preserve,stage "${LINENO}" '[...] | %s' "$( printf "%q " "${ADPN_STAGE_CMD[@]}" )"
+
 			JSON_PACKET=$(
 				printf "%s" "${JSON_PACKET}" \
-				| "${ME}" stage "${STAGING_AREA}" \
-				--au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" \
-				${_SWITCHES[skip]} \
-				"${CONTEXT_SW[@]}"
+				| "${ADPN_STAGE_CMD[@]}"
 			) ; EXITCODE="$?"
 		fi
 		

@@ -172,7 +172,7 @@ def first_of (items, ok=None) :
     
 class ADPNPreservationPackage :
     
-    def __init__ (self, path: str, data={}, plugin_parameters=[], switches={}) :
+    def __init__ (self, path: str, data={}, plugin=None, plugin_parameters=[], switches={}) :
         self.metadata_filters = {
             "AU Package": lambda x, depth: self.filter_au_package(x, depth),
             "Ingest Title": lambda x, depth: self.filter_ingest_title(x, depth),
@@ -181,9 +181,15 @@ class ADPNPreservationPackage :
         self.metadata = data
         self.switches = switches
         self.path = path if path else self.metadata.get('Packaged In')
-        self.plugin_jar = self.metadata.get("Plugin JAR")
+        
         self.parameters = plugin_parameters
-        self._plugin = myLockssPlugin(jar=self.plugin_jar, parameters=plugin_parameters, switches=switches)
+        if plugin is None :
+            self.plugin_jar = self.metadata.get("Plugin JAR")
+            self._plugin = myLockssPlugin(jar=self.plugin_jar, parameters=plugin_parameters, switches=switches)
+        else :
+            self._plugin = plugin
+            self.plugin_jar = self._plugin.jar
+            self._plugin.set_parameters(plugin_parameters)
         
     @property
     def path (self) :

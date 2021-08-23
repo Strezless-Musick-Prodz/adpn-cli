@@ -3,7 +3,7 @@
 # adpn-stage-content.py: upload a directory of files for preservation to a staging server
 # accessible via FTP, easy-peasy lemon squeezy.
 #
-# @version 2021.0628
+# @version 2021.0823
 
 import io, os, sys
 import fileinput, stat
@@ -17,6 +17,7 @@ from ftplib import FTP
 from getpass import getpass, getuser
 from myLockssScripts import myPyCommandLine, myPyJSON, align_switches, shift_args
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
+from ADPNCommandLineTool import ADPNCommandLineTool, ADPNScriptPipeline
 from myFTPStaging import myFTPStaging
 from contextlib import contextmanager
 
@@ -28,56 +29,6 @@ def input (*args) :
         return python_std_input(*args)
     finally :
         sys.stdout = old_stdout
-
-class ADPNScriptPipeline :
-
-    def __init__ (self, conditional=False, stream_in=sys.stdin) :
-        self._stream_in = stream_in
-        self._pipelines = None
-        self._conditional = conditional
-        self.json = myPyJSON()
-    
-    def test_piped_input (self) :
-        mode = os.fstat(self._stream_in.fileno()).st_mode
-        return any([stat.S_ISFIFO(mode), stat.S_ISREG(mode)])
-        
-    @property
-    def pipelines (self) :
-        if self._pipelines is None :
-            if self.test_piped_input() or not self._conditional :
-                text = self._stream_in.read()
-                self._pipelines = [ line for line in re.split(r'[\r\n]+', text) if line ]
-        return self._pipelines
-    
-    def get_data(self, key=None) :
-        result = None
-        if self.pipelines is not None :
-            self.json.accept(self.pipelines)
-            if key is None :
-                result = self.json.allData
-            else : 
-                result = self.json.allData.get(key)
-                if type(self.json.allData.get("parameters")) is list :
-                    m = re.match(r"^[@](.*)$", key)
-                    if m :
-                        for pair in self.json.allData.get("parameters") :
-                            if len(pair) == 2 :
-                                (key, value) = pair
-                                if key == m[1] :
-                                    result = value
-        return result
-    
-    def backfilled (self, table, key, data_source) :
-        
-        result = { **table }
-        if result.get(key) is None :
-        # O.K., nothing from switches; let's pull some text off stdin/pipeline
-            
-            value = self.get_data(data_source)
-            if value is not None :
-                result[key] = value
-        
-        return result
 
 class ADPNStagingArea :
 
@@ -301,7 +252,7 @@ class ADPNPublisher :
         pattern = "%(name)s (%(code)s)" if self.code is not None else "%(name)s"
         return ( pattern % self.to_dict() )
     
-class ADPNStageContentScript :
+class ADPNStageContentScript(ADPNCommandLineTool) :
     """
 Usage: adpn-stage-content.py [<OPTIONS>]... [<URL>]
 
@@ -349,10 +300,7 @@ command line with explicit switches.
     """
     
     def __init__ (self, scriptname, argv, switches) :
-        self.scriptname = scriptname
-        self.argv = argv
-        self.switches = switches
-        self.exitcode = 0
+        super().__init__(scriptname=scriptname, argv=argv, switches=switches)
         
         self.pipes = ADPNScriptPipeline(conditional=True)
         self.switches=self.pipes.backfilled(self.switches, 'local', 'Packaged In')
@@ -365,6 +313,18 @@ command line with explicit switches.
         self.switches=self.pipes.backfilled(self.switches, 'subdirectory', '@directory')
         self.switches=self.pipes.backfilled(self.switches, 'directory', '@subdirectory')
         self.switches=self.pipes.backfilled(self.switches, 'subdirectory', '@subdirectory')
+        
+        args = argv[1:]
+    
+        # look for positional arguments: first argument goes to --local=...
+        if switches.get('local') is None :
+            if len(args) > 0 :
+                ( switches['local'], args ) = shift_args(args)
+        # look for positional arguments: next argument goes to --remote=...
+        if switches.get('remote') is None :
+            if len(args) > 0 :
+                ( switches['remote'], args ) = shift_args(args)
+        align_switches("remote", "stage/base", switches)
         
         self.verbose=(0 if self.switches.get('quiet') else self.switches.get('verbose'))
         
@@ -390,24 +350,6 @@ command line with explicit switches.
         self.stage.authentication=self.get_authentication_method()
     
     @property
-    def verbose (self) :
-        return self._verbose
-    
-    @verbose.setter
-    def verbose (self, rhs) :
-        if isinstance(rhs, numbers.Number) :
-            self._verbose = int(rhs)
-        elif type(rhs) is str :
-            try :
-                self._verbose = int(rhs)
-            except ValueError as e :
-                self._verbose = int(len(rhs) > 0)
-        elif rhs is None :
-            self._verbose = 0
-        else :
-            raise TypeError("verbose must be int, str or None")
-    
-    @property
     def subdirectory_switch (self) :
         return self.switches.get('directory') if switches.get('directory') is not None else self.switches.get('subdirectory')
         
@@ -415,13 +357,6 @@ command line with explicit switches.
     def subdirectory_switch (self, rhs) :
         self.switches['subdirectory'] = rhs
         self.switches['directory'] = rhs
-    
-    @property
-    def skip_steps (self) :
-        return [ step.strip().lower() for step in self.switches.get('skip').split(",") ] if self.switched('skip') else [ ]
-    
-    def test_skip (self, step) :
-        return ( ( step.strip().lower() ) in self.skip_steps )
     
     def get_locallocation (self) :
         return os.path.realpath(self.switches.get('local')) if self.switches.get('local') else os.getcwd()
@@ -444,10 +379,6 @@ command line with explicit switches.
     @package.setter
     def package (self, rhs) :
         self._package = rhs
-        
-    def switched (self, key) :
-        got = not not self.switches.get(key, None)
-        return got
     
     def get_itemparent (self, file) :
         canonical = os.path.realpath(file)
@@ -463,7 +394,7 @@ command line with explicit switches.
         return ( "%(realname)s <%(email)s>" % { "realname": self.get_username(), "email": self.get_email() } )
         
     def new_backup_dir (self) :
-        backupPath=self.switches['backup']
+        backupPath=self.switches.get('backup')
         
         if not self.switched('dry-run') :
             try :
@@ -529,42 +460,29 @@ command line with explicit switches.
     def output_status (self, level, type, arg) :
         (prefix, message) = (type, arg)
 
-        if "uploaded" == type :
-            prefix = ">>>" if not self.switched('dry-run') else "(dry-run)>"
-        elif "downloaded" == type :
-            prefix = "<<<" if not self.switched('dry-run') else "(dry-run)<"
-        elif "excluded" == type :
-            prefix = "---"
-            message = ("excluded %(arg)s" % {"arg": arg})
-        elif "chdir" == type :
-            prefix = "..."
-            path = "./%(dir)s" % {"dir": arg[1]} if arg[1].find("/")<0 else arg[1]
-            message = "cd %(path)s" % {"path": path}
-        elif "ok" == type :
-            prefix = "JSON PACKET:\t"
-            message["status"] = type
+        if "ok" == type :
+            self.write_output(data=message, prolog="JSON PACKET:\t")
+        else :
+            if "uploaded" == type :
+                prefix = ">>>" if not self.switched('dry-run') else "(dry-run)>"
+            elif "downloaded" == type :
+                prefix = "<<<" if not self.switched('dry-run') else "(dry-run)<"
+            elif "excluded" == type :
+                prefix = "---"
+                message = ("excluded %(arg)s" % {"arg": arg})
+            elif "chdir" == type :
+                prefix = "..."
+                path = "./%(dir)s" % {"dir": arg[1]} if arg[1].find("/")<0 else arg[1]
+                message = "cd %(path)s" % {"path": path}
+            
+            self.write_status(message=message, prolog=prefix, verbosity=level)
+    
+    def get_plugin_parameters (self) :
+        plugin = myLockssPlugin(jar=self.switches["jar"])
+        plugin_parameter_names = [ parameter["name"] for parameter in plugin.get_parameter_keys() ]
+        plugin_parameters = [ [parameter, setting] for (parameter, setting) in self.switches.items() if parameter in plugin_parameter_names ]
+        return (plugin, plugin_parameters)
         
-        out=sys.stdout
-        if self.switches['output'] == 'application/json' :
-            message = json.dumps(message)
-            if level > 0 :
-                out=sys.stderr
-                
-        if prefix is not None and level <= self.verbose :
-            print(prefix, message, file=out)
-    
-    @property
-    def still_ok (self) :
-        return self.exitcode == 0
-    
-    def write_error (self, code, message, prefix="") :
-        self.exitcode = code
-        print ( "%(prefix)s[%(cmd)s] %(message)s" % { "prefix": prefix, "cmd": self.scriptname, "message": message }, file=sys.stderr )
-
-    def display_usage (self) :
-        print(self.__doc__)
-        self.exitcode = 0
-    
     def get_au_title (self) :
         return self.switches.get('au_title') if self.switched('au_title') else self.subdirectory_switch
     
@@ -577,7 +495,34 @@ command line with explicit switches.
             details[detail['name']] = detail['value']
         au_start_url = details['Start URL']
         return au_start_url
-
+    
+    def do_download_to (self, directory) :
+        try :
+            (local_pwd, remote_pwd) = self.ftp.set_location(dir=directory, remote=self.stage.subdirectory, make=True)
+            self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+        except FileNotFoundError as e :
+            if self.ftp.dry_run :
+                pass
+            else :
+                raise
+        return (local_pwd, remote_pwd)
+    
+    def do_upload_to (self, local, remote) :
+        try :
+            self.ftp.set_location(dir=local, remote=remote)
+            (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.get_locallocation(), remote=self.stage.subdirectory, make=True)
+            self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
+        except FileNotFoundError as e :
+            if self.ftp.dry_run :
+                pass
+            else :
+                raise
+        
+        # upload the present directory recursively
+        self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
+        
+        return (local_pwd, remote_pwd)
+    
     def do_transfer_files (self) :
         # Let's log in to the host
         self.ftp = self.establish_connection(dry_run=self.switched('dry-run'))
@@ -591,32 +536,13 @@ command line with explicit switches.
             raise AssertionError( { "message": ("Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir } ), "code": 1} ) from e
         
         (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
-                    
+        
         if not self.test_skip("download") :
-            backupDir = self.new_backup_dir()
-            try :
-                (local_pwd, remote_pwd) = self.ftp.set_location(dir=backupDir, remote=self.stage.subdirectory, make=True)
-                self.ftp.download(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
-            except FileNotFoundError as e :
-                if self.ftp.dry_run :
-                    pass
-                else :
-                    raise
-
-        try :
-            self.ftp.set_location(dir=local_pwd, remote=remote_pwd)
-            (local_pwd, remote_pwd) = self.ftp.set_location(dir=self.get_locallocation(), remote=self.stage.subdirectory, make=True)
-            self.output_status(2, "chdir", (os.getcwd(), self.ftp.get_location()))
-        except FileNotFoundError as e :
-            if self.ftp.dry_run :
-                pass
-            else :
-                raise
+            (local_pwd, remote_pwd) = self.do_download_to(directory=self.new_backup_dir())
         
-        # upload the present directory recursively
-        self.ftp.upload(file=".", exclude=self.exclude_filesystem_artifacts, notification=self.output_status)
-        
-
+        if not self.test_skip("upload") :
+            (local_pwd, remote_pwd) = self.do_upload_to(local=local_pwd, remote=remote_pwd) 
+    
     def execute (self) :
 
         try :
@@ -627,25 +553,21 @@ command line with explicit switches.
                 self.stage.subdirectory = self.subdirectory_switch
             
             # Let's determine the plugin and its parameters from the command line switches
-            plugin = myLockssPlugin(jar=self.switches["jar"])
-            plugin_parameters = plugin.get_parameter_keys()
-            plugin_parameter_names = [ parameter["name"] for parameter in plugin_parameters ]
-            plugin_parameter_map = {}
-            for parameter_name in plugin_parameter_names :
-                plugin_parameter_map[parameter_name] = self.switches.get(parameter_name)
-            
-            plugin_parameter_settings = [ [parameter, setting] for (parameter, setting) in self.switches.items() if parameter in plugin_parameter_names ]
-            self.plugin_parameters = plugin_parameter_settings
+            (plugin, plugin_parameters) = self.get_plugin_parameters()
             
             # Now let's plug the parameters for this package in to the package and plugin
             try :
-                self.package = ADPNPreservationPackage(path=self.get_locallocation(), plugin_parameters=self.plugin_parameters, switches=self.switches)
+                self.package = ADPNPreservationPackage(
+                    path=self.get_locallocation(),
+                    plugin=plugin, plugin_parameters=plugin_parameters,
+                    switches=self.switches
+                )
 
                 # Now let's check the packaging
                 if not self.test_skip("package") :
                     assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
                     assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
-                
+
                 self.do_transfer_files()
 
                 # Pack up JSON data for output
@@ -681,7 +603,7 @@ command line with explicit switches.
             else :
                 ( message, req ) = ( e.args[0], None )
                 self.write_error(2, "Requirement failure: %(message)s" % { "message": message })
-                
+        
         except KeyboardInterrupt as e :
             self.write_error(255, "Keyboard Interrupt.", prefix="^C\n")
 
@@ -691,9 +613,6 @@ command line with explicit switches.
                     self.ftp.quit()
             except ftplib.error_perm as e :
                 pass
-
-    def exit (self) :
-        sys.exit(self.exitcode)
 
 if __name__ == '__main__':
 
@@ -740,18 +659,6 @@ if __name__ == '__main__':
     
     if unstaging :
         switches['skip'] = ( switches.get('skip') + "," if switches.get('skip') else '' ) + "package"
-    
-    args = sys.argv[1:]
-    
-    # look for positional arguments: first argument goes to --local=...
-    if switches.get('local') is None :
-        if len(args) > 0 :
-            ( switches['local'], args ) = shift_args(args)
-    # look for positional arguments: next argument goes to --remote=...
-    if switches.get('remote') is None :
-        if len(args) > 0 :
-            ( switches['remote'], args ) = shift_args(args)
-    align_switches("remote", "stage/base", switches)
     
     script = ADPNStageContentScript(switches.get('context'), sys.argv, switches)
     

@@ -4,7 +4,7 @@
 # into a LOCKSS Archival Unit (AU), following conventions from ADPNet
 # <http://www.adpn.org/wiki/HOWTO:_Package_files_for_staging_on_the_Drop_Server>
 #
-# @version 2021.0628
+# @version 2021.0823
 
 import io, os, sys
 import fileinput, stat
@@ -14,6 +14,7 @@ from paramiko import ssh_exception
 from datetime import datetime
 from getpass import getpass, getuser
 from myLockssScripts import myPyCommandLine, myPyJSON, align_switches, shift_args
+from ADPNCommandLineTool import ADPNCommandLineTool
 from ADPNPreservationPackage import ADPNPreservationPackage, myLockssPlugin
 
 python_std_input = input
@@ -25,7 +26,7 @@ def input (*args) :
     finally :
         sys.stdout = old_stdout
 
-class ADPNStageContentScript :
+class ADPNPackageContentScript(ADPNCommandLineTool) :
     """
 Usage: adpn-do-package.py [<PATH>] [<OPTIONS>]...
 
@@ -64,36 +65,13 @@ command line with explicit switches.
     """
     
     def __init__ (self, scriptname, argv, switches) :
-        self.scriptname = scriptname
-        self.argv = argv
-        self.switches = switches
-        self.manifest_data = None
-        self.exitcode = 0
-        
-        self.verbose=(0 if self.switches.get('quiet') else self.switches.get('verbose'))
-        
+        super().__init__(scriptname=scriptname, argv=argv, switches=switches)
+
         # start out with defaults
+        self.manifest_data = None
         self._package = None
         self._plugin = None
         self._plugin_parameters = None
-    
-    @property
-    def verbose (self) :
-        return self._verbose
-    
-    @verbose.setter
-    def verbose (self, rhs) :
-        if isinstance(rhs, numbers.Number) :
-            self._verbose = int(rhs)
-        elif type(rhs) is str :
-            try :
-                self._verbose = int(rhs)
-            except ValueError as e :
-                self._verbose = int(len(rhs) > 0)
-        elif rhs is None :
-            self._verbose = 0
-        else :
-            raise TypeError("verbose must be int, str or None")
     
     @property
     def subdirectory (self) :
@@ -123,13 +101,6 @@ command line with explicit switches.
             
             code = user
         return code
-        
-    @property
-    def skip_steps (self) :
-        return [ step.strip().lower() for step in self.switches.get('skip').split(",") ] if self.switched('skip') else [ ]
-    
-    def test_skip (self, step) :
-        return ( ( step.strip().lower() ) in self.skip_steps )
     
     def get_location (self) :
         return os.path.realpath(os.path.expanduser(self.switches.get('local'))) if self.switches.get('local') else os.path.realpath(".")
@@ -141,10 +112,6 @@ command line with explicit switches.
     @package.setter
     def package (self, rhs) :
         self._package = rhs
-        
-    def switched (self, key) :
-        got = not not self.switches.get(key, None)
-        return got
     
     def get_itemparent (self, file) :
         canonical = os.path.realpath(file)
@@ -152,44 +119,6 @@ command line with explicit switches.
 
     def exclude_filesystem_artifacts (self, file) :
         return file.lower() in ['thumbs.db']
-        
-    def output_status (self, level, type, arg) :
-        (prefix, message) = (type, arg)
-
-        if "!" == type :
-            prefix = ( "[%(cmd)s]" % { "cmd": self.scriptname } )
-        elif "excluded" == type :
-            prefix = "---"
-            message = ("excluded %(arg)s" % {"arg": arg})
-        elif "chdir" == type :
-            prefix = "..."
-            path = "./%(dir)s" % {"dir": arg[1]} if arg[1].find("/")<0 else arg[1]
-            message = "cd %(path)s" % {"path": path}
-        elif "ok" == type :
-            prefix = "JSON PACKET:\t"
-            message["status"] = type
-        
-        out=sys.stdout
-        if self.switches['output'] == 'application/json' :
-            if level > 0 :
-                out=sys.stderr
-            else :
-                message = json.dumps(message)
-
-        if prefix is not None and level <= self.verbose :
-            print(prefix, message, file=out)
-    
-    @property
-    def still_ok (self) :
-        return self.exitcode == 0
-    
-    def write_error (self, code, message, prefix="") :
-        self.exitcode = code
-        print ( "%(prefix)s[%(cmd)s] %(message)s" % { "prefix": prefix, "cmd": self.scriptname, "message": message }, file=sys.stderr )
-
-    def display_usage (self) :
-        print(self.__doc__)
-        self.exitcode = 0
     
     @property
     def plugin_parameters (self) :
@@ -212,7 +141,7 @@ command line with explicit switches.
 
     def new_preservation_package (self) :
         # Now let's plug the parameters for this package in to the package and plugin
-        pack = ADPNPreservationPackage(path=self.get_location(), plugin_parameters=self.plugin_parameters, switches=self.switches)
+        pack = ADPNPreservationPackage(path=self.get_location(), plugin=self.plugin, plugin_parameters=self.plugin_parameters, switches=self.switches)
 
         # FIXME: we need to figure out a good way to extract & apply this setting...
         pack.staging_user = self.institution_code
@@ -261,29 +190,29 @@ command line with explicit switches.
         try :
             if self.subdirectory is None :
                 self.subdirectory = os.path.basename(self.get_location())
-                self.output_status(1, "!", "Using present working directory name for staging area subdirectory: %(subdirectory)s" % { "subdirectory": self.subdirectory })
+                self.write_status("Using present working directory name for staging area subdirectory: %(subdirectory)s" % { "subdirectory": self.subdirectory }, verbosity=1)
             self.package = self.new_preservation_package()
 
             if self.get_au_title() is None :
                 self.au_title = input("AU Title [%(default)s]: " % { "default": self.subdirectory })
 
             # STEP 1. Confirm that we have all the plugin parameters required to produce AU Start URL
-            self.output_status(2, "*", "Confirming required LOCKSS plugin parameters")
+            self.write_status("* Confirming required LOCKSS plugin parameters", verbosity=2)
             au_start_url = self.get_au_start_url()
 
             # STEP 2. Check BagIt enclosure of files packaged in the AU
             if not ( self.package.has_bagit_enclosure() and self.test_skip("scan") ) :
-                self.output_status(1, "*", "Checking BagIt packaging: %(path)s" % {"path": self.package.get_path(canonicalize=True)})
+                self.write_status("* Checking BagIt packaging: %(path)s" % {"path": self.package.get_path(canonicalize=True)}, verbosity=1)
                 self.package.make_bagit_enclosure(halt=True, validate=True)
             else :
-                self.output_status(1, "*", "Skipped BagIt validation: %(path)s" % {"path": self.package.get_path(canonicalize=True)})
+                self.write_status("* Skipped BagIt validation: %(path)s" % {"path": self.package.get_path(canonicalize=True)}, verbosity=1)
 
             # STEP 3. Request manifest HTML from MakeManifest service and write file
             if self.package.has_manifest() and not self.switches.get('manifest') :
-                self.output_status(1, "*", "Confirming manifest HTML: %(path)s" % { "path": self.package.plugin.get_manifest_filename() } )
+                self.write_status("* Confirming manifest HTML: %(path)s" % { "path": self.package.plugin.get_manifest_filename() }, verbosity=1 )
                 self.package.check_manifest()
             else :
-                self.output_status(1, "*", "Requesting LOCKSS manifest HTML from service: %(path)s" % { "path": self.package.plugin.get_manifest_filename() } )
+                self.write_status("* Requesting LOCKSS manifest HTML from service: %(path)s" % { "path": self.package.plugin.get_manifest_filename() }, verbosity=1 )
                 self.package.make_manifest()
             
             # STEP 4. Feed parameter settings in to LOCKSS plugin, get out AU details,
@@ -291,7 +220,7 @@ command line with explicit switches.
             out_packet = self.package.get_pipeline_metadata(cascade={ "Ingest Step": "packaged" }, read_manifest=True)
             
             # STEP 5. Send JSON data output to stdout/pipeline
-            self.output_status(0, "ok", out_packet)
+            self.write_output(data=out_packet, prolog="JSON PACKET:\t")
 
         except AssertionError as e : # Parameter requirements failure
             if "BagIt" == e.args[0] :
@@ -325,7 +254,9 @@ command line with explicit switches.
                 pass
             else :
                 raise
-
+        
+        self.exit()
+        
     def exit (self) :
         sys.exit(self.exitcode)
 
@@ -367,7 +298,7 @@ if __name__ == '__main__':
             ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
-    script = ADPNStageContentScript(switches.get('context'), sys.argv, switches)
+    script = ADPNPackageContentScript(switches.get('context'), sys.argv, switches)
     
     if script.switched('help') :
         script.display_usage()
@@ -377,5 +308,3 @@ if __name__ == '__main__':
         print("Settings:", switches)
     else :
         script.execute()
-
-    script.exit()
