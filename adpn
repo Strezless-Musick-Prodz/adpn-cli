@@ -395,7 +395,23 @@ case "${CMD}" in
 			printf "%s" "${ADPN_STASH_JSON}" | adpn-json.py "${ADPN_JSON_ARGS[@]}"
 		fi
 		;;
-
+	
+	"describe")
+# @method adpn describe
+# ADPNet Member: Get a JSON packet describing 
+#
+# @version 2021.0820
+		
+		EXITCODE=1
+		AU="${_ARGV[2]}"
+		if [[ -d "${AU}" ]] ; then
+			if [[ -r "${AU}/manifest.html" ]] ; then
+				cat "${AU}/manifest.html" | grep -E "${ADPN_JSON_PACKET_REGEX}"
+				EXITCODE="$?"
+			fi
+		fi
+		;;
+		
 	"package")
 # @method adpn package
 # ADPNet Member: Package a directory of files into a LOCKSS Archival Unit (AU).
