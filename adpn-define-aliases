@@ -820,6 +820,7 @@ function adpn_check_au_status() {
 	done
 	
 	shopt -s lastpipe
+	
 	local result=0
 	local piped_input="$( cat - )"
 	IFS="" printf "%s\n" "${piped_input}" | while read -r LINE ; do
@@ -833,7 +834,7 @@ function adpn_check_au_status() {
 			local -a ok_tests=()
 			local safe_key="$( printf '%s' "${key}" | sed -E 's/[^A-Za-z_0-9]+//g' )"
 			
-			if [[ "${key}" =~ ^Last[^A-Za-z0-9] ]] ; then
+			if [[ "${key}" =~ ^(Created|Last[^A-Za-z0-9]) ]] ; then
 				if [[ "${value}" =~ ^[-]?[0-9]+$ ]] ; then
 					if [[ "${value}" -gt 0 ]] ; then
 						local TS=""
@@ -862,16 +863,66 @@ function adpn_check_au_status() {
 				ok_tests+=( "$( printf "${LHS} ${CMP} ${RHS}" "${cmp[@]}" )" )
 			fi
 
+			status="[:info:]"
 			for test in "${ok_tests[@]}" ; do
-				eval "[[ ${test} ]]" && status="(ok!) " || { result="$?" ; status="(??) " ; }
+				eval "[[ ${test} ]]" && status="[:pass:]" || { result="$?" ; status="[:fail:]" ; }
 				adpn_debug 100,adpn,confirm,adpn_check_au_status "${LINENO}" "%s test: [[ %s ]] \t-- %s" "${key}" "${test}" "${status}"
 			done
 			
-			printf "%s%s:\t%s\n" "${status}" "${key}" "${user_value}"
+			local -a ADPN_CHECK_AU_OUTPUT=()
+			case "${params[output]}" in
+			"text/tab-separated-values")
+				ADPN_CHECK_AU_OUTPUT=( cat - )
+				;;
+			""|"text/plain"|"application/json")
+				ADPN_CHECK_AU_OUTPUT=( adpn_write_confirm_result "${params[output]}" )
+				;;
+			*)
+				ADPN_CHECK_AU_OUTPUT=( adpn_write_confirm_result "" )
+				;;
+			esac
+			printf "%s\t%s\t%s\n" "${status}" "${key}" "${user_value}" | "${ADPN_CHECK_AU_OUTPUT[@]}"
 		fi
 	done
 	
 	return "${result}"
+}
+
+function adpn_write_confirm_result () {
+	local format="${1}" ; shift
+	local _line=""
+	
+	while read -r _line ; do
+		local status="$( printf "%s" "${_line}" | cut --field=1 )"
+		local key="$( printf "%s" "${_line}" | cut -s --field=2 )"
+		local value="$( printf "%s" "${_line}" | cut -s --field=3- )"
+		case "${format}" in
+		"text/tab-separated-values")
+			printf "%s\n" "${_line}"
+			;;
+		"text/plain")
+			local -a RESULT_TR=(
+				-e "s/^\[\:fail\:\]/(???) /"
+				-e "s/^\[\:pass\:\]/(ok!) /"
+				-e "s/^\[\:info\:\]//"
+			)
+			local indicator="$( printf "%s" "${status}" | sed -E "${RESULT_TR[@]}" )"
+			printf "%s%s: %s\n" "${indicator}" "${key}" "${value}"
+			;;
+		*)
+			local em_cross_mark="$( printf "\u274C" )"
+			local em_heavy_check="$( printf "\u2714" )"
+			local em_info_source="$( printf "\u2139" )"
+			local -a EMOJI_TR=(
+				-e "s/^\[\:fail\:\]/${em_cross_mark}/"
+				-e "s/^\[\:pass\:\]/${em_heavy_check}/"
+				-e "s/^\[\:info\:\]/${em_info_source}/"
+			)
+			local emoji="$( printf "%s" "${status}" | sed -E "${EMOJI_TR[@]}" )"
+			printf "%s %s: %s\n" "${emoji}" "${key}" "${value}"
+			;;
+		esac
+	done
 }
 
 function obscure_password() {
