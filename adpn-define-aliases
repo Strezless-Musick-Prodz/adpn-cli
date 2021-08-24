@@ -800,7 +800,12 @@ function adpn_packet2daemonstatustable() {
 function adpn_check_au_status() {
 	local LINE=""
 	local -a switches=()
-	local -A params=()
+	local -A params=(
+		[test:Status]="100.00% Agreement"
+		[test:LastCrawlResult]="Successful"
+		[test:LastPollResult]="Complete"
+		[test:AvailableFromPublisher]="Yes"
+	)
 	local key
 	local value
 	
@@ -810,7 +815,7 @@ function adpn_check_au_status() {
 			[[ -z "${BASH_REMATCH[2]}" ]] && value="${key}" || value="${BASH_REMATCH[3]}"
 			
 			switches+=( "${switch}" )
-			params["${switch}"]="${value}"
+			params["${key}"]="${value}"
 		fi
 	done
 	
@@ -823,40 +828,46 @@ function adpn_check_au_status() {
 		if [[ -n "${key}" ]] ; then
 			
 			local status=""
+			local user_value="${value}"
+
+			local -a ok_tests=()
+			local safe_key="$( printf '%s' "${key}" | sed -E 's/[^A-Za-z_0-9]+//g' )"
 			
 			if [[ "${key}" =~ ^Last[^A-Za-z0-9] ]] ; then
-				local TS=""
-				local TS_EXIT=0
-				if [[ "${value}" =~ ^[0-9]+$ ]] ; then
-					TS=$(( "${value}" / 1000 ))
-					TS="$( date --date="@${TS}" )" ; TS_EXIT="$?"
-					[[ "${TS_EXIT}" -eq 0 ]] && { value="${TS}" ; status="(ok!) " ; }
+				if [[ "${value}" =~ ^[-]?[0-9]+$ ]] ; then
+					if [[ "${value}" -gt 0 ]] ; then
+						local TS=""
+						local TS_EXIT=0
+
+						TS=$(( "${value}" / 1000 )) ; TS="$( date --date="@${TS}" )" ; TS_EXIT="$?"
+						ok_tests+=( "'${TS_EXIT}' -eq 0" )
+						[[ "${TS_EXIT}" -eq 0 ]] && user_value="${TS}"
+					else
+						user_value="$( printf "(never yet; ts=%d)" "${value}" )"
+					fi
 				fi
 			fi
-			
-			case "${key}" in
-			"Status")
-				[[ "${value}" == "100.00% Agreement" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
-				;;
-			"Last Crawl Result")
-				[[ "${value}" == "Successful" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
-				;;
-			"Last Poll Result")
-				[[ "${value}" == "Complete" ]] && status="(ok!) " || { status="(??) " ; result=1 ; }
-				;;
-			"Available From Publisher")
-				[[ -n "${switches[down]}" ]] && DOWN_STATUS=0 || DOWN_STATUS=1
-				[[ -n "${switches[down]}" ]] && ISUP_STATUS=1 || ISUP_STATUS=0
-				local -a STATUS_REPORT=( "(ok!) " "(??) " )
-				[[ "${value}" == "No" ]] && result="${DOWN_STATUS}" || result="${ISUP_STATUS}"
-				status="${STATUS_REPORT[${result}]}"
-				;;
-			*)
-				# NOOP
-				;;
-			esac
 
-			printf "%s%s:\t%s\n" "${status}" "${key}" "${value}"
+			if [[ -n "${params[test:$safe_key]}" ]] ; then
+				local -a cmp=( "=" "${params[test:$safe_key]}" )
+				local -A OPS=( [>]="-gt" [<]="-lt" [=]="-eq" [!]="-ne" ['~']="=~" [\\]="=" )
+				local flag_op="${params[test:$safe_key]:0:1}" flag_operand="${params[test:$safe_key]:1}"
+				
+				[[ -n "${OPS[$flag_op]}" ]] && cmp=( "${OPS[$flag_op]}" "${flag_operand}" )
+				local LHS='%q' CMP='%s' RHS='%q'
+				[[ "${cmp[0]}" == "=~" ]] && RHS='^%s$'
+
+				cmp=( "${value}" "${cmp[@]}" )
+				
+				ok_tests+=( "$( printf "${LHS} ${CMP} ${RHS}" "${cmp[@]}" )" )
+			fi
+
+			for test in "${ok_tests[@]}" ; do
+				eval "[[ ${test} ]]" && status="(ok!) " || { result="$?" ; status="(??) " ; }
+				adpn_debug 100,adpn,confirm,adpn_check_au_status "${LINENO}" "%s test: [[ %s ]] \t-- %s" "${key}" "${test}" "${status}"
+			done
+			
+			printf "%s%s:\t%s\n" "${status}" "${key}" "${user_value}"
 		fi
 	done
 	

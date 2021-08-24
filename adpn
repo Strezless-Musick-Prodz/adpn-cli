@@ -917,22 +917,31 @@ case "${CMD}" in
 			cat "${DST_INPUT}" | adpn_packet2daemonstatustable "${DST_SW[@]}" > "${DST_OUTPUT}" ; EXITCODE="$?"
 
 			declare -a DST_GREP_OPT=( "Volume" )
-			[[ "${_PARAM[crawled]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" )
+			declare -a DST_GREP_TESTS=( )
+			[[ "${_PARAM[added]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~Waiting for [A-Za-z]+' 'LastCompletedPoll=~.*' )
+			[[ "${_PARAM[crawled]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~(Waiting for Poll|[0-9.]*[%] Agreement)' 'LastCompletedCrawl=>0' 'LastCompletedPoll=~.*' )
 			[[ "${_PARAM[preserved]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl Result" "Last Completed Poll" "Last Poll Result" )
-			[[ "${_PARAM[down]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" "Available From Publisher" )
+			[[ "${_PARAM[down]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" "Available From Publisher" ) && DST_GREP_TESTS+=( "AvailableFromPublisher=No" )
 			[[ "${#_ARGV[@]}" -gt 3 ]] && DST_GREP_OPT+=( "${_ARGV[@]:3}" )
 			[[ "${#DST_GREP_OPT[@]}" -le 1 ]] && DST_GREP_OPT+=( ".*" )
 			
-			DST_GREP="$( join_by "|" "${DST_GREP_OPT[@]}" )"
+			declare -a DST_GREP=( grep -E "^($( join_by "|" "${DST_GREP_OPT[@]}" ))=" "${DST_OUTPUT}" )
+			declare -a DST_FILTER=( cat - )
+			declare -a DST_OUTPUT=( cat - )
 			
-			if [[ -n "${_PARAM[preserved]}${_PARAM[crawled]}${_PARAM[down]}" ]] ; then
-				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" | sed -E 's/\t/    /' | sed -E 's/^([^=]+)=(.*)$/\1\t\2/' | adpn_check_au_status "${_SWITCHES[@]}" ; EXITCODE="$?"
+			if [[ -n "${_PARAM[preserved]}${_PARAM[added]}${_PARAM[crawled]}${_PARAM[down]}" ]] ; then
+				DST_OUTPUT=( adpn_check_au_status "${_SWITCHES[@]}" )
+				IFS="" ; for TEST in "${DST_GREP_TESTS[@]}" ; do
+					DST_OUTPUT+=( "$( printf -- "--test:%s" "${TEST}" )" )
+				done
+				DST_FILTER=( sed -E -e 's/\t/    /' -e 's/^([^=]+)=(.*)$/\1\t\2/' )
 			elif [[ "${_PARAM[output]}" == "text/tab-separated-values" ]] ; then
-				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" | sed -E 's/\t/    /' | sed -E 's/^([^=]+)=(.*)$/\1\t\2/'
+				DST_FILTER=( sed -E -e 's/\t/    /' -e 's/^([^=]+)=(.*)$/\1\t\2/' )
 			else
-				grep -E "^(${DST_GREP})=" "${DST_OUTPUT}" ; echo
+				DST_OUTPUT=( sed -E -e '$a\\n' )
 			fi
 			
+			"${DST_GREP[@]}" | "${DST_FILTER[@]}" | "${DST_OUTPUT[@]}" ; EXITCODE="$?"
 			if [[ "${EXITCODE}" -eq 0 && "${_PARAM[passthru]}" ]] ; then
 				declare -a AC_TESTS=()
 				[[ -n "${_PARAM[crawled]}" ]] && AC_TESTS+=( "crawled" )
@@ -1054,7 +1063,7 @@ case "${CMD}" in
 		fi
 		
 		if [[ -n "${_PARAM[force]}" || "${EXITCODE}" -eq 0 ]] ; then
-			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s | %s' "convertto_plain_text" "$( printf -- "%q " "${ME}" "notify" "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" )"
+			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s' "$( printf -- "%q " "${ME}" "notify" "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" )"
 			cat "${TMPFILES[PIPE_OUT]}" | convertto_plain_text | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}"
 			EXITCODE="$?"
 		else
