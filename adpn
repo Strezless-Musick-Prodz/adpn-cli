@@ -889,9 +889,20 @@ case "${CMD}" in
 	
 	"confirm")
 # @method adpn confirm
-# Node Manager: confirm the status of an ingested AU from the LOCKSS daemon
-# 
-# @version 2021.0812
+# Node Manager: confirm the status of an ingested AU from the LOCKSS daemon using a LOCKSS API request
+#
+# Usage: adpn confirm [^|<GITLAB REFERENCE>|<JSONFILE>|-] [<OPTIONS>] 
+#
+# Options:
+#   --added     	test whether this AU has been added to the LOCKSS preservation node
+#   --crawled   	test whether this AU has been fully and successfully crawled yet by LOCKSS
+#   --preserved 	test whether this AU has been harvested and preserved by other LOCKSS nodes
+#   --down      	test whether this AU has been marked as "down" prior to unstaging
+#
+# If one or more test conditions are provided in options, then the command will return exit code
+# 0=all test conditions were met; 1=one or more tests failed.
+#
+# @version 2021.0824
 		
 		declare -a TEMP_CLEANUP=()
 
