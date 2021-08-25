@@ -153,6 +153,7 @@ else
 			fi
 			adpn_notice "${LINENO}" "FAILED: adpn-ingest-into-titlesdb.py exited with error code=%d" "${EXITCODE}"
 		else
+			adpn_debug 30,adpn,flag,ingest,sql "${LINENO}" 'Diff: compare before/after XML for "%s"' "${PEER_TO}"
 			[[ -z "${_SWITCHES[dry-run]}" ]] && { adpn-titlesdb-diff --after "${PEER_TO}" "${CONTEXT_SW[@]}" ; EXITCODE="$?" ; }
 			if [[ "${EXITCODE}" -gt 0 ]] ; then
 				if [[ -z "${Q}" && -r "${AIIT_SQLOUT}" ]] ; then
@@ -164,8 +165,10 @@ else
 			else
 
 				if [[ -n "${_SWITCHES[dry-run]}" ]] ; then
+					adpn_debug 30,adpn,flag,ingest,sql "${LINENO}" '$ cat %q' "${AIIT_SQLOUT}"
 					cat "${AIIT_SQLOUT}"
 				elif [[ -n "${_PARAM[passthru]}" ]] ; then
+					adpn_debug 30,adpn,flag,ingest,sql "${LINENO}" '$ cat %q | grep -E "%s"' "${AIIT_SQLOUT}" "${ADPN_JSON_PACKET_REGEX}"
 					cat "${AIIT_SQLOUT}" | grep -E "${ADPN_JSON_PACKET_REGEX}"
 				fi
 				
