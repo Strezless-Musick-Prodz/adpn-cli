@@ -67,8 +67,8 @@ adpn_set_display_settings # @see adpn-define-aliases
 
 declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
 [[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
-[[ -n "${V}" ]] && CONTEXT_SW+=( "${V}" )
-[[ -n "${Q}" ]] && CONTEXT_SW+=( "${Q}" )
+[[ -n "${VV}" ]] && CONTEXT_SW+=( "${VV}" )
+[[ -n "${QQ}" ]] && CONTEXT_SW+=( "${QQ}" )
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	if [[ -z "${CMD}" ]] ; then
@@ -1072,7 +1072,7 @@ case "${CMD}" in
 		
 		[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '$ %s' "${_CMDLINE1[*]}"
 		adpn_debug 100,adpn,pipe,"${SUM1[1]}" "${LINENO}" 'exact$ %s %s' "${_CMD1[0]}" "$( printf "%q " "${_CMD1[@]:1}" )"
-		if [[ -z "${Q}" ]] ; then
+		if [[ -z "${QQ}" ]] ; then
 			"${_CMD1[@]}" | tee "${TMPFILES[PIPE_OUT]}"
 			EXITCODE="${PIPESTATUS[0]}"
 		else 
