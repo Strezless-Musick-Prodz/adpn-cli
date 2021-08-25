@@ -210,6 +210,8 @@ elif [[ "output" == "${INGEST_STEP}" && -n "${GITLAB_RESOURCE}" ]] ; then
 	EXITCODE="$?"
 	
 	if [[ "${EXITCODE}" -eq 0 ]] ; then
+		adpn_debug 50,adpn,notify,gitlab,output "${LINENO}" "Gitlab POST, JSON Response: %s" "$( cat "${ADPN_GITLAB_POST_JSON}" )"
+		
 		GL_ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=noteable_iid )"
 		GL_NOTE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=id )"
 		GL_CREATED_AT="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=created_at )"
