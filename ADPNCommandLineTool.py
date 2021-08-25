@@ -89,7 +89,7 @@ inherit from this class. For example:
         return self._scriptpath
     
     @scriptpath.setter
-    def scriptpath (self, rhs)
+    def scriptpath (self, rhs) :
         self._scriptpath = rhs
         if self._scriptname is None :
             self._scriptname = os.path.basename(os.path.realpath(rhs)) if rhs.find(os.sep) > 0 else rhs

@@ -14,6 +14,94 @@ import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyPipeline, myPyJSON
 from ADPNCommandLineTool import ADPNCommandLineTool
 
+class KeePassDatabase :
+
+    def __init__ (self, file=None, keyfile=None) :
+        self._kp = None
+        self._file = file
+        self._keyfile = keyfile
+        self._made = False
+        self._requested_passphrase = False
+        self._dirty = False
+        
+    @property
+    def file (self) -> str :
+        return self._file
+    
+    @property
+    def keyfile (self) :
+        return self._keyfile
+    
+    @property
+    def made (self) -> bool :
+        return self._made
+    
+    @made.setter
+    def made (self, rhs: bool) :
+        self._made = not not rhs
+    
+    @property
+    def requested_passphrase (self) -> bool :
+        return self._requested_passphrase
+    
+    @requested_passphrase.setter
+    def requested_passphrase (self, rhs: bool) :
+        self._requested_passphrase = rhs
+    
+    @property
+    def dirty (self) -> bool :
+        return self._dirty
+    
+    @dirty.setter
+    def dirty (self, rhs: bool) :
+        dirty_before = self.dirty
+        dirty_after = rhs
+        if dirty_before and not dirty_after :
+            self._kp.save()
+        self._dirty = dirty_after
+    
+    @property
+    def db (self) :
+        return self._kp
+    
+    def read (self, make=False, get_password=getpass) :
+        self.requested_passphrase = False
+
+        try :
+            self._kp = PyKeePass(self.file)
+        except pykeepass.exceptions.CredentialsError as e:
+            self._kp = None
+            self.requested_passphrase = True
+        except FileNotFoundError as e :
+            if make :
+                self._kp = pykeepass.create_database(self.file, password=get_password())
+                self._kp.add_group(self._kp.root_group, "ADPNet")
+                self.made = True
+
+            else :
+                self._kp = None
+                raise
+        
+        if self.requested_passphrase :
+            
+            try :
+                if self.keyfile :
+                    self._kp = PyKeePass(self.file, keyfile=self.keyfile)
+                else :
+                    self._kp = PyKeePass(self.file, password=get_password())
+            except pykeepass.exceptions.CredentialsError as e:
+                self._kp = None
+                raise
+            except FileNotFoundError as e :
+                self._kp = None
+                raise
+
+        if self._kp is None :
+            raise KeyError("Unable to open KeePass database", self.file) 
+            
+        return self._kp
+
+
 class ADPNDoKeePassScript(ADPNCommandLineTool) :
     """
 Usage: adpn-get-keypass.py [<OPTIONS>]... --database=<FILE.KDBX>
@@ -70,7 +158,7 @@ the user will be prompted to provide it interactively.
         
     @property
     def database_file (self) :
-        return os.path.expanduser(self.url_path.lstrip("/") if self.is_homepath else self.url_path
+        return os.path.expanduser(self.url_path.lstrip("/")) if self.is_homepath else self.url_path
         
     @property
     def database_url (self) :
@@ -132,42 +220,23 @@ the user will be prompted to provide it interactively.
             print(entry.password, end="")
     
     def read_keepass_database (self) :
-        kp = None
-        request_passphrase = False
+        kdbx = None
         
         try :
-            kp = PyKeePass(self.database_file)
+            kdbx = KeePassDatabase(file=self.database_file, keyfile=self.keyfile)
+            kdbx.read(make=self.switched('create'), get_password=self.get_password)
+            
         except pykeepass.exceptions.CredentialsError as e:
             kp = None
-            request_passphrase = True
-        except FileNotFoundError as e :
-            if self.switched('create') :
-                kp = pykeepass.create_database(self.database_file, password=self.get_password())
-                kp.add_group(kp.root_group, "ADPNet")
-                self.write_error(0, ("CREATED: created new KeePass database [%(database)s]" % {"database": self.database_file}))
+            self.write_error(2, "FAILED: found KeePass database but could not open with the provided passphrase. Did you use the correct passphrase for [%(database)s]?" % { "database": self.database_file })
 
-            else :
-                kp = None
-                self.write_error(1, ("FAILED: could not open KeePass database [%(database)s]" % {"database": self.database_file}))
-        
-        if request_passphrase :
-            
-            try :
-                if self.keyfile :
-                    kp = PyKeePass(self.database_file, keyfile=self.keyfile)
-                else :
-                    kp = PyKeePass(self.database_file, password=self.get_password())
-            except pykeepass.exceptions.CredentialsError as e:
-                kp = None
-                self.write_error(2, "FAILED: found KeePass database but could not open with the provided passphrase. Did you use the correct passphrase for [%(database)s]?" % { "database": self.database_file })
-            except FileNotFoundError as e :
-                kp = None
-                self.write_error(1, ("FAILED: could not open KeePass database [%(database)s] with passphrase..." % {"database": self.database_file}))
-        
-        if kp is None :
-            raise KeyError("Unable to open KeePass database", self.database_file) 
-            
-        return kp
+        except FileNotFoundError as e :
+            self.write_error(1, "FAILED: could not open KeePass database [%(db)s]" % {"db": self.database_file})
+
+        if kdbx.made : 
+            self.write_error(0, "CREATED: created new KeePass database [%(db)s]" % {"db": self.database_file})
+
+        return kdbx.db
 
     def execute (self) :
         dirty = False
