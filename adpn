@@ -1001,7 +1001,7 @@ case "${CMD}" in
 
 			printf " (ok)\n"
 
-			printf "* Comparing new %s to prior revision...\n\n"
+			printf "* Comparing new %s to prior revision...\n\n" "${TDB_FILE}"
 				
 			if [[ -z "${_PARAM[batch]}" ]] ; then
 				git add --patch "${TDB_FILE}" < /dev/tty
