@@ -142,7 +142,7 @@ else
 		[[ -n "${PEER_TO_SW}" ]] && AIIT_CMDLINE+=( "${PEER_TO_SW}" )
 		[[ -n "${PIPELINE_SW}" ]] && AIIT_CMDLINE+=( "${PIPELINE_SW}" )
 		
-		adpn_debug 20,adpn,flag,ingest,sql "${LINENO}" '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_OUTPUT}"
+		adpn_debug 20,adpn,flag,ingest,sql "${LINENO}" '$ %s > %s' "$( printf "%q " "${AIIT_CMDLINE[@]}" )" "${AIIT_SQLOUT}"
 		"${AIIT_CMDLINE[@]}" > "${AIIT_SQLOUT}" ; EXITCODE="$?"
 
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
