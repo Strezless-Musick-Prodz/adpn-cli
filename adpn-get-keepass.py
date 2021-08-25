@@ -12,8 +12,9 @@ from getpass import getpass
 import re, json
 import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyPipeline, myPyJSON
+from ADPNCommandLineTool import ADPNCommandLineTool
 
-class ADPNDoKeePassScript :
+class ADPNDoKeePassScript(ADPNCommandLineTool) :
     """
 Usage: adpn-get-keypass.py [<OPTIONS>]... --database=<FILE.KDBX>
 
@@ -34,11 +35,8 @@ the user will be prompted to provide it interactively.
     """
     
     def __init__ (self, scriptpath, argv, switches) :
-        self._path = scriptpath
-        self._argv = argv
-        self._switches = switches
-        self._exitcode = 0
-
+        super().__init__(scriptpath, argv, switches)
+        
         self._query={ "title": "ADPNet" }
 
         self._url = urllib.parse.urlparse(self.database_url)
@@ -59,39 +57,20 @@ the user will be prompted to provide it interactively.
             self._query = { **self._query, **{ "title": self.switches.get("title") } }
     
     @property
-    def path (self) :
-        return self._path
+    def is_localurl (self) :
+        return not self._url.netloc
+    
+    @property
+    def url_path (self) :
+        return self._url.path if hasattr(self._url, 'path') else None
+    
+    @property
+    def is_homepath (self) :
+        return re.match("^~", self.url_path.lstrip("/")) and self.is_localurl 
         
-    @property
-    def name (self) :
-        return os.path.basename(scriptpath)
-    
-    @property
-    def argv (self) :
-        return self._argv
-        
-    @property
-    def switches (self) :
-        return self._switches
-    
-    @property
-    def exitcode (self) -> int:
-        return self._exitcode
-        
-    @exitcode.setter
-    def exitcode (self, code: int) :
-        if code >= 0 and code <= 255 :
-            self._exitcode = code
-        else :
-            raise ValueError("Exit code must be in range 0...255", code)
-    
-    @property
-    def still_ok (self) :
-        return ( self.exitcode == 0 )
-    
     @property
     def database_file (self) :
-        return os.path.expanduser(self._url.path.lstrip("/")) if re.match("^~", self._url.path.lstrip("/")) and not self._url.netloc else self._url.path
+        return os.path.expanduser(self.url_path.lstrip("/") if self.is_homepath else self.url_path
         
     @property
     def database_url (self) :
@@ -109,15 +88,6 @@ the user will be prompted to provide it interactively.
     def entry_title_use_regex (self) :
         return self.switched("regex")
     
-    @property
-    def has_piped_data (self) :
-        mode = os.fstat(sys.stdin.fileno()).st_mode
-        return ( stat.S_ISFIFO(mode) or stat.S_ISREG(mode) )
-    
-    def switched (self, key) :
-        got = not not self.switches.get(key, None)
-        return got
-        
     def read_password (self) :
         password = None
         if self.has_piped_data :
@@ -134,7 +104,7 @@ the user will be prompted to provide it interactively.
                 pipe = myPyPipeline( [ argv ] )
                 (out, err, code) = pipe.siphon(stdin=str(password))
             except Exception as e :
-                print("[%(cmd)s --stash] error: %(e)s" % { "cmd": self.name, "e": e}, file=sys.stderr)
+                write_error(code, "--stash error: %(e)s" % { "e": e})
         return password
     
     def get_password_prompt (self) :
@@ -151,14 +121,6 @@ the user will be prompted to provide it interactively.
             password = self.read_password()
 
         return password
-            
-    def write_error (self, code, message, prefix="") :
-        self.exitcode = code
-        print ( "%(prefix)s[%(cmd)s] %(message)s" % { "prefix": prefix, "cmd": self.name, "message": message }, file=sys.stderr )
-
-    def display_usage (self) :
-        print(self.__doc__)
-        self.exitcode = 0
     
     def write_entry (self, entry) :
         fmt = self.switches.get("output", "text/plain")
@@ -270,15 +232,6 @@ the user will be prompted to provide it interactively.
 
     def exit (self) :
         sys.exit(self.exitcode)
-
-def align_switches (left, right, switches, override=True) :
-    if switches[left] is None :
-        switches[left] = switches[right]
-    if switches[right] is None :
-        switches[right] = switches[left]
-    if override :
-        if switches[right] != switches[left] :
-            switches[right] = switches[left]
 
 if __name__ == '__main__':
 

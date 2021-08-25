@@ -70,9 +70,11 @@ inherit from this class. For example:
             pass
     """
     
-    def __init__ (self, scriptname, argv, switches) :
+    def __init__ (self, scriptpath, argv, switches) :
+        self._scriptpath = None
+        self._scriptname = None
         
-        self.scriptname = scriptname
+        self.scriptpath = scriptpath
         self.argv = argv
         self.switches = switches
         self.exitcode = 0
@@ -81,6 +83,24 @@ inherit from this class. For example:
         self.debug=self.switches.get('debug')
         if self.debug > self.verbose :
             self.verbose = self.debug
+    
+    @property
+    def scriptpath (self) :
+        return self._scriptpath
+    
+    @scriptpath.setter
+    def scriptpath (self, rhs)
+        self._scriptpath = rhs
+        if self._scriptname is None :
+            self._scriptname = os.path.basename(os.path.realpath(rhs)) if rhs.find(os.sep) > 0 else rhs
+    
+    @property
+    def scriptname (self) :
+        return self._scriptname
+    
+    @scriptname.setter
+    def scriptname (self, rhs) :
+        self._scriptname = rhs
     
     @property
     def verbose (self) :
@@ -142,6 +162,22 @@ inherit from this class. For example:
     def switched (self, key) :
         got = not not self.switches.get(key, None)
         return got
+    
+    @property
+    def exitcode (self) -> int:
+        return self._exitcode
+        
+    @exitcode.setter
+    def exitcode (self, code: int) :
+        if code >= 0 and code <= 255 :
+            self._exitcode = code
+        else :
+            raise ValueError("Exit code must be in range 0...255", code)
+    
+    @property
+    def has_piped_data (self) :
+        mode = os.fstat(sys.stdin.fileno()).st_mode
+        return ( stat.S_ISFIFO(mode) or stat.S_ISREG(mode) )
     
     @property
     def still_ok (self) :
