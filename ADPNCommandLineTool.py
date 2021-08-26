@@ -194,11 +194,11 @@ inherit from this class. For example:
     def json_output (self) :
         return not not re.match( r'^([^/]+/)?(json)(;.*)?$', self.switches.get('output', ''))
     
-    def write_output (self, data, prolog=None, json_encode=True, end="\n", stream=sys.stdout) :
+    def write_output (self, data, prolog=None, json_encode=None, end="\n", stream=sys.stdout) :
         if prolog :
             print(prolog, end="")
         
-        if json_encode and self.json_output :
+        if json_encode or ( json_encode is None and self.json_output ) :
             print(json.dumps(data), end=end, file=stream)
         else :
             print(data, end=end, file=stream)
