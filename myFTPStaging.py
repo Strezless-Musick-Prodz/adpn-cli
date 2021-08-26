@@ -12,12 +12,17 @@ from ftplib import FTP
 
 class myFTPStaging :
 
-    def __init__ (self, ftp, user, host, dry_run=False) :
+    def __init__ (self, ftp, user, host, dry_run=False, skip_download=False) :
         self.ftp = ftp
         self.user = user
         self.host = host
         self.dry_run = dry_run
-        
+        self._skip_download = skip_download
+    
+    @property
+    def skip_download (self) :
+        return self._skip_download
+    
     def is_sftp (self) :
         return isinstance(self.ftp, pysftp.Connection)
     
@@ -143,10 +148,17 @@ class myFTPStaging :
     
     def get_childitem (self) :
         return self.ftp.listdir() if self.is_sftp() else self.ftp.nlst()
-
+    
+    def test_matched (self, file) :
+        if not self.skip_download :
+            is_matched = self.get_file_size(file) == os.stat(file).st_size
+        else :
+            is_matched = True
+        return is_matched
+        
     def download_file (self, file = None) :
         try :
-            if self.dry_run :
+            if self.dry_run or self.skip_download :
                 pass
             elif self.is_sftp() :
                 self.ftp.get(file)
@@ -187,8 +199,9 @@ class myFTPStaging :
         
         else :
             self.download_file(file=file)
-            if not self.dry_run and self.get_file_size(file) == os.stat(file).st_size :
-                self.remove_item(file)
+            if not self.dry_run :
+                if self.skip_download or self.test_matched(file) :
+                    self.remove_item(file)
                 out(2, "remove_item", file)
     
     def upload_file (self, blob = None, file = None) :

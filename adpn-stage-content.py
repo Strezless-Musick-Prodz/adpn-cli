@@ -32,7 +32,7 @@ def input (*args) :
 
 class ADPNStagingArea :
 
-    def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None, getpass=lambda x: None, dry_run=False) :
+    def __init__ (self, protocol="sftp", host="localhost", user=None, passwd=None, identity=None, base_dir="/", subdirectory=None, authentication=None, getpass=lambda x: None, dry_run=False, skip_download=False) :
         self.protocol = protocol
         self.host = host
         self.user = user
@@ -45,7 +45,8 @@ class ADPNStagingArea :
         self._agent = None
         self.getpass = getpass
         self._dry_run = dry_run
-    
+        self.skip_download = skip_download
+        
     @property
     def dry_run (self) :
         return self._dry_run
@@ -223,7 +224,7 @@ class ADPNStagingArea :
         else :
             conn = FTP(self.host, user=self.user, passwd=self.passwd)
         
-        return myFTPStaging(conn, user=self.user, host=self.host, dry_run=self.dry_run) if conn is not None else None
+        return myFTPStaging(conn, user=self.user, host=self.host, dry_run=self.dry_run, skip_download=self.skip_download) if conn is not None else None
 
 class ADPNPublisher :
     
@@ -425,6 +426,7 @@ command line with explicit switches.
         if self.stage.user is None :
             self.stage.user = input("User: ")
         self.stage.dry_run = dry_run
+        self.stage.skip_download = self.test_skip('backup')
         
         conn = None
         try :
