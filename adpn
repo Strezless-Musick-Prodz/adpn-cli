@@ -1133,52 +1133,61 @@ case "${CMD}" in
 			rm "${FILE}"
 		done
 		;;
+	"staging")
+		adpn-do-staging "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+		;;
 	"serve")
 # @method adpn serve
 # Preservation Node Manager: Helps retrieve content preserved on a LOCKSS box.
 #
 # @version 2021.0319
 
-		HTTP_USER=$( adpn_parameter_from "--daemon-user" ".daemon/user" )
-		HTTP_PASS=$( adpn_parameter_from "--daemon-pass" ".daemon/pass" )
-		if [[ -n "${HTTP_PASS}" ]] ; then
-			HTTP_PASS="$( adpn_getpassword_from "${HTTP_PASS}" )"
-		fi
+		# STUB -- currently nowhere near complete
+		adpn_notice "${LINENO}" "This feature is still under development and not yet ready for use."
+		EXITCODE=255
 		
-		if [[ -z "${HTTP_USER}" ]] ; then
-			read -p "LOCKSS Daemon User: " HTTP_USER
-		fi
-		if [[ -z "${HTTP_PASS}" ]] ; then
-			read -sp "LOCKSS Daemon Password: " HTTP_PASS
-		fi
+		# This is not yet ready for prime time.
 		
-		VERSION=1
-		LOCKSS_BOX="$( adpn_parameter_from "--daemon" "localhost:8081" )"
-		BASE_URL="$( adpn_parameter_from "--drop-server" ".stage/base_url" "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/" )"
-		DIRECTORY="${_PARAM[directory]}"
-		FILE="${_PARAM[file]}"
-		
-		FULL_URL=$( printf "%s%s/%s" "${BASE_URL}" "${DIRECTORY}" "${FILE}" )
-		ENCODED_URL=$( rawurlencode "${FULL_URL}" )
-		
-		AU_ID_BASE='edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~%s&directory~%s'
-		AU_ID=$( printf "${AU_ID_BASE}" $(rawurlencode "${BASE_URL}" 2) $(rawurlencode "${DIRECTORY}" 2) )
-		ENCODED_AU_ID=$( rawurlencode "${AU_ID}" )
-		
-		declare -a HT_PARAMS=()
-		
-		PARAM_URL="$( printf "url=%s" "${ENCODED_URL}" )"
-		PARAM_AUID="$( printf "auid=%s" "${ENCODED_AU_ID}" )"
-		PARAM_VERSION="$( printf "version=%d" "${VERSION}" )"
-		
-		HT_PARAMS+=( "${PARAM_URL}" )
-		HT_PARAMS+=( "${PARAM_AUID}" )
-		HT_PARAMS+=( "${PARAM_VERSION}" )
-		
-		HT_ARGS=$( join_by "&" "${HT_PARAMS[@]}" )
-
-		OUTPUT_FILENAME="$( rawurlencode "${FILE}" )"
-		wget "http://${LOCKSS_BOX}/ServeContent?${HT_ARGS}" --http-user="${HTTP_USER}" --http-password="${HTTP_PASS}" -O "${OUTPUT_FILENAME}"
+		#HTTP_USER=$( adpn_parameter_from "--daemon-user" ".daemon/user" )
+		#HTTP_PASS=$( adpn_parameter_from "--daemon-pass" ".daemon/pass" )
+		#if [[ -n "${HTTP_PASS}" ]] ; then
+		#	HTTP_PASS="$( adpn_getpassword_from "${HTTP_PASS}" )"
+		#fi
+		#
+		#if [[ -z "${HTTP_USER}" ]] ; then
+		#	read -p "LOCKSS Daemon User: " HTTP_USER
+		#fi
+		#if [[ -z "${HTTP_PASS}" ]] ; then
+		#	read -sp "LOCKSS Daemon Password: " HTTP_PASS
+		#fi
+		#
+		#VERSION=1
+		#LOCKSS_BOX="$( adpn_parameter_from "--daemon" "localhost:8081" )"
+		#BASE_URL="$( adpn_parameter_from "--drop-server" ".stage/base_url" "http://drop.adpn.org/drop-server/adah/drop_au_content_in_here/" )"
+		#DIRECTORY="${_PARAM[directory]}"
+		#FILE="${_PARAM[file]}"
+		#
+		#FULL_URL=$( printf "%s%s/%s" "${BASE_URL}" "${DIRECTORY}" "${FILE}" )
+		#ENCODED_URL=$( rawurlencode "${FULL_URL}" )
+		#
+		#AU_ID_BASE='edu|auburn|adpn|directory|AuburnDirectoryPlugin&base_url~%s&directory~%s'
+		#AU_ID=$( printf "${AU_ID_BASE}" $(rawurlencode "${BASE_URL}" 2) $(rawurlencode "${DIRECTORY}" 2) )
+		#ENCODED_AU_ID=$( rawurlencode "${AU_ID}" )
+		#
+		#declare -a HT_PARAMS=()
+		#
+		#PARAM_URL="$( printf "url=%s" "${ENCODED_URL}" )"
+		#PARAM_AUID="$( printf "auid=%s" "${ENCODED_AU_ID}" )"
+		#PARAM_VERSION="$( printf "version=%d" "${VERSION}" )"
+		#
+		#HT_PARAMS+=( "${PARAM_URL}" )
+		#HT_PARAMS+=( "${PARAM_AUID}" )
+		#HT_PARAMS+=( "${PARAM_VERSION}" )
+		#
+		#HT_ARGS=$( join_by "&" "${HT_PARAMS[@]}" )
+		#
+		#OUTPUT_FILENAME="$( rawurlencode "${FILE}" )"
+		#wget "http://${LOCKSS_BOX}/ServeContent?${HT_ARGS}" --http-user="${HTTP_USER}" --http-password="${HTTP_PASS}" -O "${OUTPUT_FILENAME}"
 		;;
 			
 	"rebalance")
