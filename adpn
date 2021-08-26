@@ -887,6 +887,32 @@ case "${CMD}" in
 		fi
 		;;
 	
+	"validate")
+		declare -a AU_LOCALPATHS=( "${_ARGV[@]:2}" )
+		AU_LOCALPATHS+=( "${PWD}" )
+		AU_LOCALPATHS=( "${AU_LOCALPATHS[@]/#/\\}" )
+		
+		AU_LOCALPATH="$( adpn_parameter_from "--local" "${AU_LOCALPATHS[@]}" )"
+		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
+		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
+		
+		if [[ -d "${AU_LOCALPATH}" && -d "${AU_LOCALPATH}/data" ]] ; then
+			declare -a PYTHON_OPTS=( ".python" )
+			( which python3 >/dev/null 2>&1 ) && PYTHON_OPTS+=( "\\$( which python3 )" )
+			( which python >/dev/null 2>&1 ) && PYTHON_OPTS+=( "\\$( which python )" )
+			PYTHON="$( adpn_parameter_from "${PYTHON_OPTS[@]}" )"
+			
+			declare -a BAGIT_CMD=( "${PYTHON}" "${SCRIPTDIR}/externals/bagit-python/bagit.py" )
+			BAGIT_CMD+=( --validate "${AU_LOCALPATH}" )
+			[[ -n "${QQ}" ]] && BAGIT_CMD+=( "${QQ}" )
+			
+			"${BAGIT_CMD[@]}" ; EXITCODE="$?"
+			
+		else
+			adpn_notice "${LINENO}" "REQUIRED: AU path [%s] must be an accessible, BagIt-formatted directory." "${AU_LOCALPATH}"
+		fi
+		;;
+
 	"confirm")
 # @method adpn confirm
 # Node Manager: confirm the status of an ingested AU from the LOCKSS daemon using a LOCKSS API request
