@@ -64,8 +64,8 @@ The default values in adpnet.json are overridden if values are provided on the
 command line with explicit switches.
     """
     
-    def __init__ (self, scriptname, argv, switches) :
-        super().__init__(scriptname=scriptname, argv=argv, switches=switches)
+    def __init__ (self, scriptpath, argv, switches, scriptname=None) :
+        super().__init__(scriptpath=scriptpath, argv=argv, switches=switches, scriptname=scriptname)
 
         # start out with defaults
         self.manifest_data = None
@@ -262,7 +262,8 @@ command line with explicit switches.
 
 if __name__ == '__main__':
 
-    scriptname = os.path.basename(sys.argv[0])
+    scriptpath = os.path.realpath(sys.argv[0])
+    scriptname = os.path.basename(scriptpath)
     scriptdir = os.path.dirname(sys.argv[0])
     configjson = "/".join([scriptdir, "adpnet.json"])
     
@@ -298,7 +299,7 @@ if __name__ == '__main__':
             ( switches['remote'], args ) = shift_args(args)
     align_switches("remote", "stage/base", switches)
     
-    script = ADPNPackageContentScript(switches.get('context'), sys.argv, switches)
+    script = ADPNPackageContentScript(scriptpath, sys.argv, switches, scriptname=switches.get('context'))
     
     if script.switched('help') :
         script.display_usage()

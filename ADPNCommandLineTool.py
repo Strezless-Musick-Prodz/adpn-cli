@@ -70,11 +70,14 @@ inherit from this class. For example:
             pass
     """
     
-    def __init__ (self, scriptpath, argv, switches) :
+    def __init__ (self, scriptpath, argv, switches, scriptname=None) :
         self._scriptpath = None
         self._scriptname = None
         
         self.scriptpath = scriptpath
+        if scriptname is not None :
+            self.scriptname = scriptname
+        
         self.argv = argv
         self.switches = switches
         self.exitcode = 0
