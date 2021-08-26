@@ -457,13 +457,15 @@ command line with explicit switches.
             else :
                 self.write_error(1, "%(protocol)s connection failed: %(err)s." % settings)
         
-        return conn
-    
+        self.ftp = conn
+        assert self.ftp is not None, { "message": ("Connection failed for %(user)s@%(host)s" % {"user": self.stage.user, "host": self.stage.host}), "code": 1 }
+        
+
     def output_status (self, level, type, arg) :
         (prefix, message) = (type, arg)
 
         if "ok" == type :
-            self.write_output(data=message, prolog="JSON PACKET:\t")
+            self.write_output(data=message, json_encode=True, prolog="JSON PACKET:\t")
         else :
             if "uploaded" == type :
                 prefix = ">>>" if not self.switched('dry-run') else "(dry-run)>"
@@ -478,6 +480,19 @@ command line with explicit switches.
                 message = "cd %(path)s" % {"path": path}
             
             self.write_status(message=message, prolog=prefix, verbosity=level)
+    
+    def get_human_readable (self, byte_count) :
+        return "%.1f %s" % self.get_bytes_order_magnitude(byte_count)
+        
+    def get_bytes_order_magnitude (self, byte_count) :
+        orders = [ 'B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB' ]
+        factor = 1024.0
+        i = 0
+        magnitude = ( byte_count * 1.0 )
+        while i < len(orders)-1 and magnitude >= factor :
+            i = i + 1
+            magnitude = magnitude / factor
+        return (magnitude, orders[i])
     
     def get_plugin_parameters (self) :
         plugin = myLockssPlugin(jar=self.switches["jar"])
@@ -498,6 +513,14 @@ command line with explicit switches.
         au_start_url = details['Start URL']
         return au_start_url
     
+    def do_set_location (self) :
+        # Let's CWD over to the repository
+        try :
+            self.ftp.set_remotelocation(self.stage.base_dir)
+        except FileNotFoundError as e :
+            raise AssertionError( { "message": ("Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir } ), "code": 1} ) from e
+            
+
     def do_download_to (self, directory) :
         try :
             (local_pwd, remote_pwd) = self.ftp.set_location(dir=directory, remote=self.stage.subdirectory, make=True)
@@ -526,25 +549,30 @@ command line with explicit switches.
         return (local_pwd, remote_pwd)
     
     def do_transfer_files (self) :
-        # Let's log in to the host
-        self.ftp = self.establish_connection(dry_run=self.switched('dry-run'))
-
-        assert self.ftp is not None, { "message": ("Connection failed for %(user)s@%(host)s" % {"user": self.stage.user, "host": self.stage.host}), "code": 1 }
-        
-        # Let's CWD over to the repository
-        try :
-            self.ftp.set_remotelocation(self.stage.base_dir)
-        except FileNotFoundError as e :
-            raise AssertionError( { "message": ("Failed to set remote directory location: %(base_dir)s" % { "base_dir": self.stage.base_dir } ), "code": 1} ) from e
-        
         (local_pwd, remote_pwd) = self.ftp.get_location(local=True, remote=True)
-        
+            
         if not self.test_skip("download") :
             (local_pwd, remote_pwd) = self.do_download_to(directory=self.new_backup_dir())
-        
+            
         if not self.test_skip("upload") :
             (local_pwd, remote_pwd) = self.do_upload_to(local=local_pwd, remote=remote_pwd) 
     
+    def confirm_local_packaging (self) :
+        # Let's determine the plugin and its parameters from the command line switches
+        (plugin, plugin_parameters) = self.get_plugin_parameters()
+            
+        # Now let's plug the parameters for this package in to the package and plugin
+        self.package = ADPNPreservationPackage(
+            path=self.get_locallocation(),
+            plugin=plugin, plugin_parameters=plugin_parameters,
+            switches=self.switches
+        )
+
+        # Now let's check the packaging
+        if not self.test_skip("package") :
+            assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
+            assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
+
     def execute (self) :
 
         try :
@@ -554,38 +582,36 @@ command line with explicit switches.
                 self.subdirectory_switch = os.path.basename(self.get_locallocation())
                 self.stage.subdirectory = self.subdirectory_switch
             
-            # Let's determine the plugin and its parameters from the command line switches
-            (plugin, plugin_parameters) = self.get_plugin_parameters()
-            
-            # Now let's plug the parameters for this package in to the package and plugin
             try :
-                self.package = ADPNPreservationPackage(
-                    path=self.get_locallocation(),
-                    plugin=plugin, plugin_parameters=plugin_parameters,
-                    switches=self.switches
-                )
-
-                # Now let's check the packaging
-                if not self.test_skip("package") :
-                    assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
-                    assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
-
-                self.do_transfer_files()
-
-                # Pack up JSON data for output
-                piped_data = ( {} if self.pipes.get_data() is None else self.pipes.get_data() )
-                script_data = {
-                    "Ingest Step": self.switches.get('step'),
-                    self.switches.get('label-by'): self.get_emailname(),
-                    self.switches.get('label-to'): self.stage.account,
-                }
-                out_packet = self.package.get_pipeline_metadata(cascade={
-                    **piped_data, **script_data
-                }, read_manifest=True)
+                if not self.switched('volume') :
+                    self.confirm_local_packaging()
                 
-                if self.switched('unstage') :
-                    out_packet.pop('Packaged In', None)
+                # Let's log in to the host
+                self.establish_connection(dry_run=self.switched('dry-run'))
+                self.do_set_location()
                 
+                if self.switched('volume') :
+                    vol = self.ftp.get_volume()
+                    
+                    human_readable = dict([ (re.sub(r"bytes_", "space_", key), self.get_human_readable(value)) for (key, value) in vol.items() if re.match(r".*(bytes_.)*", key) ])
+                    out_packet = { **vol, **human_readable }
+                else :
+                    self.do_transfer_files()
+
+                    # Pack up JSON data for output
+                    piped_data = ( {} if self.pipes.get_data() is None else self.pipes.get_data() )
+                    script_data = {
+                        "Ingest Step": self.switches.get('step'),
+                        self.switches.get('label-by'): self.get_emailname(),
+                        self.switches.get('label-to'): self.stage.account,
+                    }
+                    out_packet = self.package.get_pipeline_metadata(cascade={
+                        **piped_data, **script_data
+                    }, read_manifest=True)
+                    
+                    if self.switched('unstage') :
+                        out_packet.pop('Packaged In', None)
+                    
                 # Send JSON data output to stdout/pipeline
                 self.output_status(0, "ok", out_packet)
 

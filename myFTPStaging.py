@@ -6,7 +6,7 @@
 # @version 2021.0629
 
 import io, os, sys, errno, re
-import ftplib, pysftp
+import ftplib, pysftp, paramiko.sftp
 from io import BytesIO
 from ftplib import FTP
 
@@ -155,6 +155,50 @@ class myFTPStaging :
         else :
             is_matched = True
         return is_matched
+    
+    def get_volume (self, location=None) :
+        if self.is_sftp() :
+            remote_pwd = location if location is not None else self.get_location(remote=True)
+            requests = [ 'space-available', 'statvfs@openssh.com' ]
+            errs = []
+            request_id, sftp_message = (None, None)
+            for req in requests :
+                if sftp_message is None :
+                    try :
+                        request_id, sftp_message = self.ftp.sftp_client._request(paramiko.sftp.CMD_EXTENDED, req, remote_pwd)
+                        sftp_request = req
+                    except OSError as e :
+                        errs.append(e)
+            
+            (df, packet) = ( {}, {} )
+            if len(errs) > 0 and sftp_message is None :
+                raise results[len(results)-1]
+            elif 'space-available' == sftp_request :
+                df['bytes_on_device'] = sftp_message.get_int64()
+                df['unused_bytes_on_device'] = sftp_message.get_int64()
+                df['bytes_available_to_user'] = sftp_message.get_int64()
+                df['unused_bytes_available_to_user'] = sftp_message.get_int64()
+                df['bytes_per_allocation_unit'] = sftp_message.get_int()
+            elif 'statvfs@openssh.com' == sftp_request :
+                packet['f_bsize'] = sftp_message.get_int64()
+                packet['f_frsize'] = sftp_message.get_int64()
+                packet['f_blocks'] = sftp_message.get_int64() # number of blocks
+                packet['f_bfree'] = sftp_message.get_int64() # free blocks in file system
+                packet['f_bavail'] = sftp_message.get_int64() # free blocks for non-root
+                packet['f_files'] = sftp_message.get_int64()
+                packet['f_ffree'] = sftp_message.get_int64()
+                packet['f_favail'] = sftp_message.get_int64()
+                packet['f_fsid'] = sftp_message.get_int64()
+                packet['f_flag'] = sftp_message.get_int64()
+                packet['f_namemax'] = sftp_message.get_int64()
+                
+                df['bytes_on_device'] = ( packet['f_bsize'] * packet['f_blocks'] )
+                df['unused_bytes_on_device'] = ( packet['f_bsize'] * packet['f_bfree'] )
+                df['unused_bytes_available_to_user'] = (  packet['f_bsize'] * packet['f_bavail'] )
+            result = df
+        else :
+            raise OSError(255, "Not supported for FTP connections")
+        return df
         
     def download_file (self, file = None) :
         try :
