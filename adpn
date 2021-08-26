@@ -986,6 +986,18 @@ case "${CMD}" in
 		[[ "${EXITCODE}" -gt 0 ]] && printf "\n" 1>&2 && adpn_notice "${LINENO}" "%s FAILED: This AU failed to meet one or more of the test conditions (%s)." "${em_cross_mark}" "${GREP_TESTS_HUMAN_READABLE}"
 		;;
 	"commit")
+# @method adpn commit
+# Config Manager: generate new static titlesDb XML file and commit changes to version control
+#
+# Usage: adpn commit [<OPTIONS>]...
+#
+# Options:
+#   --batch       	commit all changes to the XML file immediately without user input
+#   --interactive 	display each change in the XML file and request user confirmation
+#   --message     	a one-line description of the nature or purpose of the changes made
+#
+# @version 2021.0826
+
 		TDB_XML=$( adpnprop "props/titlesdb.xml" )
 		if [[ -r "${TDB_XML}" ]] ; then
 
@@ -1009,11 +1021,12 @@ case "${CMD}" in
 				git add "${TDB_FILE}"
 			fi
 
-			git commit --message "${_PARAM[message]}" 
+			COMMIT_MESSAGE="$( adpn_parameter_from "--message" "Updates to static titlesDb XML" )"
+			git commit --message "${COMMIT_MESSAGE}" 
 
 		else 
 			
-			printf "[%s:%d] Warning: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${SCRIPT_CMD_NAME}" "${LINENO}" "${TDB_XML}" 1>&2
+			adpn_notice "${LINENO}" "WARNING: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${TDB_XML}"
 				
 		fi
 		;;
