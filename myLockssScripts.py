@@ -7,8 +7,7 @@
 
 import sys
 import os.path
-import re
-import json
+import re, json, numbers
 import fileinput
 import subprocess
 from subprocess import PIPE
@@ -107,13 +106,18 @@ class myPyCommandLine :
 		
 		self._alias = alias
 		
-		self._switchPattern = '--([0-9_A-z][^=]*)(\s*=(.*)\s*)?$'
+		self._switchPattern = '--([0-9_A-z][^=]*)?(\s*=(.*)\s*)?$'
 
 	@property 
 	def pattern (self) -> str :
 		"""Provides a regex that matches a command-line switch and parse out switch names and values."""
 		return self._switchPattern
-
+	
+	@pattern.setter
+	def pattern (self, rhs) -> str :
+		self._switchPattern = rhs
+		self._compiled = re.compile(self._switchPattern)
+	
 	@property
 	def argv (self) -> list :
 		"""List of files and objects from the command line, without --switches.
@@ -125,49 +129,68 @@ class myPyCommandLine :
 		"""Dictionary of configuration switches provided on command-line or in defaults.
 		"""
 		return self._switches
+	
+	def accept_switch (self, switch, switches: dict = {}, defaults: dict = {}) :
+		result = { **switches }
+		key = switch.group(1)
+		value = switch.group(3) if switch.group(3) is not None else switch.group(1)
 		
-	def KeyValuePair (self, switch) -> tuple :
-		"""Parses a string command-line switch into a (key, value) pair.
-
-		Switches may be a parameter name and value (e.g. '--output=html' -> ('output', 'html')
-		or they may be a simple setting name (e.g. '--turned-on' -> ('turned-on', 'turned-on')
-		"""
-		ref=re.match(self.pattern, switch)
-	
-		key = ref.group(1)
-		if ref.group(3) is None :
-			value = ref.group(1)
+		if callable(result.get(key)) :
+			f = result.get(key)
+			result[key] = f(value, switch, None)
+		elif callable(defaults.get(key)) :
+			f = defaults.get(key)
+			result[key] = f(value, switch, result.get(key))
+		elif type(result.get(key)) is list :
+			result[key].append(value)
+		elif type(result.get(key)) is bool :
+			result[key] = (len(value) > 0)
+		elif isinstance(result.get(key), numbers.Number) :
+			try :
+				result[key] = int(value)
+			except ValueError as e :
+				try :
+					result[key] = float(value)
+				except ValueError as e :
+					result[key] = 0
+			
 		else :
-			value = ref.group(3)
-	
-		return (key, value)
-
+			result[key] = value
+		return result
+		
 	def parse (self, argv: list = [], defaults: dict = {}) -> tuple :
 		"""Separate out a list of command-line arguments into switches and files/objects.
 		"""
-		if len(argv) > 0 :
-			the_argv = argv
-		else :
-			the_argv = self.argv
+		in_argv = []
+		in_argv.extend(self.argv)
+		in_argv.extend(argv)
 		
-		switches = dict([ self.KeyValuePair(arg) for arg in the_argv if re.match(self.pattern, arg) ])
-		switches = {**self._defaults, **defaults, **switches}
+		the_defaults = { **self._defaults, **defaults }
+		
+		( out_argv, out_switches ) = ( [], { **the_defaults } )
+		allowing_switches = True
+		for arg in in_argv :
+			ref_switch = re.match(self.pattern, arg) if allowing_switches else False
+			if ref_switch and ref_switch.group(0) == '--' :
+				allowing_switches = False
+			elif ref_switch :
+				out_switches = self.accept_switch(ref_switch, out_switches, the_defaults)
+			else :
+				out_argv.append(arg)
 		
 		for (primary, secondary) in self._alias.items() :
-			if switches.get(primary) is None :
-				if switches.get(secondary) is not None :
-					switches[primary] = switches.get(secondary)
-			if switches.get(primary) is not None :
-				switches[secondary] = switches.get(primary)
+			if out_switches.get(primary) is None :
+				if out_switches.get(secondary) is not None :
+					out_switches[primary] = out_switches.get(secondary)
+			if out_switches.get(primary) is not None :
+				out_switches[secondary] = out_switches.get(primary)
 		
-		argv = [ arg for arg in the_argv if not re.match(self.pattern, arg) ]
+		self._argv = out_argv
+		self._switches = out_switches
 		
-		self._argv = argv
-		self._switches = switches
-		
-		return (argv, switches)
+		return (out_argv, out_switches)
 	
-	def compose (self, keyvalues: list) -> list :		
+	def compose (self, keyvalues: list) -> list :
 		return self.argv + [ "--%(k)s=%(v)s" % {"k": key, "v": value} for key, value in keyvalues if not value is None ]
 		
 
