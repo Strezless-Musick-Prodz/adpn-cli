@@ -130,7 +130,14 @@ case "${CMD}" in
 		
 		declare -a SQL_COND=() SQL_VALUE=() SQL_SETS=()
 		[[ -n "${_PARAM[au_id]}" ]] && SQL_COND+=( "au_id=?" ) && SQL_VALUE+=( "@V_AU_ID" ) && SQL_SETS+=( "$( printf "@V_AU_ID=%d" "${_PARAM[au_id]}" )" )
-		[[ -n "${_PARAM[au_title]}" ]] && SQL_COND+=( "au_title=?" ) && SQL_VALUE+=( "@V_AU_TITLE" ) && SQL_SETS+=( "$( printf "@V_AU_TITLE='%s'" "${_PARAM[au_title]}" )" )
+		if [[ "${_PARAM[au_title]}" ]] ; then
+			AU_TITLE="${_PARAM[au_title]}" && SQL_OPERATOR="="
+			[[ "${AU_TITLE}" =~ ^~(.*)$ ]] && SQL_OPERATOR=" RLIKE " && AU_TITLE="${BASH_REMATCH[1]}"
+			[[ "${AU_TITLE}" =~ ^%(.*)$ ]] && SQL_OPERATOR=" LIKE " && AU_TITLE="${BASH_REMATCH[1]}"
+			SQL_COND+=( "au_title${SQL_OPERATOR}?" )
+			SQL_VALUE+=( "@V_AU_TITLE" )
+			SQL_SETS+=( "$( printf "@V_AU_TITLE='%s'" "${AU_TITLE}" )" )
+		fi
 		SQL_VALUES=$( join_by ", " "${SQL_VALUE[@]}" )
 		SQL_SET_PAIRS=$( join_by ", " "${SQL_SETS[@]}" )
 		SQL_CONDS=$( join_by " AND " "${SQL_COND[@]}" )
