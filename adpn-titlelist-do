@@ -1,0 +1,208 @@
+#!/bin/bash
+#
+# adpn-titlelist-do: script to handle adpn titlelist commands
+#
+# @version 2021.0830
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  sql       	Execute an SQL query and display the results
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _CMDLINE ; _CMDLINE=("$0")
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+CMD="${_ARGV[1]}"
+
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+if [[ ! -z "${_PARAM[remote]}" ]] ; then
+	SSH_REMOTE="${_PARAM[remote]}"
+	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
+	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+	
+	if [[ -n "${SSH_HOST}" ]] ; then
+		if [[ -z "${SSH_CMD}" ]] ; then
+			SSH_CMD=bin/adpn-cli/adpn
+		fi
+		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
+		
+		SSH_CMDLINE="$( printf "%q %q" "${SSH_CMD}" "publisher" )"
+		for ARG in "${_CMDLINE[@]:1}" ; do
+			if [[ ! "${ARG}" =~ ^--remote\b ]] ; then
+				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
+			fi
+		done
+
+		if [[ -z "${QQ}" ]] ; then
+			printf "[${SCRIPT} ${CMD}] * Connecting to %s to execute: %s\n" "${SSH_HOST}" "${SSH_CMDLINE}" 1>&2
+		fi
+		
+		ssh -tt "${SSH_HOST}" "${SSH_CMDLINE}"
+	
+		if [[ -z "${QQ}" ]] ; then
+			printf "[${SCRIPT} ${CMD}] * Disconnected from %s\n" "${SSH_HOST}" 1>&2
+		fi
+	fi
+
+else 
+
+case "${CMD}" in
+		
+	""|"list")
+# @method adpn titlelist list
+# Display a list of available titles with their au_id codes.
+# 
+# Usage: adpn titlelist list
+#
+# @version 2021.0830
+
+		if [[ -z "${CMD}" ]] ; then
+			CMD="list"
+		fi
+		
+		#SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "SELECT FROM au_titlelist
+		"${SCRIPTPATH}" sql --execute="SELECT * FROM au_titlelist"
+		EXITCODE="$?"
+		;;
+	
+	"get")
+		SQL_COLS=$( adpn_parameter_from "--cols" '\*' )
+		SQL_COLS=$( printf "%s" "${SQL_COLS}" | sed -E 's/[^A-Za-z0-9_, *]+//g' )
+		
+		declare -a SQL_COND=() SQL_VALUE=() SQL_SETS=()
+		[[ -n "${_PARAM[au_id]}" ]] && SQL_COND+=( "au_id=?" ) && SQL_VALUE+=( "@V_AU_ID" ) && SQL_SETS+=( "$( printf "@V_AU_ID=%d" "${_PARAM[au_id]}" )" )
+		[[ -n "${_PARAM[au_title]}" ]] && SQL_COND+=( "au_title=?" ) && SQL_VALUE+=( "@V_AU_TITLE" ) && SQL_SETS+=( "$( printf "@V_AU_TITLE='%s'" "${_PARAM[au_title]}" )" )
+		SQL_VALUES=$( join_by ", " "${SQL_VALUE[@]}" )
+		SQL_SET_PAIRS=$( join_by ", " "${SQL_SETS[@]}" )
+		SQL_CONDS=$( join_by " AND " "${SQL_COND[@]}" )
+		
+		declare -a SQL=()
+		SQL_SELECT="$( printf "SELECT %s FROM au_titlelist WHERE %s" "${SQL_COLS}" "${SQL_CONDS}" )"
+		SQL+=( "$( printf "PREPARE stmt1 FROM '%s'" "${SQL_SELECT}" )" )
+		SQL+=( "$( printf "SET %s" "${SQL_SET_PAIRS}" )" )
+		SQL+=( "$( printf 'EXECUTE stmt1 USING %s' "${SQL_VALUES}" )" )
+		SQL+=( "$( printf 'DEALLOCATE PREPARE stmt1' )" )
+		SQL_SCRIPT="$( join_by "; " "${SQL[@]}" )"
+		
+		"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT};"
+		EXITCODE="$?"
+		;;
+		
+	"add")
+		#SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "INSERT INTO au_titlelist (au_pub_id, au_pub, au_pub_name, au_pub_class, au_pub_xpath) VALUES (?, ?, ?, ?, ?)" )
+		#SQL_SET=$( printf 'SET @V_PUB_ID="%s", @V_PUB="%s", @V_PUB_NAME="%s", @V_PUB_CLASS="%s", @V_PUB_XPATH="%s"' "${ARG_ID}" "${ARG_NAME}" "${ARG_PUB_NAME}" "${ARG_PUB_CLASS}" "${ARG_PUB_XPATH}" )
+		#SQL_EXECUTE=$( printf 'EXECUTE stmt1 USING @V_PUB_ID, @V_PUB, @V_PUB_NAME, @V_PUB_CLASS, @V_PUB_XPATH' )
+		#SQL_DEALLOCATE=$( printf 'DEALLOCATE PREPARE stmt1' )
+		#SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
+		adpn_notice "${LINENO}" "FAILED: Not yet implemented."
+		EXITCODE=255
+		;;
+
+	"remove")
+		#SQL_PREPARE=$( printf "PREPARE stmt1 FROM '%s';" "DELETE FROM au_publishers WHERE au_pub_id=?" )
+		#SQL_SET=$( printf 'SET @V_PUB_ID="%s"' "${ARG_ID}" )
+		#SQL_EXECUTE=$( printf 'EXECUTE stmt1 USING @V_PUB_ID' )
+		#SQL_DEALLOCATE=$( printf 'DEALLOCATE PREPARE stmt1' )
+
+		#SQL_SCRIPT=$( printf "%s; %s; %s; %s;" "${SQL_PREPARE}" "${SQL_SET}" "${SQL_EXECUTE}" "${SQL_DEALLOCATE}" )
+		#"${SCRIPTPATH}" sql --execute="${SQL_SCRIPT}"
+		#EXITCODE="$?"
+		adpn_notice "${LINENO}" "FAILED: Not yet implemented."
+		EXITCODE=255
+		;;
+	
+	"sql")
+		MYSQL_HOST="$( adpn_parameter_from "--mysql-host" ".mysql/host" )"
+		MYSQL_DB="$( adpn_parameter_from "--mysql-db" ".mysql/db" )"
+		MYSQL_USER="$( adpn_parameter_from "--mysql-user" ".mysql/user" )"
+		MYSQL_PASSWORD="$( adpn_parameter_from "--mysql-password" ".mysql/password" )"
+		
+		if [[ -z "${MYSQL_PASSWORD}" ]] ; then
+			MYSQL_PASSWORD_SWITCH=""
+		elif [[ "${MYSQL_PASSWORD}" == "-" ]] ; then
+			MYSQL_PASSWORD_SWITCH="--password"
+		else
+			MYSQL_PASSWORD_SWITCH=$(printf "%s--password=%s" "" "${MYSQL_PASSWORD}")
+		fi
+		
+		mysql --user="${MYSQL_USER}" ${MYSQL_PASSWORD_SWITCH} --database="${MYSQL_DB}" --host="${MYSQL_HOST}" "${_SWITCHES[execute]}"
+		EXITCODE="$?"
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+fi 
+
+##########################################################################################
+### CLEANUP: exit with settled exit code. ################################################
+##########################################################################################
+
+exit ${EXITCODE}

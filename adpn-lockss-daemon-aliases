@@ -61,7 +61,7 @@ function lockss_daemon_data_table_to_tsv() {
 
 function adpn_describe_title_from_daemon() {
 	local INGEST_TITLE="${1}"
-	local REGEX="$( printf -- '^ArchivalUnitTable(\s+)(\S+)(\s+)(%s)(\s\[approved for removal\])?(\s+)PeerRepair' "${INGEST_TITLE}" )"
+	local REGEX="$( printf -- '^ArchivalUnitTable(\s+)(\S+)(\s+)(%s)(\s*\[approved for removal\])?(\s+)PeerRepair' "${INGEST_TITLE}" )"
 	TSV="$( lockss_daemon_data_table_to_tsv --url=/DaemonStatus?table=ArchivalUnitStatusTable --format=xml --regex="${REGEX}" )"
 	LOCKSS_ID="$( printf "%s\n" "${TSV}" | cut -s --field=2 )"
 	HT_LOCKSS_ID="$( rawurlencode "${LOCKSS_ID}" 2 )"
