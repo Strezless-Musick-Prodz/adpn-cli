@@ -74,8 +74,12 @@ Exit code:
         result = default
         if name in self.switches :
             result = self.switches.get(name)
-        return ( result is not None ) if just_present else result
-
+        if type(result) is list :
+            present = ( len(result) > 0 )
+        else :
+            present = ( result is not None )
+        return present if just_present else result
+    
     def add_flag (self, flag, value) :
         if value is not None :
             self.flags[flag].extend( [ value ] )
@@ -215,7 +219,7 @@ Exit code:
         return result
 
     def display_data_dict (self, table, context, parse, keys=None, depth=0) :
-        l_keys = ( table.keys() if keys is None else [ key for key in keys ] )
+        l_keys = ( table.keys() if keys is None or len(keys)==0 else [ key for key in keys ] )
         out = {} if self.wants_json_output() else []
         paired=( self.wants_table() or (len(l_keys) > 1) )
         try :
@@ -257,18 +261,15 @@ Exit code:
                 else :
                     self.add_output(item, table=table, context=context)
                 i = i + 1
-
+    
     @property
     def data_keys (self) :
-        s_key = self.switches.get('key')
-        l_key = None
-        try :
-            m = re.match(r"^(\\|:)(.*)", s_key)
-            l_key = [ m.group(2) ] if m else s_key.split(":")
-        except TypeError as e: 
-            l_key = None
-        return l_key
-
+        return self.switches.get("key", [])
+    
+    @property
+    def data_values (self) :
+        return self.switches.get("value", [])
+        
     def display_data (self, table, context, parse, depth=0) :
         if ( isinstance(table, dict) ) :
             self.display_data_dict(table, context, parse, keys=self.data_keys, depth=depth+1)
@@ -287,12 +288,13 @@ Exit code:
     def display_keyvalue (self) :
         self._default_mime = "application/json"
         table = {}
-        if self.switches.get('key') is not None :
-            table[self.switches.get('key')] = self.switches.get('value')
+        for key_i in range(0, len(self.data_keys)) :
+            ( key, value ) = ( self.data_keys[key_i], self.data_values[key_i] if key_i < len(self.data_values) else None )
+            table[key] = value
         self.display_data(table, table, parse=True, depth=0)
         if len(self.output) > 0 :
             print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
-
+    
     def execute (self) :
         try :
             
@@ -329,9 +331,9 @@ if __name__ == '__main__' :
 
     scriptname = sys.argv[0]
     scriptname = os.path.basename(scriptname)
-
-    (sys.argv, switches) = myPyCommandLine(sys.argv).parse()
-
+    
+    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [] }).parse()
+    
     script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
     if script.switched('help') :
         script.display_usage()

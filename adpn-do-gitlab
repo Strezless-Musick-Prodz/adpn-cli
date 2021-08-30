@@ -151,11 +151,11 @@ case "${CMD}" in
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
 
-			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id:path_with_namespace "|" grep -E "${REGEX}"
+			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id --key=path_with_namespace "|" grep -E "${REGEX}"
 			
-			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace | grep -E "${REGEX}"
+			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id --key=path_with_namespace | grep -E "${REGEX}"
 		else
-			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id:path_with_namespace
+			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id --key=path_with_namespace
 		fi
 		
 		if [[ "${EXITCODE}" -eq 0 && -n "${OUT_JSON}" ]] ; then
@@ -228,8 +228,12 @@ case "${CMD}" in
 		[[ -n "${ISSUE_ID}" ]] && ISSUE_STR="$( printf "ISSUE #%d -- " "${ISSUE_ID}" )" || ISSUE_STR=""
 		adpn_debug 1 "${LINENO}" "%sGET %s (%s)" "${ISSUE_STR}" "${API_PATH}" "$( declare -p _ARGV )"
 		
-		if [[ -n "${_PARAM[key]}" ]] ; then
-			ADPN_JSON_SW+=( "--key=${_PARAM[key]}" )
+		if [[ -n "${_SWITCHES[key]}" ]] ; then
+			for SW in "${!_SWITCHES[@]}" ; do
+				if [[ "${SW}" =~ ^key([#][0-9]+)?$ ]] ; then
+					ADPN_JSON_SW+=( "${_SWITCHES[$SW]}" )
+				fi
+			done
 		fi
 
 		if [[ -n "${_PARAM[output]}" ]] ; then
@@ -264,15 +268,21 @@ case "${CMD}" in
 
 	"token")
 		
-		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token<(adpn stash)" ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" )
+		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token<(adpn stash)" ) ; EXITCODE="$?"
 		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
-			adpn_debug 500,gitlab,token "${LINENO}" "Source/Contents for Private Token: %s" "$( obscure_password "${PRIVATE_TOKEN}" )"
-			PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" ); EXITCODE="$?"
-			adpn_debug 500,gitlab,token "${LINENO}" "Stashing gitlab/token for future reference..."
-			[[ "${EXITCODE}" -eq 0 ]] && "${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}" "${CONTEXT_SW[@]}" ; EXITCODE="$?"
-			[[ "${EXITCODE}" -eq 0 ]] && printf "%s" "${PRIVATE_TOKEN}"
+			adpn_debug 500,gitlab,token "${LINENO}" "Private Token: %s" "$( obscure_password "${PRIVATE_TOKEN}" )"
+			printf "%s" "${PRIVATE_TOKEN}"
 		else
-			EXITCODE=1
+			PRIVATE_TOKEN=$( adpn_parameter_from ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" ) ; EXITCODE="$?"
+			adpn_debug 500,gitlab,token "${LINENO}" "Source for Private Token: %s" "${PRIVATE_TOKEN}"
+			if [[ "${EXITCODE}" -eq 0 && -n "${PRIVATE_TOKEN}" ]] ; then
+				PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" ); EXITCODE="$?"
+				adpn_debug 500,gitlab,token "${LINENO}" "Stashing gitlab/token for future reference..."
+				[[ "${EXITCODE}" -eq 0 ]] && { "${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}" "${CONTEXT_SW[@]}" ; EXITCODE="$?" ; }
+				[[ "${EXITCODE}" -eq 0 ]] && printf "%s" "${PRIVATE_TOKEN}"
+			else
+				[[ "${EXITCODE}" -eq 0 ]] && EXITCODE=1
+			fi
 		fi
 		;;
 	
@@ -283,10 +293,10 @@ case "${CMD}" in
 				
 		ISH="${_ARGV[2]}"
 		
-		PACKET_KEYS=id:title:description:web_url:project_id:iid
-		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" --key="${PACKET_KEYS}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
+		declare -a PACKET_KEYS=( "--key=id" "--key=title" "--key=description" "--key=web_url" "--key=project_id" "--key=iid" )
+		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" "${PACKET_KEYS[@]}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
 		
-		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" --key="${PACKET_KEYS}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}" ; EXITCODE="$?"
+		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" "${PACKET_KEYS[@]}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
 		RE_PACKET="${ADPN_JSON_PACKET_REGEX}"
 		
@@ -299,69 +309,82 @@ case "${CMD}" in
 			cat "${F_GL_ISSUE}" | while read -r LINE ; do
 				adpn_debug 450,gitlab,packet "${LINENO}" "Data:\t%s" "${LINE}"
 				
-				ISSUE_ID=$( printf "%s" "${LINE}" | cut --field=2 )
-				ENCTITLE=$( printf "%s" "${LINE}" | cut --field=4 )
-				ENCBODY=$( printf "%s" "${LINE}" | cut --field=6 )
-				ENCWEBURL=$( printf "%s" "${LINE}" | cut --field=8 )
-				PROJECT_ID=$( printf "%s" "${LINE}" | cut --field=10 )
-				ISSUE_IID=$( printf "%s" "${LINE}" | cut --field=12 )
-				
-				ISH_TITLE=$( urldecode "${ENCTITLE}" )
-				ISH_BODY=$( urldecode "${ENCBODY}" )
-				WEB_URL=$( urldecode "${ENCWEBURL}" )
-				API_RESOURCE=$( printf "/projects/%d/issues/%d" "${PROJECT_ID}" "${ISSUE_IID}" )
-				
-				GREP="$( printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}" )"
-				GREPEXIT="$?"
-				
-				if [[ -n "${GREP}" ]] ; then
-					adpn_debug 50,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
-					adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
-				fi
-				
-				# if not found, retain some data for possible error message
-				if [[ "${GREPEXIT}" -ge 0 ]] ; then
-					ERR_DATA=$( printf "%s [title: '%s']" "${ERR_DATA}" "${ISH_TITLE}" )
-				fi
-				
-				# if found, flag this as OK
-				if [[ "${GREPEXIT}" -lt "${ALL_GREPS}" ]] ; then
-					ALL_GREPS="${GREPEXIT}"
-				fi
-
-			done
-		
-			# 2. Scan for the JSON packet, if any, in issue/notes.body
-			ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-			adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
-			"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id:body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}"
-			EXITCODE="$?"
-			
-			if [[ "${EXITCODE}" -eq 0 ]] ; then
+				declare -A A_DATA=()
+				N="$( printf "%s\n" "${LINE}" | sed -E 's/\t/\n/g' | wc -l )"
+				IFS=$'\n'
+				for I in $( seq 1 2 $N ) ; do
+					S_FIELD="$( printf "%s\n" "${LINE}" | cut --field="${I}" )"
+					CUT_FIELD="$(( I+1 ))"
+					S_ENC_VALUE="$( printf "%s\n" "${LINE}" | cut --field="${CUT_FIELD}" )"
+					A_DATA["${S_FIELD}"]="$( urldecode "${S_ENC_VALUE}" )"
+				done
 				IFS=""
+				declare -p A_DATA 1>&2 
 				
-				cat "${F_GL_ISSUE}" | while read -r LINE ; do
-					NOTE_ID=$( echo "${LINE}" | cut --field=2 )
-					ENCBODY=$( echo "${LINE}" | cut --field=4 )
-					BODY=$( urldecode "${ENCBODY}" )
-					GREP=$( printf "%s" "${BODY}" | grep -E "${RE_PACKET}" )
+				ISSUE_ID="${A_DATA[id]}"
+				ISH_TITLE="${A_DATA[title]}"
+				ISH_BODY="${A_DATA[description]}"
+				WEB_URL="${A_DATA[web_url]}"
+				PROJECT_ID="${A_DATA[project_id]}"
+				ISSUE_IID="${A_DATA[iid]}"
+				
+				API_RESOURCE=$( printf "/projects/%d/issues/%d" "${PROJECT_ID}" "${ISSUE_IID}" ) ; EXITCODE="$?"
+				if [[ "${EXITCODE}" -eq 0 ]] ; then
+					GREP="$( printf "%s" "${ISH_BODY}" | grep -E "${RE_PACKET}" )"
 					GREPEXIT="$?"
-
+					
 					if [[ -n "${GREP}" ]] ; then
-						adpn_debug 50 "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
+						adpn_debug 50,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
 						adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
-					else
-						adpn_debug 100 "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
+					fi
+					
+					# if not found, retain some data for possible error message
+					if [[ "${GREPEXIT}" -ge 0 ]] ; then
+						ERR_DATA=$( printf "%s [title: '%s']" "${ERR_DATA}" "${ISH_TITLE}" )
 					fi
 					
 					# if found, flag this as OK
 					if [[ "${GREPEXIT}" -lt "${ALL_GREPS}" ]] ; then
 						ALL_GREPS="${GREPEXIT}"
 					fi
-				done
-				EXITCODE="${ALL_GREPS}"
-			else 
-				adpn_debug 01,gitlab,packet "${LINENO}" "gitlab issue/notes request FAILED: %d" "${EXITCODE}"
+				else 
+					adpn_notice "${LINENO}" "ERROR: Could not find a valid PROJECT_ID and ISSUE_IID."
+				fi
+			done
+		
+			# 2. Scan for the JSON packet, if any, in issue/notes.body
+			if [[ "${EXITCODE}" -eq 0 ]] ; then
+				ISHN="${ISH}#notes?sort=asc&order_by=created_at"
+				adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id --key=body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
+				"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id --key=body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}"
+				EXITCODE="$?"
+			
+				if [[ "${EXITCODE}" -eq 0 ]] ; then
+					IFS=""
+					
+					cat "${F_GL_ISSUE}" | while read -r LINE ; do
+						NOTE_ID=$( echo "${LINE}" | cut --field=2 )
+						ENCBODY=$( echo "${LINE}" | cut --field=4 )
+						BODY=$( urldecode "${ENCBODY}" )
+						GREP=$( printf "%s" "${BODY}" | grep -E "${RE_PACKET}" )
+						GREPEXIT="$?"
+
+						if [[ -n "${GREP}" ]] ; then
+							adpn_debug 50 "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
+							adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
+						else
+							adpn_debug 100 "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
+						fi
+						
+						# if found, flag this as OK
+						if [[ "${GREPEXIT}" -lt "${ALL_GREPS}" ]] ; then
+							ALL_GREPS="${GREPEXIT}"
+						fi
+					done
+					EXITCODE="${ALL_GREPS}"
+				else 
+					adpn_debug 01,gitlab,packet "${LINENO}" "gitlab issue/notes request FAILED: %d" "${EXITCODE}"
+				fi
 			fi
 		fi
 		
