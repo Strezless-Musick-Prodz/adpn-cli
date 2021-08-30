@@ -9,6 +9,7 @@ SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
 SCRIPTDIR="$( dirname "${SCRIPTPATH}" )"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
+source "${SCRIPTDIR}/adpn-lockss-daemon-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="Try '${SCRIPT} help' for more information."
@@ -409,6 +410,21 @@ case "${CMD}" in
 				cat "${AU}/manifest.html" | grep -E "${ADPN_JSON_PACKET_REGEX}"
 				EXITCODE="$?"
 			fi
+		elif [[ ! -e "${AU}" && "${AU}" =~ ^daemon:(.*)$ ]] ; then
+			INGEST_TITLE="${BASH_REMATCH[1]}"
+			JSON="$( adpn_describe_title_from_daemon "${INGEST_TITLE}" | lockss-plugin-props-print-parameter.py --output=application/json )"
+			declare -a JSON_OVERLAY=( "$( printf "%s" "${JSON}" | adpn-json.py --prolog --output=application/json )" )
+			if [[ -n "${JSON}" ]] ; then
+				INGEST_TITLE="$( printf "%s\n" "${JSON}" | adpn-json.py --key=":lockssAU:Volume" )"
+				
+				LOCKSS_AU_KEY="$( printf "%s\n" "${JSON}" | adpn-json.py --key=":lockssAU:key" )"
+				declare -a LOCKSS_PARAMETERS=()
+				JSON_OVERLAY+=( "$( printf "%s\n" "${LOCKSS_AU_KEY}" | adpn_describe_plugin_from_lockss_id | lockss-plugin-props-print-parameter.py --output=application/json | adpn-json.py --output=application/json --prolog )" )
+				[[ -n "${INGEST_TITLE}" ]] && JSON_OVERLAY+=( "$( adpn-json.py --key="Ingest Title" --value="${INGEST_TITLE}" --output=application/json --prolog )" )
+				printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json --prolog
+			fi
+		elif [[ ! -e "${AU}" && "${AU}" =~ ^(.*[ ].*)$ ]] ; then
+			INGEST_TITLE="${BASH_REMATCH[1]}"
 		fi
 		;;
 		

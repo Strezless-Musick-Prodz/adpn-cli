@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# adpn-lockss-daemon-aliases: Define some common subroutines for getting data in and out from the LOCKSS daemon's web services
+
+function lockss_daemon_url_base() {
+	local DAEMON="$( adpn_parameter_from ".daemon" )"
+	[[ "${DAEMON}" =~ ^[A-Za-z]+[:][/][/] ]] || DAEMON="http://${DAEMON}"
+	[[ "${DAEMON}" =~ :[0-9]+ ]] || DAEMON="${DAEMON}:8081/"
+	printf "%s" "${DAEMON}" | sed -E 's/\/+$//'
+}
+
+function lockss_daemon_data_table_to_tsv() {
+	local SW_TSV="$( adpn_command_line_switches_to_tsv "$@" )"
+	local URL="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "url" )"
+	local FORMAT="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "format" )"
+	[[ -n "${FORMAT}" ]] || FORMAT="text"
+	local USER="$( adpn_parameter_from ".daemon/user" )"
+	local PASS="$( adpn_parameter_from ".daemon/pass" )"
+	PASS="$( adpn_getpassword_from "${PASS}" )"
+	local CREDENTIALS="${USER}:${PASS}"
+	local PREFIX="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "prefix" )"
+	[[ -n "${PREFIX}" ]] || PREFIX=".*"
+	local REGEX="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "regex" )"
+	[[ -n "${REGEX}" ]] || REGEX=".*"
+	local HEAD="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "head" )"
+	local FOOT="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "foot" )"
+	local NO_BODY="$( printf "%s" "${SW_TSV}" | adpn_switch_from_tsv "no-body" )"
+	
+	LATER=0
+	
+	if [[ "${URL}" =~ ^http(s)?:// ]] ; then
+		REQ_URL="${URL}${URL_SEP}output=${FORMAT}"
+	else
+		LOCKSS_DAEMON_URL_BASE=$( lockss_daemon_url_base )
+		REQ_URL="${LOCKSS_DAEMON_URL_BASE}/${URL##/}"
+		[[ "${REQ_URL}" =~ [?] ]] && URL_SEP="&" || URL_SEP="?"
+		REQ_URL="${REQ_URL}${URL_SEP}output=${FORMAT}"
+	fi
+	if [[ "${FORMAT}" == 'text' ]] ; then
+		local CURLOUT="$( curl --fail --silent "${REQ_URL}" --user "${CREDENTIALS}" )"
+		local result="$?"
+		printf "%s" "${CURLOUT}" | while read -r LINE ; do
+			if [[ -n "${LINE}" ]] ; then
+				[[ "${LINE}" =~ ^$PREFIX[=] ]] && [[ "${LINE}" =~ $REGEX ]] && [[ "${LATER}" -gt 0 ]] && printf "\n%s \n" "--"
+				[[ "${LINE}" =~ ^$PREFIX[=] ]] && [[ "${LINE}" =~ $REGEX ]] && printf "%s\n" "${LINE}" | sed -E 's/([^\\]),/\1\n/g' && LATER=1
+
+			fi
+		done
+		[[ "${LATER}" -gt 0 ]] || result=1
+	elif [[ "${FORMAT}" == 'xml' ]] ; then
+		local -a LDT_SW=( --user="${USER}" --pass="${PASS}" --url="${REQ_URL}" )
+		[[ -n "${HEAD}" ]] && LDT_SW+=( "--head" )
+		[[ -n "${FOOT}" ]] && LDT_SW+=( "--foot" )
+		[[ -n "${NO_BODY}" ]] && LDT_SW+=( "--no-body" )
+		TSV="$( lockss-daemon-table.py "${LDT_SW[@]}" )"; result="$?"
+		[[ "${result}" -eq 0 ]] && { printf "%s\n" "${TSV}" | grep -E "${REGEX}" ; result="$?" ; }
+	fi
+	
+	return "${result}"
+}
+
+function adpn_describe_title_from_daemon() {
+	local INGEST_TITLE="${1}"
+	local REGEX="$( printf -- '^ArchivalUnitTable(\s+)(\S+)(\s+)(%s)(\s\[approved for removal\])?(\s+)PeerRepair' "${INGEST_TITLE}" )"
+	TSV="$( lockss_daemon_data_table_to_tsv --url=/DaemonStatus?table=ArchivalUnitStatusTable --format=xml --regex="${REGEX}" )"
+	LOCKSS_ID="$( printf "%s\n" "${TSV}" | cut -s --field=2 )"
+	HT_LOCKSS_ID="$( rawurlencode "${LOCKSS_ID}" 2 )"
+	
+	printf "lockssAU:key\t%s\n" "${LOCKSS_ID}"
+	
+	local STATUS_URL="$( printf -- "/DaemonStatus?table=ArchivalUnitTable&key=%s" "${HT_LOCKSS_ID}" )"
+	TSV="$( lockss_daemon_data_table_to_tsv --url="${STATUS_URL}" --format=xml --foot --no-body )"
+	
+	printf "%s\n" "${TSV}" | while IFS="" read -r LINE ; do
+		FIELD_NAME="$( printf "%s\n" "${LINE}" | cut --field=1 )"
+		FIELD_TYPE="$( printf "%s\n" "${LINE}" | cut -s --field=2 )"
+		FIELD_CONTENTS="$( printf "%s\n" "${LINE}" | cut -s --field=3- | sed -E 's/\t/;/g' )"
+		[[ -n "${FIELD_NAME}" ]] && printf "lockssAU:%s\t%s\n" "${FIELD_NAME}" "${FIELD_CONTENTS}"
+	done
+}
+
+function adpn_describe_plugin_from_lockss_id() {
+	local LOCKSS_AU_KEY="${1}" ; shift
+	[[ -z "${LOCKSS_AU_KEY}" ]] && LOCKSS_AU_KEY="$( cat - )"
+	
+	PLUGIN_ID="$( printf "%s\n" "${LOCKSS_AU_KEY}" | cut --delimiter='&' --field=1 )"
+	if [[ -n "${PLUGIN_ID}" ]] ; then
+		PLUGIN_ID="$( printf "%s" "${PLUGIN_ID}" | sed -E 's/[|]/./g' )"
+		printf '%s\t%s\n' "Plugin ID" "${PLUGIN_ID}"
+	fi
+	
+	TSV="$( printf "%s\n" "${LOCKSS_AU_KEY}" | cut --delimiter='&' --fields=2- --output-delimiter=$'\t' )"
+	printf "%s\n" "${TSV}" | while IFS=$'\t' read -ra PAIRS ; do
+		for LINE in "${PAIRS[@]}" ; do
+			PARAM_KEY="$( printf "%s\n" "${LINE}" | cut --delimiter='~' --field=1 )"
+			PARAM_VALUE="$( printf "%s\n" "${LINE}" | cut --delimiter='~' --fields=2- )"
+			PARAM_VALUE="$( urldecode "${PARAM_VALUE}" )"
+			printf '%s\t%s="%s"\t%s\n' "PARAM(STRING):" "${PARAM_KEY}" "${PARAM_VALUE}" "${PARAM_KEY}"
+		done
+	done
+}
+
+function adpn_packet2lockssid() {
+	local JSON_PACKET=$( cat - | adpn-json.py --output="application/json" )
+	local PLUGIN_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Plugin ID" )
+
+	IFS=""
+	shopt -s lastpipe
+
+	local -a PARAMETERS=()
+	printf "%s" "${JSON_PACKET}" | adpn-json.py --key="parameters" | while read -r LINE ; do
+		local KEY=$( printf "%s\n" "${LINE}" | cut --field=1 )
+		local VALUE=$( printf "%s\n" "${LINE}" | cut --field=2- )
+		local ENCKEY=$( rawurlencode "${KEY}" 2 )
+		local ENCVALUE=$( rawurlencode "${VALUE}" 2 )
+		PARAMETERS+=( "$( printf "%s~%s\n" "${ENCKEY}" "${ENCVALUE}" )" )
+	done
+	
+	local ALL_PARAMETERS="$( join_by "&" "${PARAMETERS[@]}" )"
+	local LOCKSS_ID="$( printf "%s&%s" "${PLUGIN_ID//./|}" "${ALL_PARAMETERS}" )"
+	rawurlencode "${LOCKSS_ID}" 2
+}
+
+function adpn_packet2daemonstatusurl() {
+	local DAEMON="$( adpn_parameter_from ".daemon" )"
+	[[ "${DAEMON}" =~ ^[A-Za-z]+[:][/][/] ]] || DAEMON="http://${DAEMON}"
+	[[ "${DAEMON}" =~ :[0-9]+ ]] || DAEMON="${DAEMON}:8081/"
+	DAEMON="$( printf "%s" "${DAEMON}" | sed -E 's/\/+$//' )"
+	
+	local URL_PREFIX="${DAEMON}/DaemonStatus?table=ArchivalUnitTable&key="
+	local LOCKSSID="$( cat - | adpn_packet2lockssid )"
+	printf "%s%s" "${URL_PREFIX}" "${LOCKSSID}"
+}
+
+function adpn_packet2daemonstatustable() {
+	local URL="$( cat - | adpn_packet2daemonstatusurl )&output=text"
+	local USER="$( adpn_parameter_from ".daemon/user" )"
+	local PASS="$( adpn_parameter_from ".daemon/pass" )"
+	local CREDENTIALS="${USER}:$( adpn_getpassword_from "${PASS}" )"
+	local PREFIX="${1}"
+	
+	LATER=0
+	local CURLOUT="$( curl --fail --silent "${URL}" --user "${CREDENTIALS}" )"
+	local result="$?"
+	
+	printf "%s" "${CURLOUT}" | while read -r LINE ; do
+		if [[ -n "${LINE}" ]] ; then
+			[[ "${LINE}" =~ ^$PREFIX[=] ]] && [[ "${LATER}" -gt 0 ]] && printf "\n%s \n" "--"
+			[[ "${LINE}" =~ ^$PREFIX[=] ]] && printf "%s\n" "${LINE}" | sed -E 's/([^\\]),/\1\n/g' && LATER=1
+
+		fi
+	done
+	[[ "${LATER}" -gt 0 ]] || result=1
+
+	return "${result}"
+}

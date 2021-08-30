@@ -4,6 +4,8 @@
 #
 # @version 2021.0807-1244
 
+[[ -z "${SCRIPTDIR}" ]] && SCRIPTDIR="$( readlink --canonicalize "${BASH_SOURCE}" | xargs dirname )"
+
 PATH="${SCRIPTDIR}:${PATH}"
 CONFFILE="${SCRIPTDIR}/${SCRIPT}.defaults.conf"
 JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
@@ -193,6 +195,7 @@ declare -A _PARAM=()
 declare -A _SWITCHES=()
 declare -a _CMD_REST=()
 
+export ADPN_SWITCH_REGEX='^--([A-Za-z_0-9][^=]*)(=(.*))?$'
 function adpn_command_line() {
 	shopt -s lastpipe
 	
@@ -209,7 +212,7 @@ function adpn_command_line() {
 		while IFS="" read -r SWITCH ; do # < "${SRC}"
 			if [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--$ ]] ; then
 				switches_on=0
-			elif [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--([A-Za-z_0-9][^=]*)(=(.*))?$ ]] ; then
+			elif [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ${ADPN_SWITCH_REGEX} ]] ; then
 				local KEY="${BASH_REMATCH[1]}"
 				local VALUE="${BASH_REMATCH[3]}"
 				if [[ -z "${BASH_REMATCH[2]}" ]] ; then
@@ -230,7 +233,6 @@ function adpn_command_line() {
 				written_here["${ORIG_KEY}"]=1
 			elif [[ ! -z "${SWITCH}" ]] ; then
 				_ARGV+=("${SWITCH}")
-				
 			fi
 		done < "${SRC}"
 		
@@ -244,6 +246,44 @@ function adpn_command_line() {
 	_CMD_REST=()
 	[[ "${#_SWITCHES[@]}" -gt 0 ]] && _CMD_REST+=( "${_SWITCHES[@]}" )
 	[[ "${#_ARGV[@]}" -gt 2 ]] && _CMD_REST+=( "--" "${_ARGV[@]:2}" )
+}
+
+function adpn_command_line_switches_to_tsv() {
+	local switches_on=1
+
+	FIFO="$( mktemp -d )"
+	touch "${FIFO}/switches"
+	touch "${FIFO}/argv"
+	
+	for ARG in "$@" ; do
+		if [[ "${switches_on}" -gt 0 && "${ARG}" =~ ^--$ ]] ; then
+			switches_on=0
+		elif [[ "${switches_on}" -gt 0 && "${ARG}" =~ ${ADPN_SWITCH_REGEX} ]] ; then
+			local KEY="${BASH_REMATCH[1]}"
+			local VALUE="${BASH_REMATCH[3]}"
+			[[ -z "${BASH_REMATCH[2]}" ]] && VALUE="$KEY"
+			printf -- "%q\t%q\n" "${KEY}" "${VALUE}" >> "${FIFO}/switches"
+		else
+			printf -- "--\t%q\n" "${ARG}" >> "${FIFO}/argv"
+		fi
+	done
+	cat "${FIFO}/switches" "${FIFO}/argv"
+	rm -rf "${FIFO}"
+}
+function adpn_switch_from_tsv() {
+	local RESULT_STR
+	local GREP_STR
+	local result=0
+	
+	shopt -s lastpipe
+	for PREFIX in "$@" ; do
+		GREP_STR="$( cat - | grep -E "^${PREFIX}\s" )" ; result="$?"
+		printf "%s\n" "${GREP_STR}" | while IFS="" read -r LINE ; do
+			[[ -n "${LINE}" ]] && RESULT_STR="$( printf "%s\n" "${LINE}" | cut --field=2- )" || RESULT_STR=""
+			[[ -n "${RESULT_STR}" ]] && eval "RESULT_STR=${RESULT_STR}" && printf "%s" "${RESULT_STR}" || result="$?"
+		done
+	done
+	return "${result}"
 }
 
 declare -x DDBG DDBGLEVEL
@@ -761,61 +801,6 @@ function adpn_plugin_parameter_from_json() {
 	done
 	
 	join_by "${delimiter}" "${FOUND[@]}"
-	return "${result}"
-}
-
-function adpn_packet2lockssid() {
-	local JSON_PACKET=$( cat - | adpn-json.py --output="application/json" )
-	local PLUGIN_ID=$( printf "%s" "${JSON_PACKET}" | adpn-json.py --key="Plugin ID" )
-
-	IFS=""
-	shopt -s lastpipe
-
-	local -a PARAMETERS=()
-	printf "%s" "${JSON_PACKET}" | adpn-json.py --key="parameters" | while read -r LINE ; do
-		local KEY=$( printf "%s\n" "${LINE}" | cut --field=1 )
-		local VALUE=$( printf "%s\n" "${LINE}" | cut --field=2- )
-		local ENCKEY=$( rawurlencode "${KEY}" 2 )
-		local ENCVALUE=$( rawurlencode "${VALUE}" 2 )
-		PARAMETERS+=( "$( printf "%s~%s\n" "${ENCKEY}" "${ENCVALUE}" )" )
-	done
-	
-	local ALL_PARAMETERS="$( join_by "&" "${PARAMETERS[@]}" )"
-	local LOCKSS_ID="$( printf "%s&%s" "${PLUGIN_ID//./|}" "${ALL_PARAMETERS}" )"
-	rawurlencode "${LOCKSS_ID}" 2
-}
-
-function adpn_packet2daemonstatusurl() {
-	local DAEMON="$( adpn_parameter_from ".daemon" )"
-	[[ "${DAEMON}" =~ ^[A-Za-z]+[:][/][/] ]] || DAEMON="http://${DAEMON}"
-	[[ "${DAEMON}" =~ :[0-9]+ ]] || DAEMON="${DAEMON}:8081/"
-	DAEMON="$( printf "%s" "${DAEMON}" | sed -E 's/\/+$//' )"
-	
-	local URL_PREFIX="${DAEMON}/DaemonStatus?table=ArchivalUnitTable&key="
-	local LOCKSSID="$( cat - | adpn_packet2lockssid )"
-	printf "%s%s" "${URL_PREFIX}" "${LOCKSSID}"
-}
-
-function adpn_packet2daemonstatustable() {
-	local URL="$( cat - | adpn_packet2daemonstatusurl )&output=text"
-	local USER="$( adpn_parameter_from ".daemon/user" )"
-	local PASS="$( adpn_parameter_from ".daemon/pass" )"
-	local CREDENTIALS="${USER}:$( adpn_getpassword_from "${PASS}" )"
-	local PREFIX="${1}"
-	
-	LATER=0
-	local CURLOUT="$( curl --fail --silent "${URL}" --user "${CREDENTIALS}" )"
-	local result="$?"
-	
-	printf "%s" "${CURLOUT}" | while read -r LINE ; do
-		if [[ -n "${LINE}" ]] ; then
-			[[ "${LINE}" =~ ^$PREFIX[=] ]] && [[ "${LATER}" -gt 0 ]] && printf "\n%s \n" "--"
-			[[ "${LINE}" =~ ^$PREFIX[=] ]] && printf "%s\n" "${LINE}" | sed -E 's/([^\\]),/\1\n/g' && LATER=1
-
-		fi
-	done
-	[[ "${LATER}" -gt 0 ]] || result=1
-
 	return "${result}"
 }
 
