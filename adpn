@@ -415,11 +415,11 @@ case "${CMD}" in
 			JSON="$( adpn_describe_title_from_daemon "${INGEST_TITLE}" | lockss-plugin-props-print-parameter.py --output=application/json )"
 			declare -a JSON_OVERLAY=( "$( printf "%s" "${JSON}" | adpn-json.py --prolog --output=application/json )" )
 			if [[ -n "${JSON}" ]] ; then
-				INGEST_TITLE="$( printf "%s\n" "${JSON}" | adpn-json.py --key=":lockssAU:Volume" )"
+				INGEST_TITLE="$( printf "%s\n" "${JSON}" | adpn-json.py --key="lockssAU:Volume" )"
 				
-				LOCKSS_AU_KEY="$( printf "%s\n" "${JSON}" | adpn-json.py --key=":lockssAU:key" )"
+				LOCKSS_AU_KEY="$( printf "%s\n" "${JSON}" | adpn-json.py --key="lockssAU:key" )"
 				declare -a LOCKSS_PARAMETERS=()
-				JSON_OVERLAY+=( "$( printf "%s\n" "${LOCKSS_AU_KEY}" | adpn_describe_plugin_from_lockss_id | lockss-plugin-props-print-parameter.py --output=application/json | adpn-json.py --output=application/json --prolog )" )
+				JSON_OVERLAY+=( "$( adpn_describe_plugin_from_lockss_id "${LOCKSS_AU_KEY}" | lockss-plugin-props-print-parameter.py --output=application/json | adpn-json.py --output=application/json --prolog )" )
 				[[ -n "${INGEST_TITLE}" ]] && JSON_OVERLAY+=( "$( adpn-json.py --key="Ingest Title" --value="${INGEST_TITLE}" --output=application/json --prolog )" )
 				printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json --prolog
 			fi

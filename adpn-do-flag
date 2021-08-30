@@ -102,7 +102,7 @@ if [[ ! -z "${_PARAM[remote]}" ]] ; then
 			adpn_notice "${LINENO}" "* Connecting to %s to execute: %s" "${SSH_HOST}" "${SSH_CMDLINE}"
 		fi
 		
-		ssh -t "${SSH_HOST}" "${SSH_CMDLINE}"
+		ssh -tt "${SSH_HOST}" "${SSH_CMDLINE}"
 	
 		if [[ -z "${QQ}" ]] ; then
 			adpn_notice "${LINENO}" "* Disconnected from %s" "${SSH_HOST}"
