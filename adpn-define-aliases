@@ -206,7 +206,7 @@ function adpn_command_line() {
 	local -A can_overwrite=()
 	local -A written_here=()
 
-	for SRC in $( readlink -e "$@" 2>&/dev/null ) ; do
+	for SRC in $( readlink -e "$@" 2>/dev/null ) ; do
 		written_here=()
 		if [[ -r "${SRC}" ]] ; then
 		
