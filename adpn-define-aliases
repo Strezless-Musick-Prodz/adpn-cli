@@ -205,36 +205,39 @@ function adpn_command_line() {
 	
 	local -A can_overwrite=()
 	local -A written_here=()
-	for SRC in "$@" ; do
+
+	for SRC in $( readlink -e "$@" 2>&/dev/null ) ; do
 		written_here=()
+		if [[ -r "${SRC}" ]] ; then
 		
-		shopt -s lastpipe
-		while IFS="" read -r SWITCH ; do # < "${SRC}"
-			if [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--$ ]] ; then
-				switches_on=0
-			elif [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ${ADPN_SWITCH_REGEX} ]] ; then
-				local KEY="${BASH_REMATCH[1]}"
-				local VALUE="${BASH_REMATCH[3]}"
-				if [[ -z "${BASH_REMATCH[2]}" ]] ; then
-					VALUE="$KEY"
+			shopt -s lastpipe
+			while IFS="" read -r SWITCH ; do # < "${SRC}"
+				if [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--$ ]] ; then
+					switches_on=0
+				elif [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ${ADPN_SWITCH_REGEX} ]] ; then
+					local KEY="${BASH_REMATCH[1]}"
+					local VALUE="${BASH_REMATCH[3]}"
+					if [[ -z "${BASH_REMATCH[2]}" ]] ; then
+						VALUE="$KEY"
+					fi
+					
+					if [[ -z "${can_overwrite[${KEY}]}" ]] ; then
+						IDX=1 ; ORIG_KEY="${KEY}"
+						while [[ -n "${_SWITCHES[${KEY}]}" ]]  ; do
+							IDX=$(( IDX + 1 ))
+							KEY="${ORIG_KEY}#${IDX}"
+						done
+					else
+						can_overwrite["${KEY}"]=""
+					fi
+					_PARAM[$KEY]="${VALUE}"
+					_SWITCHES[$KEY]="${SWITCH}"
+					written_here["${ORIG_KEY}"]=1
+				elif [[ ! -z "${SWITCH}" ]] ; then
+					_ARGV+=("${SWITCH}")
 				fi
-				
-				if [[ -z "${can_overwrite[${KEY}]}" ]] ; then
-					IDX=1 ; ORIG_KEY="${KEY}"
-					while [[ -n "${_SWITCHES[${KEY}]}" ]]  ; do
-						IDX=$(( IDX + 1 ))
-						KEY="${ORIG_KEY}#${IDX}"
-					done
-				else
-					can_overwrite["${KEY}"]=""
-				fi
-				_PARAM[$KEY]="${VALUE}"
-				_SWITCHES[$KEY]="${SWITCH}"
-				written_here["${ORIG_KEY}"]=1
-			elif [[ ! -z "${SWITCH}" ]] ; then
-				_ARGV+=("${SWITCH}")
-			fi
-		done < "${SRC}"
+			done < "${SRC}"
+		fi
 		
 		can_overwrite=()
 		for key in "${!written_here[@]}" ; do

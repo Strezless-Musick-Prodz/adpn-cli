@@ -319,7 +319,6 @@ case "${CMD}" in
 					A_DATA["${S_FIELD}"]="$( urldecode "${S_ENC_VALUE}" )"
 				done
 				IFS=""
-				declare -p A_DATA 1>&2 
 				
 				ISSUE_ID="${A_DATA[id]}"
 				ISH_TITLE="${A_DATA[title]}"

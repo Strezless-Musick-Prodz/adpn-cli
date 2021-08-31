@@ -423,6 +423,15 @@ case "${CMD}" in
 				[[ -n "${INGEST_TITLE}" ]] && JSON_OVERLAY+=( "$( adpn-json.py --key="Ingest Title" --value="${INGEST_TITLE}" --output=application/json --prolog )" )
 				printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json --prolog
 			fi
+		elif [[ -n "${MYSQL_HOST}" && "${AU}" =~ ^au_title:(.*)$ ]] ; then
+			INGEST_TITLE="${BASH_REMATCH[1]}"
+			INGEST_TITLE_OP=""
+			if [[ "${INGEST_TITLE}" =~ ^/(.*)/$ ]] ; then
+				INGEST_TITLE="${BASH_REMATCH[1]}"
+				INGEST_TITLE_OP="~"
+			fi
+			{ printf "%s" "#" ; "${SCRIPTDIR}/adpn-titlelist-do" get --au_title="${INGEST_TITLE_OP}${INGEST_TITLE}" ; }
+			
 		elif [[ ! -e "${AU}" && "${AU}" =~ ^(.*[ ].*)$ ]] ; then
 			INGEST_TITLE="${BASH_REMATCH[1]}"
 		fi
