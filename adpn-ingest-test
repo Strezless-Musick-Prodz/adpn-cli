@@ -35,17 +35,17 @@ Usage:
   
   adpn-ingest-test --local=<PATH> [OPTION]...
 
-    --local=<PATH>           	path to the files being put into the AU (e.g.: 'w:\\Path')
-    --au_title=<TITLE>       	title for this AU in titledb (e.g.: 'ADAH Lovely Files')
-    --<PARAM>=<VALUE>        	set plugin parameter <PARAM> to <VALUE>
-                             	  (e.g.: subdirectory=Lovely-Files)
+    --local=<PATH>            	path to the files being put into the AU (e.g.: 'w:\\Path')
+    --au_title=<TITLE>        	title for this AU in titledb (e.g.: 'ADAH Lovely Files')
+    --<PARAM>=<VALUE>         	set plugin parameter <PARAM> to <VALUE>
+                              	  (e.g.: subdirectory=Lovely-Files)
 
   To retrieve file size and file count information from an FTP staging server:
-    --staged=<URL>           	FTP location for base directory or exact location of
-								  staged AU files (e.g.: ftp://user@server/Lockss/)
-    --subdirectory=<DIR>		optional, subdirectory within the FTP base directory that
-								  contains the staged AU files. If provided, it will also
-								  be passed along as a parameter to the publishing plugin.
+    --staged=<URL>            	FTP location for base directory or exact location of
+                              	staged AU files (e.g.: ftp://user@server/Lockss/)
+    --subdirectory=<DIR>      	optional, subdirectory within the FTP base directory that
+                              	  contains the staged AU files. If provided, it will also
+                              	  be passed along as a parameter to the publishing plugin.
 
   To select and configure a plugin for this ingest, use:
     --jar=<URL>               	URL directly to a plugin's JAR file on the props server
@@ -55,15 +55,15 @@ Usage:
     --plugin-keywords=<WORDS> 	use the plugin whose name contains keywords <WORDS>
 
   To connect to your LOCKSS daemon (to retrieve plugin lists):  
-    --daemon=<HOST>:<PORT>   	Your LOCKSS daemon host (e.g.: adpnadah.alabama.gov:8081)
-    --user=<USERNAME>        	The HTTP Auth username for your LOCKSS Daemon
-    --pass=<PASSWORD>        	The HTTP Auth password for your LOCKSS Daemon
-	
+    --daemon=<HOST>:<PORT>    	Your LOCKSS daemon host (e.g.: adpnadah.alabama.gov:8081)
+    --user=<USERNAME>         	The HTTP Auth username for your LOCKSS Daemon
+    --pass=<PASSWORD>         	The HTTP Auth password for your LOCKSS Daemon
+  
   Plugins will be hosted by the LOCKSS props server/admin node. If you need to connect
   to the LOCKSS props server through a SOCKS5 proxy, use:
-    --proxy=<HOST>           	the name of your proxy (use localhost for an SSH tunnel)
-    --port=<NUMBER>          	the port number for your proxy
-	
+    --proxy=<HOST>            	the name of your proxy (use localhost for an SSH tunnel)
+    --port=<NUMBER>           	the port number for your proxy
+  
   If you need to use SSH tunneling to connect to the SOCKS5 proxy, use:
     --tunnel=<HOST>          	the name of the host to open an SSH tunnel to
     --tunnel-port=<NUMBER>   	the port for SSH connections to the tunnel (default: 22)
@@ -115,12 +115,11 @@ declare -A DEPENDENCIES ; DEPENDENCIES=(
 )
 
 DEPENDENCY_FAILURE=""
-for CMD in "${!DEPENDENCIES[@]}" ; do
-	DESC=$(printf "${DEPENDENCIES[$CMD]}" "${CMD}")
-	if [[ -z $(which ${CMD}) ]] ; then
-		echo 1>&2
-		echo Dependency Failure: ${CMD}. This script requires the ${DESC}. 1>&2
-		DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+${CMD}"
+for _CMD in "${!DEPENDENCIES[@]}" ; do
+	DESC=$(printf "${DEPENDENCIES[$_CMD]}" "${_CMD}")
+	if [[ -z $(which ${_CMD}) ]] ; then
+		adpn_notice "${LINENO}" "Dependency Failure: %s. This script requires the %s" "${_CMD}" "${DESC}". 1>&2
+		DEPENDENCY_FAILURE="${DEPENDENCY_FAILURE}+${_CMD}"
 	fi
 done
 
@@ -132,21 +131,17 @@ fi
 ### COMMAND LINE: loop through switches and sort them to subsidiary scripts ##############
 ##########################################################################################
 
-shopt -s lastpipe
-
 JAR=""
 HELP=""
-_CMDLINE="$0 $*"
 
 declare -a SWITCHFILES ; SWITCHFILES=()
-if [[ -r "${CONFFILE}" ]] ; then
-	SWITCHFILES+=(${CONFFILE})
-fi
+[[ -r "${CONFFILE}" ]] && SWITCHFILES+=(${CONFFILE})
 
 CMDLINETXT=$(mktemp)
 JSONSWITCHES=$(mktemp)
-
+declare -a _CMDLINE=("$0")
 until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=( "$1" )
 	printf "%s\n" "$1" >> "${CMDLINETXT}"
 	shift
 done
@@ -154,10 +149,9 @@ done
 SWITCHFILES+=(${CMDLINETXT})
 
 adpn_command_line "${SWITCHFILES[@]}"
-
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
 
-[[ "${DBGLEVEL}" -ge 1 ]] && echo "[${SCRIPT}] command line: ${_CMDLINE}" >& 2
+adpn_debug 10,"${SCRIPT}" "${LINENO}" "command line: %s" "$( printf "%q " "${_CMDLINE[@]}" )"
 
 if [[ "${_ARGV[1]}" == "-" || -r "${_ARGV[1]}" ]] ; then
 	if [[ "${DBGLEVEL}" -ge 1 ]] ; then
@@ -175,20 +169,18 @@ if [[ "${_ARGV[1]}" == "-" || -r "${_ARGV[1]}" ]] ; then
 	fi
 fi
 
-_ARGV=()
-_PARAM=( ) # Defaults before command-line.
 for DEFAULT in "daemon" "daemon/user" "daemon/pass" ; do
 	DEFAULT_VALUE=$(adpnprop "${DEFAULT}")
 	if [[ -n "${DEFAULT_VALUE}" ]] ; then
 		DEFAULT_KEY="$( basename "${DEFAULT}" )"
-		_PARAM["${DEFAULT_KEY}"]="${DEFAULT_VALUE}"
+		printf -- "--%s=%s\n" "${DEFAULT_KEY}" "${DEFAULT_VALUE}" >> "${JSONSWITCHES}"
 	fi 
 done
 
 SWITCHFILES=()
-SWITCHFILES+=(${CONFFILE})
-SWITCHFILES+=(${JSONSWITCHES})
-SWITCHFILES+=(${CMDLINETXT})
+[[ -r "${CONFFILE}" ]] && SWITCHFILES+=( "${CONFFILE}" )
+[[ -r "${JSONSWITCHES}" ]] && SWITCHFILES+=( "${JSONSWITCHES}" )
+[[ -r "${CMDLINETXT}" ]] && SWITCHFILES+=( "${CMDLINETXT}" )
 ADPN_INGEST_TEST_DISPLAY=ingest
 
 adpn_command_line "${SWITCHFILES[@]}"
@@ -227,9 +219,7 @@ for KEY in "${!_PARAM[@]}" ; do
 	esac
 done
 
-[[ "${DBGLEVEL}" -ge 3 ]] && printf "\n[%s] parameters:" "${SCRIPT}" >&2
-[[ "${DBGLEVEL}" -ge 3 ]] && printf "\n[%s] %s" "${SCRIPT}" "$(declare -p _ARGV)" >&2
-[[ "${DBGLEVEL}" -ge 3 ]] && printf "\n[%s] %s\n\n" "${SCRIPT}" "$(declare -p _PARAM)" >&2
+adpn_debug 15,"${SCRIPT}" "${LINENO}" "parameters: %s %s" "$(declare -p _ARGV)" "$(declare -p _PARAM)"
 
 rm "${JSONSWITCHES}"
 rm "${CMDLINETXT}"

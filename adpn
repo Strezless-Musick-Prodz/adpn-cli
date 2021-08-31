@@ -35,8 +35,6 @@ Exit codes:
 ### COMMAND LINE: loop through switches ##################################################
 ##########################################################################################
 
-shopt -s lastpipe
-
 declare -a SWITCHFILES ; SWITCHFILES=()
 if [[ -r "${CONFFILE}" ]] ; then
 	SWITCHFILES+=(${CONFFILE})
@@ -66,7 +64,12 @@ CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # @see adpn-define-aliases
 
-declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
+declare -a _FORCE_CONTEXT=( "--context=${SCRIPT_CMD_NAME}" )
+
+declare -a _ADD_CONTEXT=()
+[[ -z "${_PARAM[context]}" ]] && _ADD_CONTEXT=( "${_FORCE_CONTEXT[@]}" )
+
+declare -a CONTEXT_SW=( "${_ADD_CONTEXT[@]}" )
 [[ -n "${DDBG}" ]] && CONTEXT_SW+=( "${DDBG}" )
 [[ -n "${VV}" ]] && CONTEXT_SW+=( "${VV}" )
 [[ -n "${QQ}" ]] && CONTEXT_SW+=( "${QQ}" )
@@ -208,7 +211,7 @@ case "${CMD}" in
 		declare -a ADS_ARGV=()
 		[[ -z "${_ARGV[2]}" ]] && ADS_ARGV+=( "all" ) || ADS_ARGV+=( "${_ARGV[@]:2}" )
 		ADS_ARGV+=( "${_SWITCHES[@]}" )
-		[[ -z "${_PARAM[context]}" ]] && ADS_ARGV+=( "--context=${SCRIPT_CMD_NAME}" )
+		[[ -z "${_PARAM[context]}" ]] && ADS_ARGV+=( "${_ADD_CONTEXT[@]}" )
 		[[ -z "${_PARAM[script]}" ]] && ADS_ARGV+=( "--script=${SCRIPTPATH}" )
 		
 		adpn-do-setup "${ADS_ARGV[@]}" ; EXITCODE="$?"
@@ -614,7 +617,7 @@ case "${CMD}" in
 #
 # @version 2021.0709
 
-		adpn-do-notify "${CONTEXT_SW[@]}" "${_CMD_REST[@]}"
+		adpn-do-notify "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
 		;;
 	
@@ -884,7 +887,7 @@ case "${CMD}" in
 
 
 		AI_OUTPUT="$(mktemp)"
-		"${ME}" accept "${_CMDLINE[@]:2}" --for=ALL --pipeline=ingested:published --context="${SCRIPT} ${CMD}" > "${AI_OUTPUT}"
+		"${ME}" accept --for=ALL --pipeline=ingested:published "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" > "${AI_OUTPUT}"
 		AI_ERRCODE="$?"
 
 		cat "${AI_OUTPUT}"
@@ -994,10 +997,14 @@ case "${CMD}" in
 			
 			if [[ -n "${_PARAM[preserved]}${_PARAM[added]}${_PARAM[crawled]}${_PARAM[down]}" ]] ; then
 				DST_OUTPUT=( adpn_check_au_status "${_SWITCHES[@]}" )
-				IFS="" ; for TEST in "${DST_GREP_TESTS[@]}" ; do
+				
+				push_input_loop
+				for TEST in "${DST_GREP_TESTS[@]}" ; do
 					DST_OUTPUT+=( "$( printf -- "--test:%s" "${TEST}" )" )
 					DST_GREP_TESTS_HUMAN_READABLE+=( "$( printf "%s" "${TEST}" | cut --delimiter="=" --field=1 )" )
 				done
+				pop_input_loop
+				
 				DST_FILTER=( sed -E -e 's/\t/    /' -e 's/^([^=]+)=(.*)$/\1\t\2/' )
 			elif [[ "${_PARAM[output]}" == "text/tab-separated-values" ]] ; then
 				DST_FILTER=( sed -E -e 's/\t/    /' -e 's/^([^=]+)=(.*)$/\1\t\2/' )
@@ -1099,14 +1106,14 @@ case "${CMD}" in
 		MYSQL_HOST="$( adpnprop 'mysql/host' )"
 		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
 		if [[ -n "${MYSQL_HOST}"  ]] ; then
-			adpn-do-flag --context="${SCRIPT} ${CMD}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+			adpn-do-flag "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		elif [[ -n "${SSH_REMOTE}" ]] ; then
-			adpn-do-flag --remote="${SSH_REMOTE}" --context="${SCRIPT} ${CMD}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+			adpn-do-flag --remote="${SSH_REMOTE}" "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		fi
 		;;
 		
 	"gitlab")
-		adpn-do-gitlab "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
+		adpn-do-gitlab "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		;;
 	
 	"pipe")
@@ -1230,7 +1237,7 @@ case "${CMD}" in
 #
 # @version 2021.0302
 
-		adpn-do-rebalance "${_CMDLINE[@]:2}" --context="${SCRIPT} ${CMD}" ; EXITCODE="$?"
+		adpn-do-rebalance "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		;;
 
 	"publisher")
@@ -1246,10 +1253,11 @@ case "${CMD}" in
 # @version 2021.0302
 		MYSQL_HOST="$( adpnprop 'mysql/host' )"
 		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
+
 		if [[ -n "${MYSQL_HOST}"  ]] ; then
-			adpn-do-publisher --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+			adpn-do-publisher "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		elif [[ -n "${SSH_REMOTE}" ]] ; then
-			adpn-do-publisher --remote="${SSH_REMOTE}" --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+			adpn-do-publisher --remote="${SSH_REMOTE}" "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		fi
 		
 		;;
@@ -1265,7 +1273,7 @@ case "${CMD}" in
 #
 # @version 2019.0716
 
-		adpn-do-plugins --context="${SCRIPT} ${CMD}" "${_CMDLINE[@]:2}" ; EXITCODE="$?"
+		adpn-do-plugins "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		;;
 	
 	"echo")

@@ -34,8 +34,6 @@ declare -a _ARGV ; _ARGV=("$0")
 declare -a _CMDLINE ; _CMDLINE=("$0")
 declare -A _PARAM=()
 
-shopt -s lastpipe
-
 declare -a SWITCHFILES ; SWITCHFILES=()
 if [[ -r "${CONFFILE}" ]] ; then
 	SWITCHFILES+=(${CONFFILE})
@@ -84,8 +82,8 @@ declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
 [[ -n "${_SWITCHES[dry-run]}" ]] && CONTEXT_SW+=( "${_SWITCHES[dry-run]}" )
 [[ -n "${_SWITCHES[token]}" ]] && CONTEXT_SW+=( "${_SWITCHES[token]}" )
 
-adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
-adpn_debug 400,"gitlab","stash" "${LINENO}" "ADPN_STASH_FILE='%s'" "${ADPN_STASH_FILE}"
+adpn_debug 100,adpn,gitlab,"${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
+adpn_debug 400,adpn,gitlab,"${SCRIPT}",stash "${LINENO}" "ADPN_STASH_FILE='%s'" "${ADPN_STASH_FILE}"
 
 if [[ ! -z "${_PARAM[version]}" ]] ; then
 	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
@@ -143,7 +141,7 @@ case "${CMD}" in
 		if [[ -z "${OUT_JSON}" ]] ; then
 			OUT_JSON="$( "${ME}" get "${ADG_GET_ARGV[@]}" "${CONTEXT_SW[@]}" )" ; EXITCODE="$?"
 		else
-			adpn_debug 20 "${LINENO}" "Retrieved JSON response from HTTP cache (%d chars)" $( printf "%s" "${OUT_JSON}" | wc -c )
+			adpn_debug 20,adpn,gitlab,"${SCRIPT}" "${LINENO}" "Retrieved JSON response from HTTP cache (%d chars)" $( printf "%s" "${OUT_JSON}" | wc -c )
 		fi
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			adpn_notice "${LINENO}" "Gitlab HTTP API request (GET %s) failed, exit code=%d" "${ADG_GET_ARGV[0]}" "${EXITCODE}"
@@ -151,7 +149,7 @@ case "${CMD}" in
 			PATH_REGEX=$( join_by "|" "${_ARGV[@]:2}" )
 			REGEX="\bpath_with_namespace\s+(${PATH_REGEX})\b$"
 
-			adpn_debug 01 "${LINENO}" "%s " "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id --key=path_with_namespace "|" grep -E "${REGEX}"
+			adpn_debug 01,adpn,gitlab,"${SCRIPT}" "${LINENO}" "%s " "${SCRIPT}" get "/projects?membership=1" "|" adpn-json.py --parse --key=id --key=path_with_namespace "|" grep -E "${REGEX}"
 			
 			printf "%s" "${OUT_JSON}" | adpn-json.py --parse --key=id --key=path_with_namespace | grep -E "${REGEX}"
 		else
@@ -226,7 +224,7 @@ case "${CMD}" in
 		[[ -n "${_PARAM[assigneee]}" ]] && ASSIGNEE="$( rawurlencode "${_PARAM[assignee]}" )" && API_PATH="$( printf "%s%s%s=%s" "${API_PATH}" "${SEP}" "assignee_username" "${ASSIGNEE}" ) )" && SEP="&"
 
 		[[ -n "${ISSUE_ID}" ]] && ISSUE_STR="$( printf "ISSUE #%d -- " "${ISSUE_ID}" )" || ISSUE_STR=""
-		adpn_debug 1 "${LINENO}" "%sGET %s (%s)" "${ISSUE_STR}" "${API_PATH}" "$( declare -p _ARGV )"
+		adpn_debug 10,adpn,gitlab,http,"${SCRIPT}","${CMD}" "${LINENO}" "%sGET %s (%s)" "${ISSUE_STR}" "${API_PATH}" "$( declare -p _ARGV )"
 		
 		if [[ -n "${_SWITCHES[key]}" ]] ; then
 			for SW in "${!_SWITCHES[@]}" ; do
@@ -270,14 +268,14 @@ case "${CMD}" in
 		
 		PRIVATE_TOKEN=$( adpn_parameter_from "--token" ".gitlab/token<(adpn stash)" ) ; EXITCODE="$?"
 		if [[ -n "${PRIVATE_TOKEN}" ]] ; then
-			adpn_debug 500,gitlab,token "${LINENO}" "Private Token: %s" "$( obscure_password "${PRIVATE_TOKEN}" )"
+			adpn_debug 500,adpn,gitlab,token "${LINENO}" "Private Token: %s" "$( obscure_password "${PRIVATE_TOKEN}" )"
 			printf "%s" "${PRIVATE_TOKEN}"
 		else
 			PRIVATE_TOKEN=$( adpn_parameter_from ".gitlab/token" "keepass:///~/.adpn/adpnet.kdbx?title=Gitlab+Token" ) ; EXITCODE="$?"
-			adpn_debug 500,gitlab,token "${LINENO}" "Source for Private Token: %s" "${PRIVATE_TOKEN}"
+			adpn_debug 500,adpn,gitlab,token "${LINENO}" "Source for Private Token: %s" "${PRIVATE_TOKEN}"
 			if [[ "${EXITCODE}" -eq 0 && -n "${PRIVATE_TOKEN}" ]] ; then
 				PRIVATE_TOKEN=$( adpn_getpassword_from "${PRIVATE_TOKEN}" ); EXITCODE="$?"
-				adpn_debug 500,gitlab,token "${LINENO}" "Stashing gitlab/token for future reference..."
+				adpn_debug 500,adpn,gitlab,token "${LINENO}" "Stashing gitlab/token for future reference..."
 				[[ "${EXITCODE}" -eq 0 ]] && { "${ADPN}" stash post "gitlab/token" "${PRIVATE_TOKEN}" "${CONTEXT_SW[@]}" ; EXITCODE="$?" ; }
 				[[ "${EXITCODE}" -eq 0 ]] && printf "%s" "${PRIVATE_TOKEN}"
 			else
@@ -292,9 +290,10 @@ case "${CMD}" in
 		ERR_DATA=""
 				
 		ISH="${_ARGV[2]}"
+		[[ "${ISH}" =~ ^gitlab:(.*)$ ]] && ISH="${BASH_REMATCH[1]}"
 		
 		declare -a PACKET_KEYS=( "--key=id" "--key=title" "--key=description" "--key=web_url" "--key=project_id" "--key=iid" )
-		adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" "${PACKET_KEYS[@]}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
+		adpn_debug 01,adpn,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" issue "${ISH}" "${_ARGV[@]:3}" "${PACKET_KEYS[@]}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
 		
 		"${ME}" issue "${ISH}" "${_ARGV[@]:3}" "${PACKET_KEYS[@]}" --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}" ; EXITCODE="$?"
 		
@@ -305,20 +304,20 @@ case "${CMD}" in
 			WEB_URL=- # assume empty until we find a match
 			
 			# 1. Scan for the JSON packet, if any, in issue.description
-			IFS=""
-			cat "${F_GL_ISSUE}" | while read -r LINE ; do
-				adpn_debug 450,gitlab,packet "${LINENO}" "Data:\t%s" "${LINE}"
+			push_input_loop
+			while read -r LINE ; do # < "${F_GL_ISSUE}"
+				adpn_debug 450,adpn,gitlab,packet "${LINENO}" "Data:\t%s" "${LINE}"
 				
 				declare -A A_DATA=()
 				N="$( printf "%s\n" "${LINE}" | sed -E 's/\t/\n/g' | wc -l )"
-				IFS=$'\n'
+				push_input_loop $'\n'
 				for I in $( seq 1 2 $N ) ; do
 					S_FIELD="$( printf "%s\n" "${LINE}" | cut --field="${I}" )"
 					CUT_FIELD="$(( I+1 ))"
 					S_ENC_VALUE="$( printf "%s\n" "${LINE}" | cut --field="${CUT_FIELD}" )"
 					A_DATA["${S_FIELD}"]="$( urldecode "${S_ENC_VALUE}" )"
 				done
-				IFS=""
+				pop_input_loop
 				
 				ISSUE_ID="${A_DATA[id]}"
 				ISH_TITLE="${A_DATA[title]}"
@@ -333,7 +332,7 @@ case "${CMD}" in
 					GREPEXIT="$?"
 					
 					if [[ -n "${GREP}" ]] ; then
-						adpn_debug 50,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
+						adpn_debug 50,adpn,gitlab,packet "${LINENO}" "PACKET FOUND (issue.description): '%s'" "${GREP}"
 						adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
 					fi
 					
@@ -349,18 +348,18 @@ case "${CMD}" in
 				else 
 					adpn_notice "${LINENO}" "ERROR: Could not find a valid PROJECT_ID and ISSUE_IID."
 				fi
-			done
-		
+			done < "${F_GL_ISSUE}"
+			pop_input_loop
+			
 			# 2. Scan for the JSON packet, if any, in issue/notes.body
 			if [[ "${EXITCODE}" -eq 0 ]] ; then
 				ISHN="${ISH}#notes?sort=asc&order_by=created_at"
-				adpn_debug 01,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id --key=body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
+				adpn_debug 01,adpn,gitlab,packet "${LINENO}" "%s " "${SCRIPT}" "issue" "${ISHN}" "${_ARGV[@]:3}" --key=id --key=body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" ">" "${F_GL_ISSUE}"
 				"${ME}" issue "${ISHN}" "${_ARGV[@]:3}" --key=id --key=body --output="multipart/form-data;table" "${CONTEXT_SW[@]}" > "${F_GL_ISSUE}"
 				EXITCODE="$?"
 			
 				if [[ "${EXITCODE}" -eq 0 ]] ; then
-					IFS=""
-					
+					push_input_loop
 					cat "${F_GL_ISSUE}" | while read -r LINE ; do
 						NOTE_ID=$( echo "${LINE}" | cut --field=2 )
 						ENCBODY=$( echo "${LINE}" | cut --field=4 )
@@ -369,10 +368,10 @@ case "${CMD}" in
 						GREPEXIT="$?"
 
 						if [[ -n "${GREP}" ]] ; then
-							adpn_debug 50 "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
+							adpn_debug 50,adpn,gitlab,packet "${LINENO}" "PACKET FOUND (issue/notes[%s].body): '%s'" "${NOTE_ID}" "${GREP}"
 							adpn_write_json_packets_from "${WEB_URL}" "${API_RESOURCE}" "${GREP}"
 						else
-							adpn_debug 100 "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
+							adpn_debug 100,adpn,gitlab,packet "${LINENO}" "no packet found (issue/notes[%s].body)" "${NOTE_ID}"
 						fi
 						
 						# if found, flag this as OK
@@ -380,16 +379,17 @@ case "${CMD}" in
 							ALL_GREPS="${GREPEXIT}"
 						fi
 					done
+					pop_input_loop
 					EXITCODE="${ALL_GREPS}"
 				else 
-					adpn_debug 01,gitlab,packet "${LINENO}" "gitlab issue/notes request FAILED: %d" "${EXITCODE}"
+					adpn_debug 01,adpn,gitlab,packet "${LINENO}" "gitlab issue/notes request FAILED: %d" "${EXITCODE}"
 				fi
 			fi
 		fi
 		
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			if [[ -z "${QQ}" ]] ; then
-				adpn_notice "No JSON packet found for issue %s%s" "${ISH}" "${ERR_DATA}"
+				adpn_notice "${LINENO}" "No JSON packet found for issue %s%s" "${ISH}" "${ERR_DATA}"
 			fi
 		fi
 		
@@ -398,26 +398,27 @@ case "${CMD}" in
 		
 	"get")
 
-		OBJECT="${_CMDLINE[2]}"
+		OBJECT="${_ARGV[2]}"
+		declare -a ADG_ARGV=( "${CONTEXT_SW[@]}" "${_SWITCHES[@]}" "--" "${_ARGV[@]:3}" )
 		if [[ "${OBJECT}" == "packet" ]] ; then
 		# Treat this as a request for a JSON packet encoded within a given Gitlab Issue
 		
-			"${ME}" packet "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
+			"${ME}" packet "${ADG_ARGV[@]}" ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "issue" ]] ; then
 		# Treat this as a request for a Gitlab Issue object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/issues.html>
 			
-			"${ME}" issue "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
+			"${ME}" issue "${ADG_ARGV[@]}" ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "project" ]] ; then
 		# Treat this as a request for a Gitlab Project object from the Gitlab API / refs <https://docs.gitlab.com/ee/api/projects.html>
 			
-			"${ME}" project "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
+			"${ME}" project "${ADG_ARGV[@]}" ; EXITCODE="$?"
 			
 		elif [[ "${OBJECT}" == "token" ]] ; then
 		# Treat this as a request for the Gitlab private access token as stored in adpnet.json or the encrypted KeePass database
 			
-			"${ME}" token "${_CMDLINE[@]:3}" ${_SWITCHES[token]} ; EXITCODE="$?"
+			"${ME}" token "${ADG_ARGV[@]}" ; EXITCODE="$?"
 			
 		else 
 		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
@@ -444,7 +445,7 @@ case "${CMD}" in
 				
 				for SLUG in "${_ARGV[@]:2}" ; do
 					URL=$( printf "${API_URL}" "${SLUG#/}" )
-					adpn_debug 200 "${LINENO}" "%s " "HTTP>>>" curl "${CURL_SW[@]}" "${URL}"
+					adpn_debug 200,adpn,gitlab,http,get "${LINENO}" "%s " "HTTP>>>" curl "${CURL_SW[@]}" "${URL}"
 					curl "${CURL_SW[@]}" "${URL}"
 
 					CURLEXIT="$?"
@@ -490,7 +491,7 @@ case "${CMD}" in
 				
 				DBG_BODY="$( printf "%s" "${NOTE_BODY}" | head -c 10 )"
 				[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
-				adpn_debug 25,adpn,gitlab,post,issue "${LINENO}" "printf '%%s' '%s' | %s" "${DBG_BODY}" "${ADGP_SW[*]}"
+				adpn_debug 25,adpn,gitlab,http,post,issue "${LINENO}" "printf '%%s' '%s' | %s" "${DBG_BODY}" "${ADGP_SW[*]}"
 				
 				printf "%s" "${NOTE_BODY}" | "${ADGP_SW[@]}"
 				EXITCODE="$?"
@@ -544,7 +545,7 @@ case "${CMD}" in
 			for SLUG in "${_ARGV[@]:2}" ; do
 				URL=$( printf "${API_URL}" "${SLUG#/}" )
 				if [[ -n "${DBG}" ]] ; then
-					adpn_debug 30,gitlab,post,curl "${LINENO}" "%s " curl "${CURL_SW[@]}" "${URL}"
+					adpn_debug 30,adpn,gitlab,http,post,curl "${LINENO}" "%s " curl "${CURL_SW[@]}" "${URL}"
 				fi
 				if [[ -z "${_PARAM[dry-run]}" ]] ; then
 					curl "${CURL_SW[@]}" "${URL}"
@@ -620,6 +621,6 @@ if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
 	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet "${CONTEXT_SW[@]}" )
 fi
 
-adpn_debug 100,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"
+adpn_debug 100,adpn,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"
 
 exit ${EXITCODE}

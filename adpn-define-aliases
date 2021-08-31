@@ -32,10 +32,10 @@ __ALIASFILE__="$( basename "${BASH_SOURCE}" )"
 function adpn_parameter_from() {
 	RESULT="" ; EXITCODE=2
 
-	adpn_debug 500 "${__ALIASFILE__}:${LINENO}" "%s(%s)" "adpn_parameter_from" "$( join_by ', ' "${@:1}" )"
+	adpn_debug 500,adpn_parameter_from "${__ALIASFILE__}:${LINENO}" "%s(%s)" "adpn_parameter_from" "$( join_by ', ' "${@:1}" )"
 	while [[ "$#" -gt 0 && "${EXITCODE}" -gt 0 ]] ; do
 		local source="${1}" ; shift
-		adpn_debug 600 "${__ALIASFILE__}:${LINENO}" "source='%s'" "$source" 
+		adpn_debug 600,adpn_parameter_from "${__ALIASFILE__}:${LINENO}" "source='%s'" "$source" 
 
 		if [[ "${source}" =~ ^(--|!!)(.*)$ ]] ; then
 			KEY="${BASH_REMATCH[2]}"
@@ -194,23 +194,32 @@ declare -a _ARGV=()
 declare -A _PARAM=()
 declare -A _SWITCHES=()
 declare -a _CMD_REST=()
+declare -g _CMD_REST_LAST_SWITCH=0
 
 export ADPN_SWITCH_REGEX='^--([A-Za-z_0-9][^=]*)(=(.*))?$'
 function adpn_command_line() {
-	shopt -s lastpipe
+
+	push_input_loop $'\n'
+	local -a SRC_FILES=( $( readlink -e "$@" 2>/dev/null ) )
+	pop_input_loop
 	
 	local switches_on=1
+	
+	_ARGV=()
+	_PARAM=()
+	_SWITCHES=()
 	
 	[[ "${#_ARGV}" -eq 0 ]] && _ARGV+=( "$0" )
 	
 	local -A can_overwrite=()
 	local -A written_here=()
 
-	for SRC in $( readlink -e "$@" 2>/dev/null ) ; do
+	for SRC in "${SRC_FILES[@]}" ; do
+		adpn_debug 500,adpn_command_line "${__ALIASFILE__}:${LINENO}" "switch file: %s" "${SRC}"
 		written_here=()
 		if [[ -r "${SRC}" ]] ; then
-		
-			shopt -s lastpipe
+
+			push_input_loop
 			while IFS="" read -r SWITCH ; do # < "${SRC}"
 				if [[ "${switches_on}" -gt 0 && "${SWITCH}" =~ ^--$ ]] ; then
 					switches_on=0
@@ -222,10 +231,12 @@ function adpn_command_line() {
 					fi
 					
 					if [[ -z "${can_overwrite[${KEY}]}" ]] ; then
+						adpn_debug 500,adpn_command_line "${__ALIASFILE__}:${LINENO}" "%s: %s" "${KEY}" "$( declare -p _PARAM )"
 						IDX=1 ; ORIG_KEY="${KEY}"
 						while [[ -n "${_SWITCHES[${KEY}]}" ]]  ; do
 							IDX=$(( IDX + 1 ))
 							KEY="${ORIG_KEY}#${IDX}"
+							adpn_debug 500,adpn_command_line "${__ALIASFILE__}:${LINENO}" "avoid collision on %s: %s into %s" "${ORIG_KEY}" "${KEY}" "$( declare -p _PARAM )"
 						done
 					else
 						can_overwrite["${KEY}"]=""
@@ -237,6 +248,8 @@ function adpn_command_line() {
 					_ARGV+=("${SWITCH}")
 				fi
 			done < "${SRC}"
+			pop_input_loop
+			
 		fi
 		
 		can_overwrite=()
@@ -247,8 +260,10 @@ function adpn_command_line() {
 	done
 	
 	_CMD_REST=()
-	[[ "${#_SWITCHES[@]}" -gt 0 ]] && _CMD_REST+=( "${_SWITCHES[@]}" )
-	[[ "${#_ARGV[@]}" -gt 2 ]] && _CMD_REST+=( "--" "${_ARGV[@]:2}" )
+	[[ "${#_SWITCHES[@]}" -gt 0 ]] && _CMD_REST+=( "${_SWITCHES[@]}" ) ; _CMD_REST_SPLIT="${#_CMD_REST[@]}"
+	[[ "${#_ARGV[@]}" -gt 2 ]] && _CMD_REST+=( "--" "${_ARGV[@]:2}" ) && _CMD_REST_SPLIT=$((_CMD_REST_SPLIT+1))
+
+
 }
 
 function adpn_command_line_switches_to_tsv() {
@@ -278,19 +293,22 @@ function adpn_switch_from_tsv() {
 	local GREP_STR
 	local result=0
 	
-	shopt -s lastpipe
 	for PREFIX in "$@" ; do
 		GREP_STR="$( cat - | grep -E "^${PREFIX}\s" )" ; result="$?"
+
+		push_input_loop
 		printf "%s\n" "${GREP_STR}" | while IFS="" read -r LINE ; do
 			[[ -n "${LINE}" ]] && RESULT_STR="$( printf "%s\n" "${LINE}" | cut --field=2- )" || RESULT_STR=""
 			[[ -n "${RESULT_STR}" ]] && eval "RESULT_STR=${RESULT_STR}" && printf "%s" "${RESULT_STR}" || result="$?"
 		done
+		pop_input_loop
+
 	done
 	return "${result}"
 }
 
 declare -x DDBG DDBGLEVEL
-declare -a DBGTAGS=()
+declare -ax DBGTAGS
 function adpn_set_display_settings() {
 	VV="${_SWITCHES[verbose]}"
 	QQ="${_SWITCHES[quiet]}"
@@ -388,8 +406,9 @@ function adpn_check_dependencies () {
 	IFS=$( printf ", " ) read -ra my_features<<<"${my_feature}"
 	
 	IFS=""
-	shopt -s lastpipe # allow export of variables from the last command in a pipeline
 	
+	# allow export of variables from the last command in a pipeline
+	push_input_loop
 	cat "${file}" | while read -r LINE ; do
 		local CONTENT="$( printf "%s\n" "${LINE}" | cut --delimiter="#" --field=1 )"
 		local CONTEXT="$( printf "%s\n" "${LINE}" | cut --delimiter="#" --only-delimited --fields=2- )"
@@ -430,6 +449,8 @@ function adpn_check_dependencies () {
 		done
 		
 	done
+	pop_input_loop
+	
 	return "${result}"
 }
 
@@ -644,20 +665,16 @@ function adpn_read_json_packet_source() {
 	declare -a AGGP_SW=()
 
 	AGJP_PACKETS="$(mktemp)"
-	GITLAB_ISSUE=$( "${ADPN}" gitlab parse "${PACKET_SOURCE}" ${DDBG} )
+	GITLAB_ISSUE=$( "${ADPN}" gitlab parse "${PACKET_SOURCE}" "${CONTEXT_SW[@]}" )
 	
 	if [[ -z "${PACKET_SOURCE}" || "${PACKET_SOURCE}" == "-" ]] ; then
 		cat - > "${AGJP_PACKETS}"
 	elif [[ -n "${GITLAB_ISSUE}" ]] ; then
-		if [[ -n "${V}" ]] ; then
-			printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
-		fi
-		"${ADPN}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" ${DDBG} > "${AGJP_PACKETS}"
+		[[ -n "${V}" ]] && printf "* Retrieving JSON for Gitlab issue: %s\n" "${GITLAB_ISSUE}" 1>&2
+		"${ADPN}" gitlab get packet "${GITLAB_ISSUE}" "${AGGP_SW[@]}" "${CONTEXT_SW[@]}" > "${AGJP_PACKETS}"
 		result="$?"
 	elif [[ "${PACKET_SOURCE}" =~ ^https?:// ]] ; then
-		if [[ -n "${V}" ]] ; then
-			printf "* Retrieving manifest HTML for URL: %s\n" "${PACKET_SOURCE}" 1>&2
-		fi
+		[[ -n "${V}" ]] && 	printf "* Retrieving manifest HTML for URL: %s\n" "${PACKET_SOURCE}" 1>&2
 		curl --silent --fail "${PACKET_SOURCE}" > "${AGJP_PACKETS}"
 		result="$?"
 	elif [[ -r "${PACKET_SOURCE}" ]] ; then
@@ -829,10 +846,10 @@ function adpn_check_au_status() {
 		fi
 	done
 	
-	shopt -s lastpipe
-	
 	local result=0
 	local piped_input="$( cat - )"
+
+	push_input_loop
 	IFS="" printf "%s\n" "${piped_input}" | while read -r LINE ; do
 		key="$( printf "%s" "${LINE}" | cut --field=1 )"
 		value="$( printf "%s" "${LINE}" | cut -s --fields=2- )"
@@ -876,7 +893,7 @@ function adpn_check_au_status() {
 			status="[:info:]"
 			for test in "${ok_tests[@]}" ; do
 				eval "[[ ${test} ]]" && status="[:pass:]" || { result="$?" ; status="[:fail:]" ; }
-				adpn_debug 100,adpn,confirm,adpn_check_au_status "${LINENO}" "%s test: [[ %s ]] \t-- %s" "${key}" "${test}" "${status}"
+				adpn_debug 100,adpn,confirm,adpn_check_au_status "${__ALIASFILE__}:${LINENO}" "%s test: [[ %s ]] \t-- %s" "${key}" "${test}" "${status}"
 			done
 			
 			local -a ADPN_CHECK_AU_OUTPUT=()
@@ -894,6 +911,7 @@ function adpn_check_au_status() {
 			printf "%s\t%s\t%s\n" "${status}" "${key}" "${user_value}" | "${ADPN_CHECK_AU_OUTPUT[@]}"
 		fi
 	done
+	pop_input_loop
 	
 	return "${result}"
 }
@@ -940,6 +958,26 @@ function obscure_password() {
 	for text in "$@" ; do
 		printf "%s" "${text}" | sed -E 's/./*/g'
 	done
+}
+
+declare -a _OLD_IFS
+declare -a _OLD_LASTPIPE
+function push_input_loop () {
+	local _NEW_IFS="${1}" ; shift
+	local _LASTPIPED=1
+	
+	_OLD_IFS=( "${IFS}" "${_OLD_IFS[@]}" )
+	IFS="${_NEW_IFS}"
+	
+	( shopt -q lastpipe ) && _LASTPIPED=$? || { _LASTPIPED=$? ; shopt -s lastpipe ; }
+	_OLD_LASTPIPE=( "${_LASTPIPED}" "${_OLD_LASTPIPE[@]}" )
+}
+
+function pop_input_loop () {
+	[[ "${#_OLD_IFS[@]}" -gt 0 ]] && IFS="${_OLD_IFS[0]}" && _OLD_IFS=( "${_OLD_IFS[@]:1}" )
+	
+	_LASTPIPED="${_OLD_LASTPIPE[0]}" ; _OLD_LASTPIPE=( "${_OLD_LASTPIPE[@]:1}" )
+	[[ -n "${_LASTPIPED}" && "${_LASTPIPED}" -eq 0 ]] || shopt -u lastpipe
 }
 
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
