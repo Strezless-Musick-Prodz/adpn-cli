@@ -185,8 +185,9 @@ command line with explicit switches.
         au_start_url = details['Start URL']
         return au_start_url
         
-    def execute (self) :
-
+    def execute (self, terminate=True) :
+        super().execute(terminate=False)
+        
         try :
             if self.subdirectory is None :
                 self.subdirectory = os.path.basename(self.get_location())
@@ -255,7 +256,8 @@ command line with explicit switches.
             else :
                 raise
         
-        self.exit()
+        if terminate :
+            self.exit()
         
     def exit (self) :
         sys.exit(self.exitcode)
@@ -301,11 +303,11 @@ if __name__ == '__main__':
     
     script = ADPNPackageContentScript(scriptpath, sys.argv, switches, scriptname=switches.get('context'))
     
-    if script.switched('help') :
-        script.display_usage()
-    elif script.switched('details') :
+    if script.switched('details') :
         print("Defaults:", defaults)
         print("")
         print("Settings:", switches)
     else :
         script.execute()
+    script.exit()
+    

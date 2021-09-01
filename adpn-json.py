@@ -75,12 +75,6 @@ Exit code:
         flags = self.flags[flag]
         return (len(flags) > 0)	
 
-    def display_version (self) :
-        print("%(script)s version %(version)s" % {"script": self.scriptname, "version": self.version})
-
-    def display_usage (self) :
-        print(self.__doc__)
-
     def wants_splat(self) :
         return ( self.switches.get('nosplat') is None )
 
@@ -307,34 +301,47 @@ Exit code:
         if len(self.output) > 0 :
             print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
     
-    def execute (self) :
+    def get_json_input (self) :
+        table = None
         try :
-            
-            try :
-                lineInput = [ line for line in fileinput.input() ]
-                jsonInput = self.json
-                jsonInput.accept( lineInput )
-                jsonInput.select_where(self.selected)
-                table = jsonInput.allData
-            except json.decoder.JSONDecodeError as e :
-                # This might be the full text of a report. Can we find the JSON PACKET:
-                # envelope nestled within it and strip out the other stuff?
-                jsonInput.accept( lineInput, screen=True ) 
-                table = jsonInput.allData
-            
-            self.display_data(table, table, self.switches.get('parse'))
-            if len(self.output) > 0 :
-                print("\n".join([ self.format_line(line, jsonInput) for line in self.output ]), end=self.get_output_terminator())
-                
+            lineInput = [ line for line in fileinput.input() ]
+            self.json.accept( lineInput )
+            self.json.select_where(self.selected)
+            table = self.json.allData
         except json.decoder.JSONDecodeError as e :
+            # This might be the full text of a report. Can we find the JSON PACKET:
+            # envelope nestled within it and strip out the other stuff?
+            self.json.accept( lineInput, screen=True ) 
+            self.json.select_where(self.selected)
+            table = self.json.allData
+        return table
+        
+    def execute (self, terminate=True) :
 
-            self.add_flag("json_error", jsonInput.raw)
+        super().execute(terminate=False)
+
+        if script.switched('regex') :
+            script.display_regex()
+        elif script.switched('key') and script.switched('value', just_present=True) :
+            script.display_keyvalue()
+        else :
+            try :
+                table = self.get_json_input()
+            
+                self.display_data(table, table, self.switches.get('parse'))
+                if len(self.output) > 0 :
+                    print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
+                
+            except json.decoder.JSONDecodeError as e :
+
+                self.add_flag("json_error", self.json.raw)
         
         for err in self.flags["json_error"] :
             if not self.switched('quiet') :
                 self.write_error(2, "JSON encoding error. Could not extract data or key-value pairs from the provided data: '%(json)s'" % {"json": err.strip()})
         
-        self.exit()
+        if terminate :
+            self.exit()
     
 if __name__ == '__main__' :
 
@@ -343,15 +350,6 @@ if __name__ == '__main__' :
     (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [], "output": None, "input": "text/plain" }).parse()
     
     script = ADPNGetJSON(scriptpath, sys.argv, switches)
-    if script.switched('help') :
-        script.display_usage()
-    elif script.switched('version') :
-        script.display_version()
-    elif script.switched('regex') :
-        script.display_regex()
-    elif script.switched('key') and script.switched('value', just_present=True) :
-        script.display_keyvalue()
-    else :
-        script.execute()
+    script.execute()
     script.exit()
 

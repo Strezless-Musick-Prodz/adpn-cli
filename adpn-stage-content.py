@@ -573,8 +573,9 @@ command line with explicit switches.
             assert self.package.has_bagit_enclosure(), { "message": "%(path)s must be packaged in BagIt format" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
             assert self.package.has_valid_manifest(), { "message": "%(path)s must be packaged with a valid LOCKSS manifest" % { "path": self.package.get_path(canonicalize=True) }, "remedy": "adpn package", "code": 2 }
 
-    def execute (self) :
-
+    def execute (self, terminate=True) :
+        super().execute(terminate=False)
+        
         try :
             if self.stage.base_dir is None or len(self.stage.base_dir) == 0:
                 self.stage.base_dir = input("Base dir: ")
@@ -641,7 +642,10 @@ command line with explicit switches.
                     self.ftp.quit()
             except ftplib.error_perm as e :
                 pass
-
+        
+        if terminate :
+            self.exit()
+        
 if __name__ == '__main__':
     scriptpath = os.path.realpath(sys.argv[0])
     scriptname = os.path.basename(scriptpath)
@@ -690,9 +694,7 @@ if __name__ == '__main__':
     
     script = ADPNStageContentScript(scriptpath, sys.argv, switches, scriptname=switches.get('context'))
     
-    if script.switched('help') :
-        script.display_usage()
-    elif script.switched('details') :
+    if script.switched('details') :
         print("FROM:", switches['local'], file=sys.stderr)
         print("TO:", switches['remote'], file=sys.stderr)
         if script.switches.get('details') in switches and script.switches.get('details') != 'details' :

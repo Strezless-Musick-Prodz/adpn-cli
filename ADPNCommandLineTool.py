@@ -254,9 +254,20 @@ inherit from this class. For example:
         print(self.__doc__)
         self.exitcode = 0
         self.exit()
-        
-    def execute (self) :
+    
+    def display_version (self) :
+        print("%(script)s version %(version)s" % {"script": self.scriptname, "version": self.version})
+        self.exitcode = 0
         self.exit()
+    
+    def execute (self, terminate=True) :
+        if self.switched('help') :
+            self.display_usage()
+        elif self.switched('version') :
+            self.display_version()
+
+        if terminate :
+            self.exit()
         
     def exit (self) :
         sys.exit(self.exitcode)

@@ -238,7 +238,9 @@ the user will be prompted to provide it interactively.
 
         return kdbx.db
 
-    def execute (self) :
+    def execute (self, terminate=True) :
+        super().execute(terminate=False)
+        
         dirty = False
         
         if self.switched('database') :
@@ -298,7 +300,10 @@ the user will be prompted to provide it interactively.
             
         if dirty :
             kp.save()
-
+        
+        if terminate :
+            self.exit()
+            
     def exit (self) :
         sys.exit(self.exitcode)
 
@@ -329,9 +334,7 @@ if __name__ == '__main__':
     
     script = ADPNDoKeePassScript(scriptpath, sys.argv, switches)
     
-    if script.switched('help') :
-        script.display_usage()
-    elif script.switched('details') :
+    if script.switched('details') :
         print("Settings:", argv, switches)
     else :
         script.execute()
