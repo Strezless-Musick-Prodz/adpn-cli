@@ -269,7 +269,43 @@ Exit code:
     @property
     def data_values (self) :
         return self.switches.get("value", [])
+    
+    def test_format (self, format1, format2) :
+        result = None # nothing until proven something
+        pattern = re.compile(r'^(([^/]+)/)?([^;]+)(;\s*(\S.*))?$')
+        ( major1, minor1, parameter1 ) = ( None, None, None )
+        ( major2, minor2, parameter2 ) = ( None, None, None )
+        m = re.match(pattern, format1)
+        if m :
+            ( major1, minor1, parameter1 ) = ( m.group(2), m.group(3), m.group(5) )
+        m = re.match(pattern, format2)
+        if m :
+            ( major2, minor2, parameter2 ) = ( m.group(2), m.group(3), m.group(5) )
         
+        # Not so strict -- allow application/json == json, text/html = html, etc.
+        if major2 is None :
+            major2 = major1
+        # Not so strict -- interpret 'text' (or 'text/text') as 'text/plain'
+        if major2 == 'text' and minor2 == 'text' :
+            minor2 = 'plain'
+        if parameter2 is None :
+            parameter2 = parameter1
+        result = all([major1 == major2, minor1 == minor2, parameter1 == parameter2])
+        return result
+        
+    def test_input_format(self, format) :
+        return self.test_format(format, self.switches.get('input', 'text/plain'))
+    
+    def get_value (self, i, default=None) :
+        value = self.data_values[i] if i<len(self.data_values) else default
+        if self.test_input_format('application/json') :
+            jsonParser = myPyJSON()
+            jsonParser.accept(value)
+            result = jsonParser.allData
+        else :
+            result = value
+        return result
+    
     def display_data (self, table, context, parse, depth=0) :
         if ( isinstance(table, dict) ) :
             self.display_data_dict(table, context, parse, keys=self.data_keys, depth=depth+1)
@@ -289,7 +325,7 @@ Exit code:
         self._default_mime = "application/json"
         table = {}
         for key_i in range(0, len(self.data_keys)) :
-            ( key, value ) = ( self.data_keys[key_i], self.data_values[key_i] if key_i < len(self.data_values) else None )
+            ( key, value ) = ( self.data_keys[key_i], self.get_value(key_i) if key_i < len(self.data_values) else None )
             table[key] = value
         self.display_data(table, table, parse=True, depth=0)
         if len(self.output) > 0 :
@@ -332,7 +368,7 @@ if __name__ == '__main__' :
     scriptname = sys.argv[0]
     scriptname = os.path.basename(scriptname)
     
-    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [] }).parse()
+    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [], "output": None, "input": "text/plain" }).parse()
     
     script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
     if script.switched('help') :
