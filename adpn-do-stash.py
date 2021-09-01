@@ -6,7 +6,8 @@
 #
 # @version 2021.0726
 
-from myLockssScripts import myPyCommandLine, myPyJSON, ADPNStashEncryption
+from myLockssScripts import myPyCommandLine, myPyJSON
+from ADPNStashEncryption import ADPNStashEncryption
 import sys, os, stat, fileinput, tempfile
 import re, json
 import urllib.parse

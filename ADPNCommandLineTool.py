@@ -162,9 +162,15 @@ inherit from this class. For example:
     def test_skip (self, step) :
         return ( ( step.strip().lower() ) in self.skip_steps )
         
-    def switched (self, key) :
-        got = not not self.switches.get(key, None)
-        return got
+    def switched (self, key, just_present=False, default=None) :
+        result = default
+        if key in self.switches :
+            result = self.switches.get(key)
+        if type(result) is list :
+            present = ( len(result) > 0 )
+        else :
+            present = ( result is not None )
+        return present if just_present else not not result
     
     @property
     def exitcode (self) -> int:
@@ -172,6 +178,9 @@ inherit from this class. For example:
         
     @exitcode.setter
     def exitcode (self, code: int) :
+        self.set_exitcode(code)
+        
+    def set_exitcode(self, code: int) :
         if code >= 0 and code <= 255 :
             self._exitcode = code
         else :
@@ -220,7 +229,8 @@ inherit from this class. For example:
             print(text, file=stream)
     
     def write_error (self, code, message, prefix="") :
-        self.exitcode = code
+        if code is not None :
+            self.exitcode = code
         print ( "%(prefix)s[%(cmd)s] %(message)s" % { "prefix": prefix, "cmd": self.scriptname, "message": message }, file=sys.stderr )
 
     def display_usage (self) :

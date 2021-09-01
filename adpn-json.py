@@ -13,8 +13,9 @@ import fileinput
 import re, json, codecs
 import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyJSON
+from ADPNCommandLineTool import ADPNCommandLineTool
 
-class ADPNJSONToSwitches :
+class ADPNGetJSON(ADPNCommandLineTool) :
     """
 Usage: VALUE=$( <INPUT> | adpn-json.py - --key=<KEY> )
 
@@ -34,10 +35,9 @@ Exit code:
 2= failed to output a value because the JSON could not be decoded
     """
 
-    def __init__ (self, scriptname, argv, switches) :
-        self.scriptname = scriptname
-        self._argv = argv
-        self._switches = switches
+    def __init__ (self, scriptpath, argv, switches, scriptname=None) :
+        super().__init__(scriptpath, argv, switches, scriptname)
+        
         self._output = []
         self._flags = { "json_error": [], "key_error": [], "nothing_found": [], "output_error": [] }
         self._default_mime = "text/plain"
@@ -55,31 +55,29 @@ Exit code:
         return self._version
         
     @property
-    def switches (self) :
-        return self._switches
-
-    @property
     def flags (self) :
         return self._flags
-        
-    @property
-    def argv (self) :
-        return self._argv
 
     @property
     def output (self) :
         return self._output
-        
-    def switched (self, name, just_present=False, default=None) :
-        result = default
-        if name in self.switches :
-            result = self.switches.get(name)
-        if type(result) is list :
-            present = ( len(result) > 0 )
-        else :
-            present = ( result is not None )
-        return present if just_present else result
     
+    @property
+    def exitcode (self) -> int :
+        if self.test_flagged("json_error") :
+            self._exitcode=2
+        elif self.test_flagged("key_error") :
+            self._exitcode=1
+        elif self.test_flagged("output_error") :
+            self._exitcode=254
+        else :
+            self._exitcode=0
+        return super().exitcode
+    
+    @exitcode.setter
+    def exitcode (self, code: int) :
+        super().set_exitcode(code)
+        
     def add_flag (self, flag, value) :
         if value is not None :
             self.flags[flag].extend( [ value ] )
@@ -87,17 +85,6 @@ Exit code:
     def test_flagged (self, flag) :
         flags = self.flags[flag]
         return (len(flags) > 0)	
-
-    def get_exitcode (self) :
-        if self.test_flagged("json_error") :
-            exitcode=2
-        elif self.test_flagged("key_error") :
-            exitcode=1
-        elif self.test_flagged("output_error") :
-            exitcode=254
-        else :
-            exitcode=0
-        return exitcode
 
     def display_version (self) :
         print("%(script)s version %(version)s" % {"script": self.scriptname, "version": self.version})
@@ -356,21 +343,17 @@ Exit code:
         
         for err in self.flags["json_error"] :
             if not self.switched('quiet') :
-                print(
-                    ("[%(script)s] JSON encoding error. Could not extract data or key-value pairs from "
-                        + "the provided data: '%(json)s'")
-                        % {"script": self.scriptname, "json": err.strip()},
-                    file=sys.stderr
-                )
-                
+                self.write_error(2, "JSON encoding error. Could not extract data or key-value pairs from the provided data: '%(json)s'" % {"json": err.strip()})
+        
+        self.exit()
+    
 if __name__ == '__main__' :
 
-    scriptname = sys.argv[0]
-    scriptname = os.path.basename(scriptname)
+    scriptpath = sys.argv[0]
     
     (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [], "output": None, "input": "text/plain" }).parse()
     
-    script = ADPNJSONToSwitches(scriptname, sys.argv, switches)
+    script = ADPNGetJSON(scriptpath, sys.argv, switches)
     if script.switched('help') :
         script.display_usage()
     elif script.switched('version') :
@@ -381,5 +364,5 @@ if __name__ == '__main__' :
         script.display_keyvalue()
     else :
         script.execute()
-    sys.exit(script.get_exitcode())
+    script.exit()
 
