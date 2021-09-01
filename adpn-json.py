@@ -43,17 +43,6 @@ Exit code:
         self._default_mime = "text/plain"
         self._json = None
         
-        with open(argv[0], 'r') as f :
-            for line in f.readlines() :
-                ref = re.search(r'^#\s*@version\s*(.*)\s*$', line)
-                if ref :
-                    self._version = ref.group(1)
-            f.close()
-
-    @property
-    def version (self) :
-        return self._version
-        
     @property
     def flags (self) :
         return self._flags
@@ -235,7 +224,7 @@ Exit code:
             self.output.extend([ line ])
         else :
             self.output.extend(out)
-            
+    
     def display_data_list (self, table, context, parse, depth=0) :
         i = 0
         for item in table :

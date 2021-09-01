@@ -82,6 +82,8 @@ inherit from this class. For example:
         self.switches = switches
         self.exitcode = 0
         
+        self._version = None
+        
         self.verbose=(0 if self.switches.get('quiet') else self.switches.get('verbose'))
         self.debug=self.switches.get('debug')
         if self.debug > self.verbose :
@@ -105,6 +107,21 @@ inherit from this class. For example:
     def scriptname (self, rhs) :
         self._scriptname = rhs
     
+    @property
+    def version (self) :
+        if self._version is None :
+            self._version = self.read_version()
+        return self._version
+    
+    def read_version (self) :
+        result = None
+        with open(self.scriptpath, 'r') as f :
+            regex = re.compile(r'^#\s*@version\s*(.*)\s*$')
+            m = [ re.search(regex, line).group(1) for line in f.readlines() if re.search(regex, line ) ]
+            result = m[0] if len(m) > 0 else None
+            
+        return result
+        
     @property
     def verbose (self) :
         return self._verbose
