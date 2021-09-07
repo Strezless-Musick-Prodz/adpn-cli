@@ -15,6 +15,41 @@ import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyJSON
 from ADPNCommandLineTool import ADPNCommandLineTool
 
+class ADPNDataTables :
+    def __init__ (self, data) :
+        self.data = data
+        self.output = []
+        
+    @property
+    def data (self) :
+        return self._data
+    
+    @data.setter
+    def data (self, rhs) :
+        self._data = rhs
+    
+    @property
+    def output (self) -> list :
+        return self._output
+    
+    @output.setter
+    def output (self, rhs: list) :
+        assert all([ type(item) is str for item in rhs ]), "Output lines must be type str"
+        self._output = rhs
+    
+    def add_output (self, lines) :
+        if type(lines) is str :
+            to_add = [ lines ]
+        elif type(lines) is list :
+            to_add = [ line for line in lines ]
+        else :
+            raise TypeError("argument lines must be a str or a list of str")
+        assert all([ type(item) is str for item in to_add ]), "argument lines must be a str or a list of str"
+        
+        self._output.extend(lines)
+    
+    
+    
 class ADPNGetJSON(ADPNCommandLineTool) :
     """
 Usage: VALUE=$( <INPUT> | adpn-json.py - --key=<KEY> )
