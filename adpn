@@ -915,6 +915,23 @@ case "${CMD}" in
 		fi
 		;;
 	
+	"announce")
+		PIPELINE="$( adpn_parameter_from "--pipeline" "published:announced" )"
+		if [[ -n "${PIPELINE}" ]] ; then
+			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
+			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
+			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+		fi
+
+		AN_INPUT=$( mktemp )
+		
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AN_INPUT}"
+		
+		adpn notify < "${AN_INPUT}"
+		rm "${AN_INPUT}"
+		EXITCODE="$?"
+		;;
+		
 	"validate")
 		declare -a AU_LOCALPATHS=( "${_ARGV[@]:2}" )
 		AU_LOCALPATHS+=( "${PWD}" )
