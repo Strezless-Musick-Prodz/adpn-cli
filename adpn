@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0831
+# @version 2021.0908
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
