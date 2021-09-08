@@ -39,7 +39,7 @@ function adpn_parameter_from() {
 
 		if [[ "${source}" =~ ^(--|!!)(.*)$ ]] ; then
 			KEY="${BASH_REMATCH[2]}"
-			# in a civilized version of batch we could use test -v
+			# in a civilized version of bash we could use test -v
 			# but we're not always in civilized places...
 			# technique from <https://stackoverflow.com/questions/3601515/how-to-check-if-a-variable-is-set-in-bash/13864829#13864829>
 			if [[ -n "${_PARAM[$KEY]+SET}" ]] ;then
