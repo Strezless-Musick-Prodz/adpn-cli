@@ -15,11 +15,13 @@ import urllib.parse
 from myLockssScripts import myPyCommandLine, myPyJSON
 from ADPNCommandLineTool import ADPNCommandLineTool
 
-class ADPNDataTables :
-    def __init__ (self, data) :
+
+class ADPNDataConverter :
+    def __init__ (self, data, mime="text/tab-separated-values") :
         self.data = data
         self.output = []
-        
+        self.mime = mime
+    
     @property
     def data (self) :
         return self._data
@@ -29,13 +31,32 @@ class ADPNDataTables :
         self._data = rhs
     
     @property
+    def mime (self) -> str:
+        return self._mime
+        
+    @mime.setter
+    def mime (self, rhs: str) : 
+        assert type(rhs) is str, "MIME type must be a str"
+        
+        mime_type = rhs
+        mime_parameters = []
+        
+        m = re.match(r'^([^;]+)[;]\s*(.*)\s*$', rhs)
+        if m :
+            mime_type = m.group(1)
+            mime_parameters = re.split(r'\s*[;]\s*', m.group(2))
+            
+        self._mime = mime_type
+        self._mime_parameters = mime_parameters
+    
+    @property
     def output (self) -> list :
         return self._output
     
     @output.setter
     def output (self, rhs: list) :
         assert all([ type(item) is str for item in rhs ]), "Output lines must be type str"
-        self._output = rhs
+        self._output = [ item for item in rhs ]
     
     def add_output (self, lines) :
         if type(lines) is str :
@@ -48,7 +69,93 @@ class ADPNDataTables :
         
         self._output.extend(lines)
     
+    def write_output (self, template=None, where=None, delimiter="\n", end=None, file=sys.stdout) :
+        ok = ( ( lambda x: True ) if where is None else where )
+        tmpl = ( ( lambda s: s ) if template is None else template )
+        assert callable(ok), "parameter @where must be a callable filter function, for example where=lambda s: len(s) > 0"
+        assert callable(tmpl), "parameter @template must be a callable filter function, for example template=lambda s: s.strip()"
+        
+        fmt=[ tmpl(line) for line in self.output if ok(line) ]
+        if len(fmt) > 0 :
+            print(delimiter.join(fmt), end=end, file=file)
     
+    def wants_table_output (self) :
+        return False # DBG
+        
+    def wants_json_table_output (self) :
+        return ( self.wants_json_output() and self.wants_table_output() )
+        
+    def wants_json_output (self) :
+        return ( self.get_output_format() in [ 'json', 'application/json' ] )
+    
+    def wants_urlencoded_output (self) :
+        return ( self.get_output_format() in [ 'urlencode', 'multipart/form-data' ] )
+    
+    def get_output_format (self) :
+        return self.mime
+
+class ADPNDataList(ADPNDataConverter) :
+    
+    def __init__ (self, data, mime="text/tab-separated-values") :
+        # raises TypeError if data is not iterable
+        _ = (e for e in data)
+        
+        # str is iterable, but we do not want it treated like a list of characters
+        assert not ( type(data) is str ), "ADPNDataList parameter @data must be an iterable data object that is not a str"
+        
+        super().__init__(data, mime)
+    
+    def convertto_text (self) :
+        self.output.extend( [ self.format_output(line) for line in self.data ] )
+    
+    def format_output (self, item) :
+        if self.mime is None :
+            output = item
+        elif self.wants_json_output() :
+            output = json.dumps(item)
+        elif self.wants_urlencoded_output() :
+            output = str(item)
+            output = urllib.parse.quote(output.encode("utf-8", "surrogatepass"))
+        else :
+            output = item
+        return output
+    
+class ADPNDataTable(ADPNDataConverter) :
+    def __init__ (self, data, mime='text/tab-separated-values') :
+        try :
+            if type(data) is list :
+                for row in data :
+                    _ = ( col for col in row )
+            else :
+                _ = ( (k, v) for (k, v) in data.items() )
+        except TypeError as e :
+            raise TypeError("ADPNDataList parameter @data must be a type that can be processed as a data table, for example a dict or list of lists") from e
+        except AttributeError as e :
+            raise TypeError("ADPNDataList parameter @data must be a type that can be processed as a data table, for example a dict or list of lists") from e
+        
+        super().__init__(data, mime)
+    
+    @property
+    def data_rows (self) :
+        try :
+            rows = [ (k, v) for (k, v) in self.data.items() ]
+        except AttributeError as e :
+            rows = [ row for row in self.data ]
+        return rows
+        
+    def convertto_text (self) :
+        self.output.extend( [ self.format_output(row) for row in self.data_rows ] )
+    
+    def format_output (self, item) :
+        if self.mime is None :
+            output = item
+        elif self.wants_json_output() :
+            output = json.dumps(item)
+        elif self.wants_urlencoded_output() :
+            output = "\t".join([ urllib.parse.quote(col.encode("utf-8", "surrogatepass")) for col in item ])
+        else :
+            output = "\t".join(item)
+        return output
     
 class ADPNGetJSON(ADPNCommandLineTool) :
     """
@@ -323,8 +430,8 @@ Exit code:
         # Replace non-capturing (?: ... ) with widely supported, grep -E compliant ( ... )
         print(re.sub(r'[(][?][:]', '(', self.json.prolog), end="")
 
-    def format_line (self, line, jsonInput) :
-        return line if not self.switched('prolog') else jsonInput.add_prolog(line)
+    def format_line (self, line) :
+        return line if not self.switched('prolog') else self.json.add_prolog(line)
 
     def display_keyvalue (self) :
         self._default_mime = "application/json"
@@ -333,8 +440,10 @@ Exit code:
             ( key, value ) = ( self.data_keys[key_i], self.get_value(key_i) if key_i < len(self.data_values) else None )
             table[key] = value
         self.display_data(table, table, parse=True, depth=0)
-        if len(self.output) > 0 :
-            print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
+        
+        oData = ADPNDataConverter(table)
+        oData.output = self.output
+        oData.write_output(template=lambda s: self.format_line(s), end=self.get_output_terminator())
     
     def get_json_input (self) :
         table = None
@@ -364,9 +473,11 @@ Exit code:
                 table = self.get_json_input()
             
                 self.display_data(table, table, self.switches.get('parse'))
-                if len(self.output) > 0 :
-                    print("\n".join([ self.format_line(line, self.json) for line in self.output ]), end=self.get_output_terminator())
                 
+                oData = ADPNDataConverter(table)
+                oData.output = self.output
+                oData.write_output(template=lambda s: self.format_line(s), end=self.get_output_terminator())
+            
             except json.decoder.JSONDecodeError as e :
 
                 self.add_flag("json_error", self.json.raw)

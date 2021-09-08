@@ -479,7 +479,7 @@ command line with explicit switches.
                 path = "./%(dir)s" % {"dir": arg[1]} if arg[1].find("/")<0 else arg[1]
                 message = "cd %(path)s" % {"path": path}
             
-            self.write_status(message=message, prolog=prefix, verbosity=level)
+            self.write_status(message=message, prolog=prefix, is_notice=False, verbosity=level)
     
     def get_human_readable (self, byte_count) :
         return "%.1f %s" % self.get_bytes_order_magnitude(byte_count)
