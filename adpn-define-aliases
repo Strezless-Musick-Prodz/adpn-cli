@@ -677,7 +677,10 @@ function adpn_read_json_packet_source() {
 		[[ -n "${V}" ]] && 	printf "* Retrieving manifest HTML for URL: %s\n" "${PACKET_SOURCE}" 1>&2
 		curl --silent --fail "${PACKET_SOURCE}" > "${AGJP_PACKETS}"
 		result="$?"
-	elif [[ -r "${PACKET_SOURCE}" ]] ; then
+	elif [[ -d "${PACKET_SOURCE}" && -r "${PACKET_SOURCE}" ]] ; then
+		"${ADPN}" describe "${PACKET_SOURCE}" > "${AGJP_PACKETS}"
+		result="$?"
+	elif [[ -f "${PACKET_SOURCE}" && -r "${PACKET_SOURCE}" ]] ; then
 		cp "${PACKET_SOURCE}" "${AGJP_PACKETS}"
 	else
 		printf "[%s] WARNING: Cannot locate any AU data from: '%s'\n" "${CONTEXT}" "${PACKET_SOURCE}" 1>&2
