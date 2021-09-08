@@ -980,9 +980,17 @@ case "${CMD}" in
 			
 			declare -a BAGIT_CMD=( "${PYTHON}" "${SCRIPTDIR}/externals/bagit-python/bagit.py" )
 			BAGIT_CMD+=( --validate "${AU_LOCALPATH}" )
-			[[ -n "${QQ}" ]] && BAGIT_CMD+=( "${QQ}" )
+			[[ -n "${Q}" ]] && BAGIT_CMD+=( "${Q}" )
 			
-			"${BAGIT_CMD[@]}" ; EXITCODE="$?"
+			"${BAGIT_CMD[@]}" 2>&1 ; EXITCODE="$?"
+			
+			if [[ -n "${_PARAM[passthru]}" && -n "${JSON_TEXT}" ]] ; then
+				USER_EMAIL="$( adpn_get_user_email )"
+				declare -a JSON_OVERLAY=( "${JSON_TEXT}" )
+				JSON_OVERLAY+=( "$( adpn-json.py --output=application/json --key="Ingest Step" --value="validated" --key="Validated By" --value="${USER_EMAIL}" )" )
+				
+				[[ "${EXITCODE}" -eq 0 ]] && printf "\nOK: The bagged AU located at %s validated as complete and correct.\n" "${AU_LOCALPATH}" && printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json
+			fi
 			
 		else
 			adpn_notice "${LINENO}" "REQUIRED: AU path [%s] must be an accessible, BagIt-formatted directory." "${AU_LOCALPATH}"
