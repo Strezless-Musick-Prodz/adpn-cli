@@ -194,8 +194,11 @@ for KEY in "${!_PARAM[@]}" ; do
 		"help")
 			ADPN_INGEST_TEST_DISPLAY="${KEY}"
 			;;
-		"batch"|"au_title"|"local"|"remote"|"staged"|"file-size"|"peer"|"peer-from"|"peer-to"|"verbose")
-			# NOOP: adpn-ingest-test parameters, not a passthru
+		"batch"|"local"|"remote"|"verbose")
+			# NOOP: adpn-ingest-test operational parameters, not a passthru
+			;;
+		"au_title"|"staged"|"staged-to"|"staged-by"|"verified-by"|"packaged-in"|"packaged-by"|"gitlab-issue"|"gitlab-resource"|"file-size"|"peer"|"peer-from"|"peer-to"|"ingest-report"|"gitlab-issue"|"gitlab-resource")
+			# NOOP: adpn-ingest-test descriptive passthru parameters
 			;;
 		"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user")
 			SUBARGV_LOCKSSPLUGINURL[$KEY]="--${KEY}=${VALUE}"
@@ -357,15 +360,18 @@ else
 	if [[ ! -z "${FILESIZE_STR}" ]] ; then
 		printf "File Size\t%s\n" "${FILESIZE_STR}" >> ${PLUGINTXT}
 	fi
-	if [[ ! -z "${_PARAM[peer-from]}" ]] ; then
-		printf "From Peer\t%s\n" "${_PARAM[peer-from]}" >> ${PLUGINTXT}
-	fi
-	if [[ ! -z "${_PARAM[peer-to]}" ]] ; then
-		printf "To Peer\t%s\n" "${_PARAM[peer-to]}" >> ${PLUGINTXT}
-	fi
-	if [[ ! -z "${_PARAM[ingest-report]}" ]] ; then
-		printf "Ingest Report\t%s\n" "${_PARAM[ingest-report]}" >> ${PLUGINTXT}
-	fi
+
+	declare -a TO_TSV=( \
+		"peer-from" "peer-to" \
+		"ingest-report" \
+		"staged-to" "staged-by" \
+		"verified-by" \
+		"packaged-in" "packaged-by" \
+		"gitlab-issue" "gitlab-resource" \
+	)
+	for KEY in "${TO_TSV[@]}" ; do
+		[[ -n "${_SWITCHES[$KEY]}" ]] && adpn-json-to-switches.py --reverse "${_SWITCHES[$KEY]}" >> "${PLUGINTXT}"
+	done
 	
 	if [[ ! -z "${_PARAM[pipeline]}" ]] ; then
 		INGEST_STEP=$( printf "%s" "${_PARAM[pipeline]}" | cut --field=2 --delimiter=":" )

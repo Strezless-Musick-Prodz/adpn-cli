@@ -46,11 +46,51 @@ Written to stdout, one switch per line. For example:
 		if name in self.switches :
 			result = self.switches[name]
 		return result
-
+	
+	@property
+	def key_mappings (self) :
+		return {
+			"Ingest Title": "au_title",
+			"Plugin JAR": "jar",
+			"jar": "jar",
+			"Plugin ID": "plugin-id",
+			"File Size": "file-size",
+			"File Size ": "file-size",
+			"local": "local",
+			"staged": "staged",
+			"Plugin Name": "plugin",
+			"From Peer": "peer-from",
+			"To Peer": "peer-to",
+			"Ingest Report": "ingest-report",
+			"Staged To": "staged-to",
+			"Staged By": "staged-by",
+			"Verified By": "verified-by",
+			"Packaged In": "packaged-in",
+			"Packaged By": "packaged-by",
+			"Gitlab Issue": "gitlab-issue",
+			"Gitlab Resource": "gitlab-resource"
+		}
+		
+	def key_to_switch (self, key, value=None) :
+		switch_value=( value if value is not None else table.get(key) )
+		
 	def display_usage (self) :
 		print(self.__doc__)
 
 	def execute (self) :
+		if self.switched('reverse') :
+			self.write_tsv_from_switches()
+		else :
+			self.write_switches_from_json()
+	
+	def write_tsv_from_switches (self) :
+		to_print = { **self.switches }
+		for (key, switch) in self.key_mappings.items() :
+			if to_print.get(switch) is not None :
+				print( "\t".join( [ key, to_print.get(switch) ] ) )
+				to_print[switch] = None # Do this once only
+				
+	def write_switches_from_json (self) :
 		try :
 			jsonInput = myPyJSON(splat=True, cascade=True)
 			lineinput = [ line for line in fileinput.input() ]
@@ -60,38 +100,22 @@ Written to stdout, one switch per line. For example:
 			except json.decoder.JSONDecodeError as e:
 				jsonInput.accept( lineinput, screen=True )
 				table = jsonInput.allData
-	
-			if ('Ingest Title' in table) :
-				print('--au_title=%(name)s' % {"name": table['Ingest Title']})
-
-			if ('Plugin JAR' in table) :
-				print('--jar=%(url)s' % {"url": table['Plugin JAR']})
-			if ('jar' in table) :
-				print('--jar=%(url)s' % {"url": table['jar']})
-			if ('Plugin ID' in table) :
-				print('--plugin-id=%(id)s' % {"id": table['Plugin ID']})
-			elif ('Plugin Name' in table) :
-				print('--plugin=%(name)s' % {"name": table['Plugin Name']})
-
-			if ('File Size' in table or 'File Size ' in table) :
-				strSize = table.get('File Size','') + table.get('File Size ','')
-				print('--file-size=%(size)s' % {"size": strSize})
 			
-			if ('local' in table) :
-				print('--local=%(dir)s' % {"dir": table['local']})
-
-			if ('staged' in table) :
-				print('--staged=%(ftp)s' % {"ftp": table['staged']})
+			for (key, switch) in self.key_mappings.items() :
+				value = table.get(key)
+				sw = None
+				if value is not None :
+					if type(value) is bool :
+						sw = ('--%(sw)s' % { "sw": switch }) if value else None
+					elif type(table.get(key)) is int :
+						sw = ('--%(sw)s=%(v)d' % { "sw": switch, "v": value })
+					elif type(table.get(key)) is float :
+						sw = ('--%(sw)s=%(v)f' % { "sw": switch, "v": value })
+					else :
+						sw = ('--%(sw)s=%(v)s' % { "sw": switch, "v": str(value) })
+				if sw is not None :
+					print(sw)
 			
-			if ('From Peer' in table) :
-				print('--peer-from=%(peer)s' % {"peer": table.get('From Peer')})
-				
-			if ('To Peer' in table) :
-				print('--peer-to=%(peer)s' % {"peer": table.get('To Peer')})
-				
-			if ('Ingest Report' in table) :
-				print('--ingest-report=%(report)s' % {"report": table.get('Ingest Report')})
-				
 			if ('parameters' in table) :
 				if len(table) > 0 :
 					for param, value in table['parameters'] :
