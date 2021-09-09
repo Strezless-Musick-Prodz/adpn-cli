@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0908
+# @version 2021.0909
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -434,9 +434,7 @@ case "${CMD}" in
 				INGEST_TITLE="${BASH_REMATCH[1]}"
 				INGEST_TITLE_OP="~"
 			fi
-			printf "%s" "#"
-			"${SCRIPTDIR}/adpn-titlelist-do" get --au_title="${INGEST_TITLE_OP}${INGEST_TITLE}" --batch
-			
+			"${SCRIPTDIR}/adpn-titlelist-do" get --au_title="${INGEST_TITLE_OP}${INGEST_TITLE}" --batch | convertto_json_table titlesdb | get_titlesdb_identifiers ; EXITCODE="$?"
 		elif [[ ! -e "${AU}" && "${AU}" =~ ^(.*[ ].*)$ ]] ; then
 			INGEST_TITLE="${BASH_REMATCH[1]}"
 		fi

@@ -985,6 +985,53 @@ function pop_input_loop () {
 	[[ -n "${_LASTPIPED}" && "${_LASTPIPED}" -eq 0 ]] || shopt -u lastpipe
 }
 
+function convertto_json_table() {
+	local NS="${1+$1:}" ; shift
+	local DATA_TABLE="$( cat - )"
+	local HEAD_ROW="$( printf '%s\n' "${DATA_TABLE}" | head -n 1 )"
+	local DATA_ROWS="$( printf '%s\n' "${DATA_TABLE}" | tail -n +2 )"
+	local result=0
+	
+	if [[ "${HEAD_ROW}" =~ ^[#](.*)$ ]] ; then
+		HEAD_ROW="${HEAD_ROW:1}"
+	elif [[ -n "$( printf '%s\n' "${1}" | cut --field=2 --only-delimited )" ]] ; then
+		HEAD_ROW="${1}" ; shift
+		DATA_ROWS="${DATA_TABLE}"
+	fi
+	
+	push_input_loop
+	while read -r DATA_ROW ; do # < <(printf "%s\n" "${DATA_ROWS}" )
+		
+		local -a TH=() TD=()
+		push_input_loop $'\t'
+		read -ra TH < <(printf "%s\n" "${HEAD_ROW}")
+		read -ra TD < <(printf "%s\n" "${DATA_ROW}")
+		pop_input_loop
+		
+		for (( I=0 ; I < "${#TD[@]}"; I++ )) ; do
+			printf '%s%s\t%s\n' "${TH[$I]+$NS}" "${TH[$I]}" "${TD[$I]}"
+		done | lockss-plugin-props-print-parameter.py --output=application/json | adpn-json.py --output=application/json --prolog
+	done < <(printf "%s\n" "${DATA_ROWS}" )
+	pop_input_loop
+	
+	return "${result}"
+}
+
+function get_titlesdb_identifiers() {
+	local JSON="$( cat - )"
+	
+	local AU_ID="$( adpn_parameter_from ".titlesdb:au_id<${JSON}" )"
+	local AU_NAME="$( adpn_parameter_from ".titlesdb:au_name<${JSON}" )"
+	local AU_FROM="$( adpn_parameter_from ".titlesdb:au_pub_id<${JSON}" )"
+	local AU_INGEST_TITLE="$( adpn_parameter_from ".titlesdb:au_title<${JSON}" )"
+	local AU_PLUGIN_ID="$( adpn_parameter_from ".titlesdb:au_plugin<${JSON}" )"
+	
+	local -a JSON_OVERLAY=( "$( printf '%s\n' "${JSON}" | adpn-json.py --output=application/json --prolog )" )
+	JSON_OVERLAY+=( "$( adpn-json.py --output=application/json --prolog --key="Ingest Title" --value="${AU_INGEST_TITLE}" --key="au_id" --value="${AU_ID}" --key="AU Name" --value="${AU_NAME}" --key="Peer From" --value="${AU_FROM}" --key="Plugin ID" --value="${AU_PLUGIN_ID}" )" )
+	printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json --prolog
+	return 0
+}
+
 # rawurlencode: Encode a command-line parameter to URL (%hex) style encoding and output
 # example: FOOBAR=$( rawurlencode "${DATA}" )
 # uses code from @Orwellophile at https://stackoverflow.com/questions/296536/how-to-urlencode-data-for-curl-command
