@@ -51,7 +51,7 @@ function adpn_parameter_from() {
 			KEY="${BASH_REMATCH[1]}"
 			JSON="${BASH_REMATCH[3]}"
 			if [[ "${JSON}" == '(adpn stash)' ]] ; then
-				RESULT="$( adpn-do-stash get --output=application/json | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
+				RESULT="$( "${ADPN_STASH}" get --output=application/json | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
 			elif [[ -n "${JSON}" ]] ; then
 				RESULT="$( printf "%s" "${JSON}" | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
 			else
@@ -163,7 +163,7 @@ function adpn_getpassword_from() {
 			FILENAME="$( basename "${FILENAME}" )"
 			MD5=$( printf "%s" "${FILENAME}" | md5sum | sed -E 's/\s+.*$//g' )
 			PASSKEY="$( printf "AGK-Pass-%s" "${MD5}" )"
-			PASSPHRASE="$( adpn-do-stash get "${PASSKEY}" )"
+			PASSPHRASE="$( "${ADPN_STASH}" get "${PASSKEY}" )"
 
 			local -a AGK_SW=( "adpn-get-keepass.py" "--single" )
 			AGK_SW+=("${source}")
@@ -173,7 +173,7 @@ function adpn_getpassword_from() {
 			else 
 				adpn_debug 500,adpn,stash "${__ALIASFILE__}:${LINENO}" "adpn_get_password_from: Using interactive request"
 				AGK_SW+=( "--interactive" )
-				AGK_SW+=( "--stash=adpn-do-stash post ${PASSKEY}" )
+				AGK_SW+=( "--stash=${ADPN_STASH} post ${PASSKEY}" )
 				[[ -n "${DDBG}" ]] && AGK_SW+=( "${DDBG}" )
 				RESULT="$(  "${AGK_SW[@]}" )"
 			fi
