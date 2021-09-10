@@ -64,7 +64,7 @@ ADPN_STASH_CLOSE=""
 # stash open: this will output some variable settings
 if [[ -z "${ADPN_STASH_FILE}" || -z "${ADPN_STASH_KEY}" ]] ; then
 
-	eval $( "${ADPN}" stash open --quiet --if-needed ${DDBG} )
+	eval $( "${ADPN_STASH}" open --quiet --if-needed ${DDBG} )
 
 fi
 
@@ -618,7 +618,7 @@ fi
 ##########################################################################################
 
 if [[ -n "${ADPN_STASH_CLOSE}" ]]; then
-	eval $( ${ADPN} stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet "${CONTEXT_SW[@]}" )
+	eval $( "${ADPN_STASH}" close --if-needed="${ADPN_STASH_CLOSE}" --quiet "${CONTEXT_SW[@]}" )
 fi
 
 adpn_debug 100,adpn,"gitlab","${SCRIPT}","${CMD}" "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"

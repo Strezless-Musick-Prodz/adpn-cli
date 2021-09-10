@@ -63,17 +63,7 @@ EXITCODE=0
 CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
-
-if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
-	CMD="version"
-fi
-
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	CMD="help"
-fi
+adpn_script_handle_version_or_help
 
 if [[ ! -z "${_PARAM[remote]}" ]] ; then
 	SSH_REMOTE="${_PARAM[remote]}"

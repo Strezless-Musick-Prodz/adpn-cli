@@ -104,7 +104,8 @@ if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
 	ADPN_STASH_JSON=""
 elif [[ -z "${ADPN_STASH_FILE}" || -z "${ADPN_STASH_KEY}" ]] ; then
 	# stash open: this will output some variable settings
-	eval $( "${ME}" stash open --quiet --if-needed )
+	adpn_debug 900,"${SCRIPT}","${CMD}",recurse "${LINENO}" "checking for an open encrypted stash, cmd=%s" "${CMD}"
+	eval $( "${ADPN_STASH}" "${_ADD_CONTEXT[@]}" open --quiet --if-needed )
 fi
 
 ##########################################################################################
@@ -238,7 +239,7 @@ case "${CMD}" in
 		;;
 	
 	"stash")
-		
+		adpn_debug 500,adpn,stash "stash request: %s" "${_CMD_REST[*]}"
 		adpn-stash-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
 		;;
@@ -1198,7 +1199,7 @@ if [[ stash =~ ^(${_NO_RECURSE[$CMD]})$ ]] ; then
 	# avoid infinite recursion, double-execution, unwanted errors, etc.
 	printf "NOOP" > /dev/null
 else
-	eval $( adpn stash close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
+	eval $( "${ADPN_STASH}" "${_ADD_CONTEXT[@]}" close --if-needed="${ADPN_STASH_CLOSE}" --quiet )
 fi
 
 adpn_debug 10,"${SCRIPT}","${CMD}",exit "${LINENO}" "exited, cmd=%s, code=%d" "${CMD}" "${EXITCODE}"

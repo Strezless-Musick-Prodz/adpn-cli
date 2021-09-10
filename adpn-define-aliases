@@ -13,6 +13,7 @@ JSONCONFFILE="${SCRIPTDIR}/adpnet.json"
 SCRIPT="$(basename "${SCRIPTPATH}")"
 ME="${SCRIPTPATH}"
 ADPN="$( readlink --canonicalize "${SCRIPTDIR}/adpn" )"
+ADPN_STASH="$( readlink --canonicalize "${SCRIPTDIR}/adpn-stash-do" )"
 
 __ALIASFILE__="$( basename "${BASH_SOURCE}" )"
 
@@ -49,7 +50,7 @@ function adpn_parameter_from() {
 			KEY="${BASH_REMATCH[1]}"
 			JSON="${BASH_REMATCH[3]}"
 			if [[ "${JSON}" == '(adpn stash)' ]] ; then
-				RESULT="$( adpn stash get --output=application/json | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
+				RESULT="$( adpn-do-stash get --output=application/json | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
 			elif [[ -n "${JSON}" ]] ; then
 				RESULT="$( printf "%s" "${JSON}" | adpn-json.py --output=text/plain --key="${KEY}" )" ; EXITCODE="$?"
 			else
@@ -161,7 +162,7 @@ function adpn_getpassword_from() {
 			FILENAME="$( basename "${FILENAME}" )"
 			MD5=$( printf "%s" "${FILENAME}" | md5sum | sed -E 's/\s+.*$//g' )
 			PASSKEY="$( printf "AGK-Pass-%s" "${MD5}" )"
-			PASSPHRASE="$( adpn stash get "${PASSKEY}" )"
+			PASSPHRASE="$( adpn-do-stash get "${PASSKEY}" )"
 
 			local -a AGK_SW=( "adpn-get-keepass.py" "--single" )
 			AGK_SW+=("${source}")
@@ -171,7 +172,7 @@ function adpn_getpassword_from() {
 			else 
 				adpn_debug 500,adpn,stash "${__ALIASFILE__}:${LINENO}" "adpn_get_password_from: Using interactive request"
 				AGK_SW+=( "--interactive" )
-				AGK_SW+=( "--stash=adpn stash post ${PASSKEY}" )
+				AGK_SW+=( "--stash=adpn-do-stash post ${PASSKEY}" )
 				[[ -n "${DDBG}" ]] && AGK_SW+=( "${DDBG}" )
 				RESULT="$(  "${AGK_SW[@]}" )"
 			fi
@@ -344,6 +345,22 @@ function adpn_set_display_settings() {
 	
 	local script_cmd=$( printf "%s" "${SCRIPT} ${CMD}" | sed -E 's/\s+$//' )
 	SCRIPT_CMD_NAME=$( adpn_parameter_from "--context" "\\${script_cmd}" )
+}
+
+function adpn_script_handle_version_or_help() {
+
+	if [[ -n "${_PARAM[version]}" ]] ; then
+		VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+		printf '%s version %s\n' "${SCRIPT_CMD_NAME}" "${VERSION}"
+		CMD="version"
+	fi
+
+	if [[ -n "${_PARAM[help]}" ]] ; then
+		printf '%s\n' "${__DOC__}"
+		CMD="help"
+	fi
+	
+	return 0
 }
 
 function adpn_set_pipeline_step () {
