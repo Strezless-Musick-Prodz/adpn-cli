@@ -19,7 +19,10 @@ __DOC__="""${__USAGE__}
   --help    	Display these usage notes
 
 The most commonly used ${SCRIPT} commands are:
-  destination  	Output a destination directory for the rebalanced AU
+  
+  list                                 	list the publisher codes in config server database
+  add [<AU_PUB_ID>] [<PUBLISHER_NAME>] 	add a publisher code for a new content source
+  remove [<AU_PUB_ID>]                 	remove a publisher code
   
 Exit codes:
 0 = success (successful operation and expected result)
@@ -62,19 +65,9 @@ EXITCODE=0
 CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
+adpn_script_handle_version_or_help
 
-if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
-	CMD="version"
-fi
-
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	CMD="help"
-fi
-
-if [[ ! -z "${_PARAM[remote]}" ]] ; then
+if [[ -n "${_PARAM[remote]}" && -z "${_PARAM[no-remote]}" ]] ; then
 	SSH_REMOTE="${_PARAM[remote]}"
 	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
 	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"

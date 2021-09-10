@@ -1150,18 +1150,14 @@ case "${CMD}" in
 # @method adpn publisher
 # Config Manager: Helps review and manage the list of AU publishers on a LOCKSS props server.
 #
-# Usage:
-# 
-#   adpn publisher
-#   adpn publisher list
-#   adpn publisher add [<AU_PUB_ID>] [<PUBLISHER_NAME>]
+# @see adpn-do-publisher --help
 #
 # @version 2021.0302
 		MYSQL_HOST="$( adpnprop 'mysql/host' )"
 		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
 
 		if [[ -n "${MYSQL_HOST}"  ]] ; then
-			adpn-do-publisher "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+			adpn-do-publisher --no-remote "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		elif [[ -n "${SSH_REMOTE}" ]] ; then
 			adpn-do-publisher --remote="${SSH_REMOTE}" "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		fi
