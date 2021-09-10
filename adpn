@@ -163,7 +163,7 @@ case "${CMD}" in
 # CMD is an adpn script pipeline command, e.g "preserve", "ingest", "publish"
 # ARGS are the arguments for that pipeline command.
 #
-# @version 2019.0715
+# @version 2021.0910
 
 		TESTDIR="${SCRIPTDIR}/json/tests"
 		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json)$ ]] ; then
@@ -233,61 +233,8 @@ case "${CMD}" in
 # 
 # @version 2021.0406
 
-		SUBCMD="${_ARGV[2]}"
-		case "${SUBCMD}" in
-			""|"list")
-				adpnprop
-				printf "\n"
-				;;
-			"get")
-				adpnprop "${_ARGV[3]}"
-				EXITCODE=$?
-				;;
-			"set")
-				declare -a WORDS
-				WORDS=( "${_ARGV[@]:3}" )
-				if [[ -n "${_PARAM[key]}" ]] ; then
-					KEY="${_PARAM[key]}"
-				elif [[ -n "${WORDS[0]}" ]] ; then
-					KEY="${WORDS[0]}"
-					WORDS=( "${WORDS[@]:1}" )
-				fi
-				
-				if [[ -n "${_PARAM[value]}" ]] ; then
-					VALUE="${_PARAM[value]}"
-				elif [[ -n "${WORDS[0]}" ]] ; then
-					VALUE="${WORDS[0]}"
-					WORDS=( "${WORDS[@]:1}" )
-				fi
-				
-				APS_OUTPUT=$(mktemp)
-
-				JSON_KEYVALUE="$( adpn-json.py --key="${KEY}" --value="${VALUE}" )"
-				JSON_OTHERS="$( adpnprop --output=application/json )"
-				printf "%s\n%s\n" "${JSON_OTHERS}" "${JSON_KEYVALUE}" | adpn-json.py --output="application/json;prettyprint" --cascade > "${APS_OUTPUT}"
-				printf "\n" >> "${APS_OUTPUT}"
-
-				JSONORIGINAL="$( readlink -f "${JSONCONFFILE}" )"
-				JSONBACKUP="$( printf "%s~" "${JSONORIGINAL}" )"
-				if [[ -r "${JSONORIGINAL}" ]] ; then
-					cp "${JSONORIGINAL}" "${JSONBACKUP}"
-				else
-					printf "{}\n" > "${JSONBACKUP}"
-				fi
-				mv "${APS_OUTPUT}" "${JSONORIGINAL}"
-				if [[ -z "${_PARAM[quiet]}" ]] ; then
-					declare -a DIFF_SW=( "-u" )
-					( diff --color /dev/null /dev/null 2>/dev/null ) && DIFF_SW+=( "--color" )
-					diff "${DIFF_SW[@]}" "${JSONBACKUP}" "${JSONORIGINAL}"
-				fi
-				
-				EXITCODE=0
-				;;
-			*)
-				printf "[%s:%d] '%s' command not understood.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SUBCMD}" 1>&2
-				EXITCODE=255
-				;;
-		esac
+		adpn-property-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
+		EXITCODE="$?"
 		;;
 	
 	"stash")

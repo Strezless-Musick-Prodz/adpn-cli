@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# adpn-property-do: script to handle adpn property commands
+#
+# @version 2021.0910
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  get       	Retrieve the value of a chosen property from adpn settings
+  set       	Assign a new value to a chosen property in adpn settings
+  undo      	Undo the most recent reassignment of a property value, if backup file still exists
+  list      	List the currently assigned adpn settings with their values
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _CMDLINE ; _CMDLINE=("$0")
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+CMD="${_ARGV[1]}"
+
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
+
+if [[ ! -z "${_PARAM[version]}" ]] ; then
+	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
+	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
+	CMD="version"
+fi
+
+if [[ ! -z "${_PARAM[help]}" ]] ; then
+	echo "${__DOC__}"
+	CMD="help"
+fi
+
+if [[ ! -z "${_PARAM[remote]}" ]] ; then
+	SSH_REMOTE="${_PARAM[remote]}"
+	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
+	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+	
+	if [[ -n "${SSH_HOST}" ]] ; then
+		if [[ -z "${SSH_CMD}" ]] ; then
+			SSH_CMD=bin/adpn-cli/adpn
+		fi
+		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
+		
+		SSH_CMDLINE="$( printf "%q %q" "${SSH_CMD}" "property" )"
+		for ARG in "${_CMDLINE[@]:1}" ; do
+			if [[ ! "${ARG}" =~ ^--remote\b ]] ; then
+				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
+			fi
+		done
+
+		if [[ -z "${QQ}" ]] ; then
+			printf "[${SCRIPT} ${CMD}] * Connecting to %s to execute: %s\n" "${SSH_HOST}" "${SSH_CMDLINE}" 1>&2
+		fi
+		
+		ssh -tt "${SSH_HOST}" "${SSH_CMDLINE}"
+	
+		if [[ -z "${QQ}" ]] ; then
+			printf "[${SCRIPT} ${CMD}] * Disconnected from %s\n" "${SSH_HOST}" 1>&2
+		fi
+	fi
+
+else 
+
+case "${CMD}" in
+	
+	""|"list")
+		adpnprop
+		printf "\n"
+		;;
+	"get")
+		adpnprop "${_ARGV[2]}"
+		EXITCODE=$?
+		;;
+	"set")
+		declare -a WORDS
+		WORDS=( "${_ARGV[@]:2}" )
+		if [[ -n "${_PARAM[key]}" ]] ; then
+			KEY="${_PARAM[key]}"
+		elif [[ -n "${WORDS[0]}" ]] ; then
+			KEY="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )
+		fi
+		
+		if [[ -n "${_PARAM[value]}" ]] ; then
+			VALUE="${_PARAM[value]}"
+		elif [[ -n "${WORDS[0]}" ]] ; then
+			VALUE="${WORDS[0]}"
+			WORDS=( "${WORDS[@]:1}" )
+		fi
+		
+		APS_OUTPUT=$(mktemp)
+
+		JSON_KEYVALUE="$( adpn-json.py --key="${KEY}" --value="${VALUE}" )"
+		JSON_OTHERS="$( adpnprop --output=application/json )"
+		printf "%s\n%s\n" "${JSON_OTHERS}" "${JSON_KEYVALUE}" | adpn-json.py --output="application/json;prettyprint" --cascade > "${APS_OUTPUT}"
+		printf "\n" >> "${APS_OUTPUT}"
+
+		JSONORIGINAL="$( readlink -f "${JSONCONFFILE}" )"
+		JSONBACKUP="$( printf "%s~" "${JSONORIGINAL}" )"
+		if [[ -r "${JSONORIGINAL}" ]] ; then
+			cp "${JSONORIGINAL}" "${JSONBACKUP}"
+		else
+			printf "{}\n" > "${JSONBACKUP}"
+		fi
+		mv "${APS_OUTPUT}" "${JSONORIGINAL}"
+		if [[ -z "${_PARAM[quiet]}" ]] ; then
+			declare -a DIFF_SW=( "-u" )
+			( diff --color /dev/null /dev/null 2>/dev/null ) && DIFF_SW+=( "--color" )
+			diff "${DIFF_SW[@]}" "${JSONBACKUP}" "${JSONORIGINAL}"
+		fi
+				
+		EXITCODE=0
+		;;
+	"undo")
+		JSON_CURRENT="$( readlink -f "${JSONCONFFILE}" )"
+		JSON_BACKUP="$( printf '%s~' "${JSON_CURRENT}" )"
+		JSON_TEMP="$( mktemp )"
+		[[ -r "${JSON_BACKUP}" ]] && mv "${JSON_CURRENT}" "${JSON_TEMP}" && mv "${JSON_BACKUP}" "${JSON_CURRENT}" && mv "${JSON_TEMP}" "${JSON_BACKUP}"
+		if [[ -z "${_PARAM[quiet]}" ]] ; then
+			declare -a DIFF_SW=( "-u" )
+			( diff --color /dev/null /dev/null 2>/dev/null ) && DIFF_SW+=( "--color" )
+			diff "${DIFF_SW[@]}" "${JSON_BACKUP}" "${JSON_CURRENT}"
+		fi
+		[[ -r "${JSON_TEMP}" ]] && rm "${JSON_TEMP}"
+		;;
+	"version"|"help")
+		EXITCODE=0
+		;;
+	*)
+		printf "[%s:%d] '%s' command not understood.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SUBCMD}" 1>&2
+		printf "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+fi 
+
+##########################################################################################
+### CLEANUP: exit with settled exit code. ################################################
+##########################################################################################
+
+exit ${EXITCODE}
