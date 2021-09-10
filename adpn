@@ -221,24 +221,20 @@ case "${CMD}" in
 		
 	"property")
 # @method adpn property
-# Display property values from the configuration file (adpnet.json)
+# Display or set property values from the configuration file (adpnet.json)
 #
-# Usage: adpn property [list|get <KEY>|set <KEY> <VALUE>]
-#
-# Example: adpn property get "peer"
-#
-# Output:
-# * adpn property list # lists the available settings from the JSON hash table
-# * adpn property get <KEY> # prints the value associated with <KEY> in the JSON hash table
-# * adpn property set <KEY> <VALUE> # sets the value associated with <KEY> to <VALUE>
-# 
-# @version 2021.0406
+# @see adpn-property-do --help
 
 		adpn-property-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
 		;;
 	
 	"stash")
+# @method adpn stash
+# Display or set property values from the temporary encrypted stash file
+#
+# @see adpn-stash-do --help
+		
 		adpn_debug 500,adpn,stash "stash request: %s" "${_CMD_REST[*]}"
 		adpn-stash-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
@@ -1015,7 +1011,15 @@ case "${CMD}" in
 		;;
 		
 	"gitlab")
-		adpn-do-gitlab "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+# @method adpn gitlab
+# Perform tasks based on interacting with the Gitlab API, typically for pipelining
+# JSON data packets or posting announcements.
+# 
+# @see adpn-gitlab-do --help
+#
+# @version 2021.0910
+
+		adpn-gitlab-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		;;
 	
 	"pipe")

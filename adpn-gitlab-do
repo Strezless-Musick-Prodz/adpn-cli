@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# adpn-do-gitlab: script to handle Gitlab API commands
+# adpn-gitlab-do: script to handle Gitlab API commands
 #
 # @version 2021.0802
 
@@ -18,6 +18,7 @@ __DOC__="""${__USAGE__}
   --help    	Display these usage notes
 
 The most commonly used ${SCRIPT} commands are:
+  list   	List data about projects that you are a member of
   issue  	Retrieve information about a Gitlab Issue thread
   
 Exit codes:
@@ -85,19 +86,9 @@ declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
 adpn_debug 100,adpn,gitlab,"${SCRIPT}","${CMD}" "${LINENO}" "entered, cmd=%s, cmdline='%s'" "${CMD}" "$( join_by "', '" "${_CMDLINE[@]:2}" )"
 adpn_debug 400,adpn,gitlab,"${SCRIPT}",stash "${LINENO}" "ADPN_STASH_FILE='%s'" "${ADPN_STASH_FILE}"
 
-if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
-	CMD="version"
-fi
+adpn_script_handle_version_or_help
 
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	CMD="help"
-fi
-
-
-declare -A _NO_RECURSE=( [token]="token|parse" )
+declare -A _NO_RECURSE=( [token]="token|parse|help|version" )
 if [[ "${CMD}" =~ ^(${_NO_RECURSE[token]}) ]] ; then
 	# avoid infinite recursion, double-execution, unwanted prompts & errors, etc.
 	[[ -n "${_SWITCHES[token]}" ]] && PRIVATE_TOKEN="${_SWITCHES[token]}"

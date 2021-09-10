@@ -26,9 +26,9 @@ The most commonly used ${SCRIPT} commands are:
   
 The open and close commands are typically used within an eval structure, for example:
   
-    eval \$( adpn stash open )
-    eval \$( adpn stash open --if-needed )
-    eval \$( adpn stash close )
+    eval \$( ${SCRIPT} open )
+    eval \$( ${SCRIPT} open --if-needed )
+    eval \$( ${SCRIPT} close )
   
 Exit codes:
 0 = success (successful operation and expected result)

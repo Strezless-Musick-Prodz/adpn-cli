@@ -12,8 +12,10 @@ SCRIPT="$(basename "${SCRIPTPATH}")"
 source "${SCRIPTDIR}/adpn-define-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
-__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__HELP__="[${SCRIPT}] Try '${SCRIPT_CMD_NAME} help' for more information."
 __DOC__="""${__USAGE__}
+
+Example: ${SCRIPT} get 'peer'
 
   --version 	Display the version of the script
   --help    	Display these usage notes

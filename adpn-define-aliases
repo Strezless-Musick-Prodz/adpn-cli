@@ -357,7 +357,11 @@ function adpn_script_handle_version_or_help() {
 	fi
 
 	if [[ -n "${_PARAM[help]}" ]] ; then
-		printf '%s\n' "${__DOC__}"
+		if [[ "${_PARAM[help]}" != help ]] ; then
+			printf '%s\n' "${__DOC__}" | sed -E "s/\b${SCRIPT}\b/${_PARAM[help]}/"
+		else
+			printf '%s\n' "${__DOC__}"
+		fi
 		CMD="help"
 	fi
 	
@@ -595,13 +599,23 @@ function adpn_help_notes () {
 		directive="[@]method ${package} ${method}\b"
 	fi
 	
-	HELPNOTES=$( sed --quiet "/^[#] ${directive}/,/^[#] @version/p" ${scriptpath} )
-	
-	if [ -z "${HELPNOTES}" ] ; then
+	HELPNOTES=$( \
+		sed --quiet "/^[#] ${directive}/,/^[#] @version/p" "${scriptpath}" \
+		| grep -E '^[#]' \
+		| sed -E 's/^[#]\s*//g' \
+	)
+
+	SEE_ALSO="$( printf '%s\n' "${HELPNOTES}" | grep -E "^[@]see" )"
+	if [[ -n "${SEE_ALSO}" ]] ; then
+		SEE_ALSO="$( printf '%s\n' "${SEE_ALSO}" | sed -E 's/^([@]\S+\s+)//g' )"
+		declare -a SEE_ALSO_CMD=()
+		IFS=$' \t\r\n' read -ra SEE_ALSO_CMD<<<"${SEE_ALSO}"
+		[[ -n "${SEE_ALSO_CMD[0]}" ]] && "${SEE_ALSO_CMD[0]}" --help="${SCRIPT_CMD_NAME}"
+	elif [[ -z "${HELPNOTES}" ]] ; then
 		echo "[${package}${context}] '${method}' help notes not yet implemented." 1>&2
 		EXITCODE=255
 	else 
-		echo "${HELPNOTES}" | grep "^[#]" | grep -v "^[#] [@]" | sed "s/^[#] *//"
+		printf "%s\n" "${HELPNOTES}" | head -n -1 | tail -n +2
 		EXITCODE=0
 	fi
 	

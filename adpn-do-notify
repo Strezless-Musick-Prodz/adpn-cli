@@ -175,7 +175,7 @@ else
 fi
 
 ###############################################################################
-## EXECUTE ADPN-DO-GITLAB SCRIPT ##############################################
+## EXECUTE ADPN-GITLAB-DO SCRIPT ##############################################
 ###############################################################################
 
 ADPN_GITLAB_POST_JSON=$(mktemp)
@@ -183,10 +183,10 @@ ADPN_GITLAB_POST_JSON=$(mktemp)
 adpn_debug 50,adpn,notify,gitlab,output,"${INGEST_STEP}" "${LINENO}" "Step: '%s'; Resource: '%s'" "${INGEST_STEP}" "${GITLAB_RESOURCE}"
 if [[ "staged" == "${INGEST_STEP}" ]] ; then
 
-	printf "%s" "${BODY_TEXT}" | adpn-do-gitlab issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
+	printf "%s" "${BODY_TEXT}" | adpn-gitlab-do issue --post --title="${SUBJECT_TEXT}" --labels="${LABELS}" --pipe=description --project="${DEFAULT_REPOSITORY}" --output="application/json" ${V} ${DDBG} > "${ADPN_GITLAB_POST_JSON}" ; ADGIP_EXITCODE="$?"
 
 	if [[ "${ADGIP_EXITCODE}" -eq 0 ]] ; then
-		adpn_debug 10,adpn,notify,gitlab "${LINENO}" "adpn-do-gitlab result: %s"  "$( cat "${ADPN_GITLAB_POST_JSON}" )"
+		adpn_debug 10,adpn,notify,gitlab "${LINENO}" "adpn-gitlab-do result: %s"  "$( cat "${ADPN_GITLAB_POST_JSON}" )"
 
 		ISSUE_ID="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="iid" )"
 		ISSUE_URL="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key="web_url" )"
@@ -200,7 +200,7 @@ if [[ "staged" == "${INGEST_STEP}" ]] ; then
 
 elif [[ "output" == "${INGEST_STEP}" && -n "${GITLAB_RESOURCE}" ]] ; then
 	
-	declare -a ADG_POST_NOTE=( "adpn-do-gitlab" "post" "note" "${CONTEXT_SW[@]}" "${GITLAB_RESOURCE}" )
+	declare -a ADG_POST_NOTE=( "adpn-gitlab-do" "post" "note" "${CONTEXT_SW[@]}" "${GITLAB_RESOURCE}" )
 	
 	DBG_BODY="$( printf "%s" "${BODY_TEXT}" | head -c 10 )"
 	[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
