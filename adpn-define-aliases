@@ -23,6 +23,7 @@ __ALIASFILE__="$( basename "${BASH_SOURCE}" )"
 #
 # --SWITCH: accept a parameter from the command-line switch named SWITCH
 # .PROPERTY: accept a parameter from the key-value pair in the data provided by the standard configuration JSON file (typically adpnet.json)
+# .PROPERTY<(adpn stash): accept a parameter from the key-value pair in the data provided by the temporary encrypted stash
 # .PROPERTY<{JSON DATA}: accept a parameter from the key-value pair in the JSON DATA provided
 # <PROMPT: accept a parameter interactively from user input, using the text in PROMPT as a prompt
 # TEXT: use the literal text provided as a default value if previous sources have failed
