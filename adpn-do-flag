@@ -68,47 +68,15 @@ declare -a CONTEXT_SW=( "--context=${SCRIPT_CMD_NAME}" )
 [[ -n "${Q}" ]] && CONTEXT_SW+=( "${Q}" )
 [[ -n "${_SWITCHES[dry-run]}" ]] && CONTEXT_SW+=( "${_SWITCHES[dry-run]}" )
 
-if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
-	CMD="version"
-fi
-
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	CMD="help"
-fi
+adpn_script_handle_version_or_help
 
 declare -a TEMP_CLEANUP=()
 
-if [[ ! -z "${_PARAM[remote]}" ]] ; then
-	SSH_REMOTE="${_PARAM[remote]}"
-	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
-	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+if [[ -n "${_PARAM[remote]}" && -z "${_PARAM[no-remote]}" ]] ; then
 	
-	if [[ -n "${SSH_HOST}" ]] ; then
-		if [[ -z "${SSH_CMD}" ]] ; then
-			SSH_CMD="$( printf "bin/adpn-cli/%s" "${SCRIPT}" )"
-		fi
-		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
-		SSH_CMDLINE="$( printf "%q" "${SSH_CMD}" )"
-		for ARG in "${_CMDLINE[@]:1}" ; do
-			if [[ ! "${ARG}" =~ ^--remote($|[^A-Za-z_0-9]) ]] ; then
-				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
-			fi
-		done
-
-		if [[ -z "${QQ}" ]] ; then
-			adpn_notice "${LINENO}" "* Connecting to %s to execute: %s" "${SSH_HOST}" "${SSH_CMDLINE}"
-		fi
-		
-		ssh -tt "${SSH_HOST}" "${SSH_CMDLINE}"
+	adpn_script_handle_remote_execution -tt "flag" "${_CMDLINE[@]:1}"
+	EXITCODE="$?"
 	
-		if [[ -z "${QQ}" ]] ; then
-			adpn_notice "${LINENO}" "* Disconnected from %s" "${SSH_HOST}"
-		fi
-	fi
-
 else 
 	
 	adpn_set_pipeline_step "published:flagged" "flag"

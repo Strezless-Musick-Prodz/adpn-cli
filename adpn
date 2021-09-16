@@ -1162,15 +1162,10 @@ case "${CMD}" in
 # @see adpn-do-publisher --help
 #
 # @version 2021.0302
-		MYSQL_HOST="$( adpnprop 'mysql/host' )"
-		SSH_REMOTE="$( adpnprop 'props-server/ssh' )"
-
-		if [[ -n "${MYSQL_HOST}"  ]] ; then
-			adpn-do-publisher --no-remote "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
-		elif [[ -n "${SSH_REMOTE}" ]] ; then
-			adpn-do-publisher --remote="${SSH_REMOTE}" "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
-		fi
-		
+		MYSQL_HOST="$( adpn_parameter_from "--mysql-host" '.mysql/host' )"
+		[[ -n "${MYSQL_HOST}" ]] && EXECUTE_AT="--mysql-host=${MYSQL_HOST}" || EXECUTE_AT="--remote=$( adpnprop 'props-server/ssh' )"
+		adpn-do-publisher "${_ADD_CONTEXT[@]}" "${EXECUTE_AT}" "${_CMD_REST[@]}"
+		EXITCODE="$?"
 		;;
 	
 	"plugins")

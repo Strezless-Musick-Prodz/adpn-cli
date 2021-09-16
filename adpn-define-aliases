@@ -368,6 +368,35 @@ function adpn_script_handle_version_or_help() {
 	return 0
 }
 
+function adpn_script_handle_remote_execution() {
+	local -a ssh_flags=( ${1} ) ; shift
+	local -a _cmdline=( "$@" )
+	local result=0
+	
+	local SSH_REMOTE="${_PARAM[remote]}"
+	local SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
+	local SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
+	
+	if [[ -n "${SSH_HOST}" ]] ; then
+		[[ -z "${SSH_CMD}" ]] && SSH_CMD="bin/adpn-cli/adpn"
+		local SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
+		
+		local SSH_CMDLINE="$( printf "%q" "${SSH_CMD}" )"
+		for ARG in "${_cmdline[@]}" ; do
+			[[ "${ARG}" =~ ^--remote(=|$) ]] || SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
+		done
+
+		[[ -z "${QQ}" ]] && adpn_notice "${__ALIASFILE__}:${LINENO}" "* Connecting to %s to execute: %s" "${SSH_HOST}" "${SSH_CMDLINE}"
+		
+		ssh "${ssh_flags[@]}" "${SSH_HOST}" "${SSH_CMDLINE}"
+		result="$?"
+		
+		[[ -z "${QQ}" ]] && adpn_notice "${__ALIASFILE__}:${LINENO}" "* Disconnected from %s" "${SSH_HOST}"
+	fi
+	
+	return "${result}"
+}
+
 function adpn_set_pipeline_step () {
 
 	local default="${1}"
