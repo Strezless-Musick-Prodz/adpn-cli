@@ -495,6 +495,11 @@ case "${CMD}" in
 		AU_LOCALPATH="$( adpn_parameter_from "--local" "${AU_LOCALPATHS[@]}" )"
 		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
 		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
+		AU_DEFAULTBASE="${AU_LOCALBASE}"
+		if [[ -x ~/.adpn/to-staging-directory ]] ; then
+		
+			AU_ALTBASE="$( printf "%s" "${AU_LOCALPATH}" | ~/.adpn/to-staging-directory )" && AU_LOCALBASE="${AU_ALTBASE}"
+		fi
 		
 		MANIFEST_JSON="$( "${ME}" describe "${AU_LOCALPATH}" )"
 		[[ -n "${MANIFEST_JSON}" ]] && MANIFEST_JSON="$( printf "%s" "${MANIFEST_JSON}" | adpn-json.py --output=application/json )" || MANIFEST_JSON="{}"
@@ -507,11 +512,15 @@ case "${CMD}" in
 		FROM="$( adpn_parameter_from "--from" "--publisher" "--peer" ".publisher"  ".peer" "<From (<PUBLISHER>): " )"
 		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" ".Directory name<${MANIFEST_JSON}" "<Directory name [${AU_LOCALBASE}]: " "${AU_LOCALBASE}")"
 		DEFAULT_AU="$( printf "AU from %s" "${SUBDIRECTORY}" )"
+		if [[ -x ~/.adpn/to-au-title ]] ; then
+			AU_DEFAULT_TITLE_ALT="$( printf "%s" "${AU_LOCALPATH}" | ~/.adpn/to-au-title )" && DEFAULT_AU="${AU_DEFAULT_TITLE_ALT}"
+		fi
+
 		AU_TITLE="$( adpn_parameter_from "--au_title" ".AU Package<${MANIFEST_JSON}" "<AU Title [${DEFAULT_AU}]: " "\\${DEFAULT_AU}")"
 		AU_INSTITUTION="$( adpn_parameter_from "--institution" ".institution" )"
 		
 		[[ -z "${V}" ]] || adpn_notice "${LINENO}" "1. Packaging files into LOCKSS Archival Unit (AU)." 
-
+		
 		declare -a ADPN_PACKAGE_CMD=( "${ME}" "package" "${AU_LOCALPATH}" )
 		ADPN_PACKAGE_CMD+=( "${CONTEXT_SW[@]}" )
 		ADPN_PACKAGE_CMD+=( --au_title="${AU_TITLE}" --subdirectory="${SUBDIRECTORY}" )
