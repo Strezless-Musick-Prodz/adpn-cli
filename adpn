@@ -235,7 +235,7 @@ case "${CMD}" in
 #
 # @see adpn-stash-do --help
 		
-		adpn_debug 500,adpn,stash "stash request: %s" "${_CMD_REST[*]}"
+		adpn_debug 500,adpn,stash "${LINENO}" "stash request: %s" "${_CMD_REST[*]}"
 		adpn-stash-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
 		EXITCODE="$?"
 		;;
