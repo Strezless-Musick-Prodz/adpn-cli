@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0916
+# @version 2021.0917
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -676,7 +676,8 @@ case "${CMD}" in
 # @version 2021.0420
 
 		adpn-titlelist-do promote "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
-	
+		;;
+		
 	"announce")
 		PIPELINE="$( adpn_parameter_from "--pipeline" "published:announced" )"
 		if [[ -n "${PIPELINE}" ]] ; then
