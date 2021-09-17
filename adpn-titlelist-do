@@ -212,7 +212,7 @@ case "${CMD}" in
 			TDB_PATH=$( readlink -f "${TDB_XML}" )
 			TDB_DIR=$( dirname "${TDB_PATH}" )
 			TDB_FILE=$( basename "${TDB_PATH}" )
-				
+			
 			printf "\n"
 			printf "* Generating new static %s for network..." "${TDB_FILE}"
 
@@ -221,17 +221,20 @@ case "${CMD}" in
 
 			printf " (ok)\n"
 
-			printf "* Comparing new %s to prior revision...\n\n" "${TDB_FILE}"
+			# Is this directory under git version control?
+			if [[ -d "./.git" ]] ; then
+				printf "* Comparing new %s to prior revision...\n\n" "${TDB_FILE}"
 				
-			if [[ -z "${_PARAM[batch]}" ]] ; then
-				git add --patch "${TDB_FILE}" < /dev/tty
-			else
-				git add "${TDB_FILE}"
+				if [[ -z "${_PARAM[batch]}" ]] ; then
+					git add --patch "${TDB_FILE}" < /dev/tty
+				else
+					git add "${TDB_FILE}"
+				fi
+
+				COMMIT_MESSAGE="$( adpn_parameter_from "--message" "Updates to static titlesDb XML" )"
+				git commit --message "${COMMIT_MESSAGE}" 
 			fi
-
-			COMMIT_MESSAGE="$( adpn_parameter_from "--message" "Updates to static titlesDb XML" )"
-			git commit --message "${COMMIT_MESSAGE}" 
-
+			
 		else 
 			
 			adpn_notice "${LINENO}" "WARNING: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${TDB_XML}"
