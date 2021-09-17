@@ -167,7 +167,7 @@ case "${CMD}" in
 # @version 2021.0910
 
 		TESTDIR="${SCRIPTDIR}/json/tests"
-		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json)$ ]] ; then
+		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json|adpn_notice)$ ]] ; then
 			TEST_FUNCTION="${_ARGV[2]}"
 			if [[ -n "${_PARAM[pipe]}" ]] ; then
 				PIPED_INPUT="$( cat "-" )"
@@ -182,14 +182,14 @@ case "${CMD}" in
 				"${_CMDLINE[0]}" "${_CMDLINE[@]:3}" ${TESTFILE}
 				EXITCODE="$?"
 			else
-				printf "[%s:%d] Use '%s [<TESTCODE>]'.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
+				adpn_notice "${LINENO}" "Use '%s [<TESTCODE>]'." "${SCRIPT} ${CMD}"
 				printf "\n" 1>&2
 				printf "Available tests:\n" 1>&2
 				cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2
 				EXITCODE=255
 			fi
 		else
-			printf "[%s:%d] Use '%s [<TESTCODE>]'.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT} ${CMD}" 1>&2
+			adpn_notice "${LINENO}" "Use '%s [<TESTCODE>]'." "${SCRIPT} ${CMD}"
 			printf "\n" 1>&2
 			printf "Available tests:\n" 1>&2
 			cd $TESTDIR && ls ./*.json | sed 's/^.\//- /' | sed 's/[.]json$//' 1>&2

@@ -655,12 +655,17 @@ function adpn_notice() {
 	local line="${1}" ; shift
 	declare -a DBG_MESSAGE=( "$@" )
 	
+	local line_source="${line}"
+	if [[ "${line_source}" =~ ^[0-9]+$ ]] ; then
+		line_source=$( printf "%s:%d" "${SCRIPT}" "${line}" )
+	fi
+
 	local message="$1"
 	if [[ "$#" -gt 1 ]] ; then
 		message="$( printf -- "$@" )"
 	fi
 	
-	printf "[%s] %s (%s:%d)\n" "${SCRIPT_CMD_NAME}" "${message}" "${SCRIPT}" "${line}" 1>&2
+	printf "[%s] %s (%s)\n" "${SCRIPT_CMD_NAME}" "${message}" "${line_source}" 1>&2
 }
 
 function adpn_debug() {
