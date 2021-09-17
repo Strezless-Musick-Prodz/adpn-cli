@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0909
+# @version 2021.0916
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -1032,7 +1032,7 @@ case "${CMD}" in
 		;;
 	
 	"pipe")
-		declare -a _CMD1=( "${ADPN}" "${CONTEXT_SW[@]}" "${_ARGV[@]:2}" )
+		declare -a _CMD1=( "${ADPN}" "${CONTEXT_SW[@]}" --passthru "${_ARGV[@]:2}" )
 		declare -a _CMDLINE1=( "${SCRIPT}" "${_ARGV[@]:2}" )
 		declare -a _SUM1=( "${SCRIPT}" "${_ARGV[2]}" )
 		
