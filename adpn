@@ -652,66 +652,7 @@ case "${CMD}" in
 #
 # @version 2021.0420
 
-		AV_OUTPUT="$(mktemp)" ; declare -a TEMP_CLEANUP=( "${AV_OUTPUT}" )
-		
-		PIPELINE="$( adpn_parameter_from "--pipeline" "verified:ingested" )"
-		"${ME}" verify --pipeline="${PIPELINE}" "${_CMD_REST[@]}" > "${AV_OUTPUT}"
-		EXITCODE="$?"
-
-		cat "${AV_OUTPUT}" | grep -E -v "${ADPN_JSON_PACKET_REGEX}" ; echo
-		JSON_PACKET=$(grep -E "${ADPN_JSON_PACKET_REGEX}" "${AV_OUTPUT}" | cut --fields=2-)
-		
-		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] %s verify FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
-			
-		else 
-			
-			INGEST_FROM="$( adpn_parameter_from "--from" ".From Peer<${JSON_PACKET}" "<From (<PEER>): " )"
-			INGEST_TO="$( adpn_parameter_from "--for" "--to" "--peer" ".To Peer<${JSON_PACKET}" "<To (ALL|<PEER>): " )"
-			
-			[[ -z "${_PARAM[dry-run]}" ]] && adpn-titlesdb-diff --before "${INGEST_TO}" ${V}
-			
-			AIIT_SQLOUT="${_PARAM[sqldump]}"
-			if [[ -z "${AIIT_SQLOUT}" ]] ; then
-				AIIT_SQLOUT="$( mktemp )" ; TEMP_CLEANUP+=( "${AIIT_SQLOUT}" )
-			fi
-
-			[[ -z "${_PARAM[dry-run]}" ]] && adpn-ingest-into-titlesdb.py --snapshot
-			
-			declare -a AIIT_CMDLINE=( "adpn-ingest-into-titlesdb.py" )
-			AIIT_CMDLINE+=( "${CONTEXT_SW[@]}" )
-			AIIT_CMDLINE+=( "--from=${INGEST_FROM}" "--to=${INGEST_TO}" )
-			AIIT_CMDLINE+=( "--passthru" )
-			[[ -n "${_SWITCHES[dry-run]}" ]] && AIIT_CMDLINE+=( "${_SWITCHES[dry-run]}" )
-			[[ -n "${PIPELINE}" ]] && AIIT_CMDLINE+=( "--pipeline=${PIPELINE}" )
-
-			printf "%s" "${JSON_PACKET}" | "${AIIT_CMDLINE[@]}" > "${AIIT_SQLOUT}" ; EXITCODE="$?"
-			
-			if [[ "${EXITCODE}" -gt 0 ]] ; then
-				printf "[%s:%d] adpn-ingest-into-titlesdb.py FAILED." "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-			else
-				[[ -z "${_PARAM[dry-run]}" ]] && { adpn-titlesdb-diff --after "${INGEST_TO}" ${V} ; EXITCODE="$?" ; }
-				if [[ "${EXITCODE}" -gt 0 ]] ; then
-					printf "[%s:%d] adpn-titlesdb-diff FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-					EXITCODE="${ATD_ERRCODE}"
-				else 
-					if [[ -n "${_SWITCHES[dry-run]}" ]] ; then
-						cat "${AIIT_SQLOUT}"
-					else
-						cat "${AIIT_SQLOUT}" | grep -E "${ADPN_JSON_PACKET_REGEX}"
-					fi
-
-					# Display final notice if this was called in its own right, not if by adpn promote &c.
-					if [[ -z "${_PARAM[context]}" ]] ; then
-						adpn_notice "${LINENO}" "DONE: Archival Unit posted to %s titlesdb." "${INGEST_TO}"
-					fi
-				fi
-			fi
-		fi
-		
-		for TMP in "${TEMP_CLEANUP[@]}" ; do
-			rm "${TMP}"
-		done
+		adpn-titlelist-do post "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
 		;;
 		
 	"promote"|"publish")
@@ -734,35 +675,7 @@ case "${CMD}" in
 #
 # @version 2021.0420
 
-
-		AI_OUTPUT="$(mktemp)"
-		"${ME}" accept --for=ALL --pipeline=ingested:published "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" > "${AI_OUTPUT}"
-		AI_ERRCODE="$?"
-
-		cat "${AI_OUTPUT}"
-		JSON_PACKET=$(grep -E "${ADPN_JSON_PACKET_REGEX}" "${AI_OUTPUT}" | cut --fields=2-)
-		
-		rm "${AI_OUTPUT}"
-
-		if [[ "${AI_ERRCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] ${SCRIPT} accept FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" "${SCRIPT}" 1>&2
-			EXITCODE="${AI_ERRCODE}"
-		
-		else
-			printf "\n" 1>&2
-			printf "[%s:%d] DONE: Archival Unit published to titlesdb.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-			
-			AU_TITLE="$( adpn_parameter_from "--au_title" ".Ingest Title<${JSON_PACKET}" )"
-
-			declare -a AC_SW=()
-			AC_SW+=( "$( printf -- "--message=Promoted new AU (%s)" "${AU_TITLE}" )" )
-			[[ -n "${_PARAM[batch]}" ]] && AC_SW+=( "${_SWITCHES[batch]}" )
-			
-			"${ADPN}" commit "${AC_SW[@]}" "${CONTEXT_SW[@]}"
-			EXITCODE="$?"
-			
-		fi
-		;;
+		adpn-titlelist-do promote "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
 	
 	"announce")
 		PIPELINE="$( adpn_parameter_from "--pipeline" "published:announced" )"
@@ -962,39 +875,10 @@ case "${CMD}" in
 #   --message     	a one-line description of the nature or purpose of the changes made
 #
 # @version 2021.0826
-
-		TDB_XML=$( adpnprop "props/titlesdb.xml" )
-		if [[ -r "${TDB_XML}" ]] ; then
-
-			TDB_PATH=$( readlink -f "${TDB_XML}" )
-			TDB_DIR=$( dirname "${TDB_PATH}" )
-			TDB_FILE=$( basename "${TDB_PATH}" )
-				
-			printf "\n"
-			printf "* Generating new static %s for network..." "${TDB_FILE}"
-
-			cd "${TDB_DIR}"
-			adpn-titlesdb-diff --before="${TDB_PATH}" --stype=1
-
-			printf " (ok)\n"
-
-			printf "* Comparing new %s to prior revision...\n\n" "${TDB_FILE}"
-				
-			if [[ -z "${_PARAM[batch]}" ]] ; then
-				git add --patch "${TDB_FILE}" < /dev/tty
-			else
-				git add "${TDB_FILE}"
-			fi
-
-			COMMIT_MESSAGE="$( adpn_parameter_from "--message" "Updates to static titlesDb XML" )"
-			git commit --message "${COMMIT_MESSAGE}" 
-
-		else 
-			
-			adpn_notice "${LINENO}" "WARNING: Could not locate static titlesDb XML file at [%s], so the new version was not generated.\n"  "${TDB_XML}"
-				
-		fi
+		
+		adpn-titlelist-do commit "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
 		;;
+		
 	"flag")
 # @method adpn flag
 # Config Manager: add or remove a parameter to an AU in titlesdb.
