@@ -62,46 +62,12 @@ EXITCODE=0
 CMD="${_ARGV[1]}"
 
 adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
-
-if [[ ! -z "${_PARAM[version]}" ]] ; then
-	VERSION=$(grep "^# @version" $0 | head --lines=1 | cut --only-delimited --fields=3- --delimiter=" ")
-	echo "${SCRIPT_CMD_NAME} version ${VERSION}"
-	CMD="version"
-fi
-
-if [[ ! -z "${_PARAM[help]}" ]] ; then
-	echo "${__DOC__}"
-	CMD="help"
-fi
+adpn_script_handle_version_or_help
 
 if [[ ! -z "${_PARAM[remote]}" ]] ; then
-	SSH_REMOTE="${_PARAM[remote]}"
-	SSH_HOST="$( printf "%s" "${SSH_REMOTE}" | cut --field=1 --delimiter=":" )"
-	SSH_CMD="$( printf "%s" "${SSH_REMOTE}" | cut --field=2 --delimiter=":" --only-delimited )"
-	
-	if [[ -n "${SSH_HOST}" ]] ; then
-		if [[ -z "${SSH_CMD}" ]] ; then
-			SSH_CMD=bin/adpn-cli/adpn
-		fi
-		SSH_CMD_SLUG="$( basename "${SSH_CMD}" )"
-		
-		SSH_CMDLINE="$( printf "%q %q" "${SSH_CMD}" "publisher" )"
-		for ARG in "${_CMDLINE[@]:1}" ; do
-			if [[ ! "${ARG}" =~ ^--remote\b ]] ; then
-				SSH_CMDLINE="$( printf "%s %q" "${SSH_CMDLINE}" "${ARG}" )"
-			fi
-		done
 
-		if [[ -z "${QQ}" ]] ; then
-			printf "[${SCRIPT} ${CMD}] * Connecting to %s to execute: %s\n" "${SSH_HOST}" "${SSH_CMDLINE}" 1>&2
-		fi
-		
-		ssh -tt "${SSH_HOST}" "${SSH_CMDLINE}"
-	
-		if [[ -z "${QQ}" ]] ; then
-			printf "[${SCRIPT} ${CMD}] * Disconnected from %s\n" "${SSH_HOST}" 1>&2
-		fi
-	fi
+	adpn_script_handle_remote_execution -t "titlelist" "${_CMDLINE[@]:1}"
+	EXITCODE="$?"
 
 else 
 
