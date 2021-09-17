@@ -205,7 +205,7 @@ case "${CMD}" in
 	
 	"commit")
 		
-		TDB_XML=$( adpn_parameter_from "--to" "${_ARGV[1]}" )
+		TDB_XML=$( adpn_parameter_from "--to" "${_ARGV[2]}" )
 		[[ -z "${TDB_XML}" ]] && TDB_XML="$( adpn_parameter_from ".props/titlesdb.xml" )"
 		if [[ -r "${TDB_XML}" ]] ; then
 

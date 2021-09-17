@@ -923,6 +923,9 @@ case "${CMD}" in
 		
 		declare -A TMPFILES=( [PIPE_OUT]="$( mktemp )" )
 		
+		# verify - Verify Access to AU from %(peer-to)s Preservation Node
+		# accept - Accept AU and Make Visible to %(peer-to)s Preservation Node
+		
 		AN_LABEL="$(adpn_parameter_from "--label" "<(${SCRIPT_CMD_NAME}) Issue Note Title (if any): " )"
 		[[ -n "${AN_LABEL}" ]] && AN_LABEL="$( printf '**%s:** ' "${AN_LABEL%%+(:)}" )"
 		AN_IN_ORDER_TO="$( adpn_parameter_from "--in-order-to" "<(${SCRIPT_CMD_NAME}) I'm using the '${_SUM1[*]}' command in order to: " )"
