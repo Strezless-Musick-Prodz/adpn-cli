@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0917
+# @version 2021.0918
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -291,8 +291,9 @@ case "${CMD}" in
 #
 # @version 2021.0918
 		
-		adpn-package-do enclose "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
-		|| EXITCODE="$?"
+		declare -a APD_CMD=( "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" )
+		[[ "${_ARGV[2]}" =~ ^(enclose|validate)$ ]] || APD_CMD=( enclose "${APD_CMD[@]}" )
+		adpn-package-do "${APD_CMD[@]}" || EXITCODE="$?"
 		;;
 		
 	"stage")
