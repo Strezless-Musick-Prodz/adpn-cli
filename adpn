@@ -289,37 +289,10 @@ case "${CMD}" in
 # LOCALPATH is a directory on the local workstation containing the files for the
 # Archival Unit (AU) to prepare.
 #
-# @version 2021.0715
+# @version 2021.0918
 		
-		ADP_OUTPUT="$(mktemp)"
-		
-		declare -a ADP_ARGV=( "${_ARGV[@]:2}" )
-		declare -A ADP_SWITCHES=( )
-		for SWITCH in "${!_SWITCHES[@]}" ; do
-			case "${SWITCH}" in 
-				"output")
-					# DROP IT -- WE'LL SET IT OURSELVES BELOW
-					;;
-				*)
-					ADP_SWITCHES[${SWITCH}]="${_SWITCHES[$SWITCH]}"
-					;;
-			esac
-		done
-		
-		declare -a ADPN_DO_PACKAGE_CMD=( adpn-do-package.py --output=application/json )
-		ADPN_DO_PACKAGE_CMD+=( "${ADP_ARGV[@]}" )
-		ADPN_DO_PACKAGE_CMD+=( "${ADP_SWITCHES[@]}" "${CONTEXT_SW[@]}" )
-		
-		adpn_debug 15,adpn,package "${LINENO}" '$ %s > %s' "$( printf "%q " "${ADPN_DO_PACKAGE_CMD[@]}" )" "${ADP_OUTPUT}"
-		"${ADPN_DO_PACKAGE_CMD[@]}" > "${ADP_OUTPUT}"; EXITCODE="$?"
-		
-		if [[ "${EXITCODE}" -lt 255 ]] ; then
-			JSON_PACKET="$( adpn_get_json_packets "${ADP_OUTPUT}" )"
-			adpn_debug 35,adpn,package "${LINENO}" 'printf "%%s" "%s" | [...]' "${JSON_PACKET}"
-			printf "%s" "${JSON_PACKET}"
-		fi
-		
-		rm "${ADP_OUTPUT}"
+		adpn-package-do enclose "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 		
 	"stage")
@@ -457,8 +430,7 @@ case "${CMD}" in
 #
 # @version 2021.0709
 
-		adpn-do-notify "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}"
-		EXITCODE="$?"
+		adpn-do-notify "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
 		;;
 	
 	"preserve")
@@ -580,49 +552,8 @@ case "${CMD}" in
 #
 # @version 2021.0807
 
-		PIPELINE="$( adpn_parameter_from "--pipeline" "staged:verified" )"
-		if [[ -n "${PIPELINE}" ]] ; then
-			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
-			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
-			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
-		fi
-		
-		declare -a TEMP_CLEANUP=()
-
-		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
-		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
-
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AIT_INPUT}"
-		EXITCODE="$?"
-		
-		if [[ -r "${AIT_INPUT}" ]] ; then
-			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
-			if [[ -z "${PEER_TO}" ]] ; then
-				PEER_TO=$( adpnprop "peer" )
-			fi
-			if [[ -n "${PEER_TO}" ]] ; then
-				PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
-			fi
-
-			declare -a AIT_SW=( "--remote=1" )
-			[[ -n "${PIPELINE}" ]] && AIT_SW+=( "--pipeline=${PIPELINE}" )
-			[[ -n "$( adpn_get_user_email )" ]] && AIT_SW+=( "--by=$( adpn_get_user_email )" )
-			[[ -n "${V}" ]] && AIT_SW+=( "${V}" )
-			[[ -n "${DDBG}" ]] && AIT_SW+=( "${DDBG}" )
-			
-			adpn_debug 01 "${LINENO}" '$ adpn-ingest-test "%s" "%s" "%s" > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "$( join_by '" "' "${AIT_SW[@]}" )" "${AIT_OUTPUT}"
-			adpn-ingest-test "${AIT_INPUT}" "${PEER_TO}" "${AIT_SW[@]}" > "${AIT_OUTPUT}" ; EXITCODE="$?"
-
-			cat "${AIT_OUTPUT}" ; echo
-		fi
-		
-		for TMP in "${TEMP_CLEANUP[@]}" ; do
-			rm "${TMP}"
-		done
-
-		if [[ "${EXITCODE}" -gt 0 ]] ; then
-			printf "[%s:%d] adpn-ingest-test FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
-		fi
+		on_node_do adpn-daemon-do verify "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 		
 	"accept"|"post"|"ingest")
@@ -652,7 +583,8 @@ case "${CMD}" in
 #
 # @version 2021.0420
 
-		adpn-titlelist-do post "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
+		on_props_do adpn-titlelist-do post "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 		
 	"promote"|"publish")
@@ -675,7 +607,8 @@ case "${CMD}" in
 #
 # @version 2021.0420
 
-		adpn-titlelist-do promote "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
+		on_props_do adpn-titlelist-do promote "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 		
 	"announce")
@@ -696,70 +629,8 @@ case "${CMD}" in
 		;;
 		
 	"validate")
-		
-		PIPELINE="$( adpn_parameter_from "--pipeline" "staged:validated" )"
-		if [[ -n "${PIPELINE}" ]] ; then
-			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
-			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
-			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
-		fi
-
-		declare -A TEMP_CLEANUP=()
-
-		TEMP_CLEANUP[json_input]="$(mktemp)"
-
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${TEMP_CLEANUP[json_input]}"
-		EXITCODE="$?"
-		
-		declare -a AU_LOCALPATHS=( )
-
-		[[ "${EXITCODE}" -eq 0 ]] && JSON_TEXT="$( cat "${TEMP_CLEANUP[json_input]}" )" || JSON_TEXT="" 
-		if [[ -n "${JSON_TEXT}" ]] ; then
-			PUB_FROM=$( adpn_parameter_from "--from" ".From Publisher<${JSON_TEXT}" ".From Peer<${JSON_TEXT}" )
-			SUBDIRECTORY=$( printf "%s" "${JSON_TEXT}" | adpn-json.py --key=parameters | grep -E "^(sub)?directory\s" | cut --field=2)
-			LOCAL_BASE=$( adpn_parameter_from "--base_dir" ".stage/base_dir/${PUB_FROM}" ".stage/base_dir" )
-			LOCAL_DIRECTORY="$( printf "%s/%s" "${LOCAL_BASE%%/}" "${SUBDIRECTORY}" )"
-			[[ -n "${LOCAL_DIRECTORY}" && -d "${LOCAL_DIRECTORY}" && -r "${LOCAL_DIRECTORY}" ]] && AU_LOCALPATHS+=( "${LOCAL_DIRECTORY}" ) &&
-			printf "* GETTING DIRECTORY FROM JSON: %s\n" "${LOCAL_DIRECTORY}" 1>&2
-		else 
-			AU_LOCALPATHS+=( "${_ARGV[@]:2}" )
-			EXITCODE=0
-		fi
-		
-		AU_LOCALPATHS+=( "${PWD}" )
-		AU_LOCALPATHS=( "${AU_LOCALPATHS[@]/#/\\}" )
-		
-		AU_LOCALPATH="$( adpn_parameter_from "--local" "${AU_LOCALPATHS[@]}" )"
-		AU_LOCALPATH="$( readlink -f "${AU_LOCALPATH}" )"
-		AU_LOCALBASE="$( basename "${AU_LOCALPATH}" )"
-		
-		if [[ -d "${AU_LOCALPATH}" && -d "${AU_LOCALPATH}/data" ]] ; then
-			declare -a PYTHON_OPTS=( ".python" )
-			( which python3 >/dev/null 2>&1 ) && PYTHON_OPTS+=( "\\$( which python3 )" )
-			( which python >/dev/null 2>&1 ) && PYTHON_OPTS+=( "\\$( which python )" )
-			PYTHON="$( adpn_parameter_from "${PYTHON_OPTS[@]}" )"
-			
-			declare -a BAGIT_CMD=( "${PYTHON}" "${SCRIPTDIR}/externals/bagit-python/bagit.py" )
-			BAGIT_CMD+=( --validate "${AU_LOCALPATH}" )
-			[[ -n "${Q}" ]] && BAGIT_CMD+=( "${Q}" )
-			
-			"${BAGIT_CMD[@]}" 2>&1 ; EXITCODE="$?"
-			
-			if [[ -n "${_PARAM[passthru]}" && -n "${JSON_TEXT}" ]] ; then
-				USER_EMAIL="$( adpn_get_user_email )"
-				declare -a JSON_OVERLAY=( "${JSON_TEXT}" )
-				JSON_OVERLAY+=( "$( adpn-json.py --output=application/json --key="Ingest Step" --value="validated" --key="Validated By" --value="${USER_EMAIL}" )" )
-				
-				[[ "${EXITCODE}" -eq 0 ]] && printf "\nOK: The bagged AU located at %s validated as complete and correct.\n" "${AU_LOCALPATH}" && printf "%s\n" "${JSON_OVERLAY[@]}" | adpn-json.py --cascade --output=application/json
-			fi
-			
-		else
-			adpn_notice "${LINENO}" "REQUIRED: AU path [%s] must be an accessible, BagIt-formatted directory." "${AU_LOCALPATH}"
-		fi
-		
-		for FILE in "${TEMP_CLEANUP[@]}" ; do
-			rm "${FILE}"
-		done
+		adpn-package-do validate "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 
 	"confirm")
@@ -877,7 +748,7 @@ case "${CMD}" in
 #
 # @version 2021.0826
 		
-		adpn-titlelist-do commit "${CONTEXT_SW[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
+		adpn-titlelist-do commit "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" || EXITCODE="$?"
 		;;
 		
 	"flag")
@@ -1050,10 +921,8 @@ case "${CMD}" in
 # @see adpn-do-publisher --help
 #
 # @version 2021.0302
-		MYSQL_HOST="$( adpn_parameter_from "--mysql-host" '.mysql/host' )"
-		[[ -n "${MYSQL_HOST}" ]] && EXECUTE_AT="--mysql-host=${MYSQL_HOST}" || EXECUTE_AT="--remote=$( adpnprop 'props-server/ssh' )"
-		adpn-do-publisher "${_ADD_CONTEXT[@]}" "${EXECUTE_AT}" "${_CMD_REST[@]}"
-		EXITCODE="$?"
+		on_props_do adpn-do-publisher "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
 	
 	"titlelist")
@@ -1061,12 +930,15 @@ case "${CMD}" in
 # Config Manager: Helps review and manage the list of AU titles on a LOCKSS props server.
 #
 # @version 2021.0917
-		MYSQL_HOST="$( adpn_parameter_from "--mysql-host" '.mysql/host' )"
-		[[ -n "${MYSQL_HOST}" ]] && EXECUTE_AT="--mysql-host=${MYSQL_HOST}" || EXECUTE_AT="--remote=$( adpnprop 'props-server/ssh' )"
-		adpn-titlelist-do "${_ADD_CONTEXT[@]}" "${EXECUTE_AT}" "${_CMD_REST[@]}"
-		EXITCODE="$?"
+		on_props_do adpn-titlelist-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
 		;;
-		
+	
+	"daemon")
+		adpn-daemon-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" \
+		|| EXITCODE="$?"
+		;;
+	
 	"plugins")
 # @method adpn plugins
 # List LOCKSS Publisher Plugins or display details for a selected Plugin.

@@ -368,6 +368,39 @@ function adpn_script_handle_version_or_help() {
 	return 0
 }
 
+function on_drop_do() {
+	local -a args=( "$@" )
+	local result=0
+	
+	REMOTE_SW="$( adpn_parameter_from "--remote" )"
+	[[ -z "${REMOTE_SW}" ]] && NODE_SERVER="$( adpn_parameter_from '.drop-server/ssh' )" || NODE_SERVER=""
+	[[ -z "${NODE_SERVER}" ]] && EXECUTE_AT="--node-server" || EXECUTE_AT="--remote=${NODE_SERVER}"
+	"${args[@]:0:1}" "${EXECUTE_AT}" "${args[@]:1}" || result="$?"
+	return "${result}"
+}
+
+function on_node_do() {
+	local -a args=( "$@" )
+	local result=0
+	
+	REMOTE_SW="$( adpn_parameter_from "--remote" )"
+	[[ -z "${REMOTE_SW}" ]] && NODE_SERVER="$( adpn_parameter_from '.node-server/ssh' )" || NODE_SERVER=""
+	[[ -z "${NODE_SERVER}" ]] && EXECUTE_AT="--node-server" || EXECUTE_AT="--remote=${NODE_SERVER}"
+	"${args[@]:0:1}" "${EXECUTE_AT}" "${args[@]:1}" || result="$?"
+	return "${result}"
+}
+
+function on_props_do() {
+	local -a args=( "$@" )
+	local result=0
+	
+	MYSQL_HOST="$( adpn_parameter_from "--mysql-host" '.mysql/host' )"
+	[[ -n "${MYSQL_HOST}" ]] && EXECUTE_AT="--mysql-host=${MYSQL_HOST}" || EXECUTE_AT="--remote=$( adpnprop 'props-server/ssh' )"
+
+	"${args[@]:0:1}" "${EXECUTE_AT}" "${args[@]:1}" || result="$?"
+	return "${result}"
+}
+
 function adpn_script_handle_remote_execution() {
 	local -a ssh_flags=( ${1} ) ; shift
 	local -a _cmdline=( "$@" )

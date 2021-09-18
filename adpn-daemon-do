@@ -1,0 +1,139 @@
+#!/bin/bash
+#
+# adpn-daemon-do: script to handle adpn daemon commands
+#
+# @version 2021.0918
+
+SCRIPTPATH="$(which "$0")"
+SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
+SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
+SCRIPT="$(basename "${SCRIPTPATH}")"
+
+source "${SCRIPTDIR}/adpn-define-aliases"
+
+__USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
+__HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
+__DOC__="""${__USAGE__}
+
+  --version 	Display the version of the script
+  --help    	Display these usage notes
+
+The most commonly used ${SCRIPT} commands are:
+  verify       	Verify that an AU's parameters are complete and correct
+               	and its start URL is accessible to the LOCKSS daemon.
+  
+Exit codes:
+0 = success (successful operation and expected result)
+1-254 = error in executing command
+255 = command not supported
+"""
+
+##########################################################################################
+### COMMAND LINE: loop through switches ##################################################
+##########################################################################################
+
+declare -a _CMDLINE ; _CMDLINE=("$0")
+
+shopt -s lastpipe
+
+declare -a SWITCHFILES ; SWITCHFILES=()
+if [[ -r "${CONFFILE}" ]] ; then
+	SWITCHFILES+=(${CONFFILE})
+fi
+
+CMDLINETXT=$(mktemp)
+
+until [[ "$#" -lt 1 ]] ; do
+	_CMDLINE+=("$1")
+	printf "%s\n" "$1" >> "${CMDLINETXT}"
+	shift
+done
+
+SWITCHFILES+=(${CMDLINETXT})
+
+adpn_command_line "${SWITCHFILES[@]}"
+
+rm "${CMDLINETXT}"
+
+##########################################################################################
+### SCRIPT: DETERMINE COMMAND, THEN EXECUTE PIPELINE  ####################################
+##########################################################################################
+
+EXITCODE=0
+CMD="${_ARGV[1]}"
+
+adpn_set_display_settings # V, VV, Q, QQ, DBG, DBGLEVEL, DDBG, SCRIPT_CMD_NAME / @see adpn-define-aliases
+adpn_script_handle_version_or_help
+
+if [[ ! -z "${_PARAM[remote]}" ]] ; then
+
+	adpn_script_handle_remote_execution -t "daemon" "${_CMDLINE[@]:1}"
+	EXITCODE="$?"
+
+else 
+
+case "${CMD}" in
+	"verify")
+		PIPELINE="$( adpn_parameter_from "--pipeline" "staged:verified" )"
+		if [[ -n "${PIPELINE}" ]] ; then
+			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
+			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
+			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
+		fi
+		
+		declare -a TEMP_CLEANUP=()
+
+		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
+		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
+
+		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AIT_INPUT}"
+		EXITCODE="$?"
+		
+		if [[ -r "${AIT_INPUT}" ]] ; then
+			PEER_TO=$( [[ -n "${_PARAM[to]}" ]] && printf "%s" "${_PARAM[to]}" || printf "%s" "${_PARAM[peer]}" )
+			if [[ -z "${PEER_TO}" ]] ; then
+				PEER_TO=$( adpnprop "peer" )
+			fi
+			if [[ -n "${PEER_TO}" ]] ; then
+				PEER_TO=$( printf "%s--peer-to=%s" "" "${PEER_TO}" )
+			fi
+
+			declare -a AIT_SW=( "--remote=1" )
+			[[ -n "${PIPELINE}" ]] && AIT_SW+=( "--pipeline=${PIPELINE}" )
+			[[ -n "$( adpn_get_user_email )" ]] && AIT_SW+=( "--by=$( adpn_get_user_email )" )
+			[[ -n "${V}" ]] && AIT_SW+=( "${V}" )
+			[[ -n "${DDBG}" ]] && AIT_SW+=( "${DDBG}" )
+			
+			adpn_debug 01 "${LINENO}" '$ adpn-ingest-test "%s" "%s" "%s" > "%s"\n' "${AIT_INPUT}" "${PEER_TO}" "$( join_by '" "' "${AIT_SW[@]}" )" "${AIT_OUTPUT}"
+			adpn-ingest-test "${AIT_INPUT}" "${PEER_TO}" "${AIT_SW[@]}" > "${AIT_OUTPUT}" ; EXITCODE="$?"
+
+			cat "${AIT_OUTPUT}" ; echo
+		fi
+		
+		for TMP in "${TEMP_CLEANUP[@]}" ; do
+			rm "${TMP}"
+		done
+
+		if [[ "${EXITCODE}" -gt 0 ]] ; then
+			printf "[%s:%d] adpn-ingest-test FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
+		fi
+		;;
+		
+	"version"|"help")
+		EXITCODE=0
+		;;
+		
+	*)
+		echo "[${SCRIPT_CMD_NAME}] '${CMD}' command not understood." 1>&2
+		echo "${__HELP__}" 1>&2
+		EXITCODE=255
+		;;
+esac
+
+fi 
+
+##########################################################################################
+### CLEANUP: exit with settled exit code. ################################################
+##########################################################################################
+
+exit ${EXITCODE}
