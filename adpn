@@ -345,6 +345,15 @@ case "${CMD}" in
 		EXITCODE="${ASC_ERRCODE}"
 		;;
 	
+	"reclaim")
+		
+		"${ME}" pipe --remove_labels="WAITING: Confirm AU" --add_labels="DONE: Confirm AU,TODO: Unstage" -- confirm --preserved "${_CMD_REST[@]}" && \
+			"${ME}" pipe -- flag --key=pub_down --value=true "${_CMD_REST[@]}" && \
+			"${ME}" daemon refresh && \
+			"${ME}" pipe -- confirm --down "${_CMD_REST[@]}" && \
+			"${ME}" pipe --remove_labels="TODO: Unstage" --add_labels="DONE: Unstage" -- unstage "${_CMD_REST[@]}"
+		;;
+		
 	"unstage")
 # @method adpn unstage
 # ADPNet Member: Unstage AU files from the staging server and replace with placeholder text
