@@ -431,8 +431,10 @@ Exit code:
         print(re.sub(r'[(][?][:]', '(', self.json.prolog), end="")
 
     def format_line (self, line) :
-        return line if not self.switched('prolog') else self.json.add_prolog(line)
-
+        output = line if not self.switched('prolog') else self.json.add_prolog(line)
+        output = output if not self.switched('epilog') else ( output + "\n" )
+        return output
+        
     def display_keyvalue (self) :
         self._default_mime = "application/json"
         table = {}
@@ -458,6 +460,29 @@ Exit code:
             self.json.accept( lineInput, screen=True ) 
             self.json.select_where(self.selected)
             table = self.json.allData
+        
+        if self.switched('key+') :
+            key=self.switches.get('key+')
+            
+            old_value=table.get(key)
+            new_value=self.switches.get('value+')
+            if new_value is None :
+                old_value=None
+                new_value=self.switches.get('value:')
+
+            if old_value is None :
+                value=new_value
+            elif type(old_value) is list and not type(new_value) is list :
+                value=[ item for item in old_value ]
+                value.append(new_value)
+            else :
+                value=(old_value + new_value)
+            table = { **table, **{ key: value } }
+        
+        if self.switched('into') :
+            key = self.switches.get('into')
+            table = { key: table }
+        
         return table
         
     def execute (self, terminate=True) :
@@ -493,7 +518,12 @@ if __name__ == '__main__' :
 
     scriptpath = sys.argv[0]
     
-    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "key": [], "value": [], "output": None, "input": "text/plain" }).parse()
+    (sys.argv, switches) = myPyCommandLine(sys.argv, defaults={
+        "key": [], "value": [],
+        "key:": None, "key+": None, "value:": None, "value+": None,
+        "output": None, "input": "text/plain",
+        "prolog": False, "epilog": False
+    }).parse()
     
     script = ADPNGetJSON(scriptpath, sys.argv, switches)
     script.execute()

@@ -458,7 +458,14 @@ case "${CMD}" in
 		
 		elif [[ "${OBJECT}" == "note" ]] ; then
 		
-			[[ -n "${_PARAM[body]}" ]] && NOTE_BODY="${_PARAM[body]}" || NOTE_BODY="$( cat - )"
+			if [[ -n "${_PARAM[no-body]}" ]] ; then
+				NOTE_BODY=""
+			elif [[ -n "${_PARAM[body]}" ]] ; then
+				NOTE_BODY="${_PARAM[body]}"
+			else
+				NOTE_BODY="$( cat - )"
+			fi
+
 			[[ -n "${_PARAM[issue]}" ]] && ISSUE="${_PARAM[issue]}" || ISSUE="${_ARGV[3]}"
 			# confidential=true|false, created_at=<iso8601 date/time>
 			
@@ -475,6 +482,7 @@ case "${CMD}" in
 			
 			if [[ "${GITLAB_RESOURCE}" =~ ^${REGEX_ISSUE}$ ]] ; then
 
+				GITLAB_RESOURCE_ISSUE=$( printf '%s' "${GITLAB_RESOURCE}" )
 				GITLAB_RESOURCE=$( printf "%s/%s" "${GITLAB_RESOURCE}" "notes" )
 				
 				declare -a ADGP_SW=( "${ME}" post "${GITLAB_RESOURCE}" "${CONTEXT_SW[@]}" )
@@ -484,8 +492,29 @@ case "${CMD}" in
 				[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
 				adpn_debug 25,adpn,gitlab,http,post,issue "${LINENO}" "printf '%%s' '%s' | %s" "${DBG_BODY}" "${ADGP_SW[*]}"
 				
-				printf "%s" "${NOTE_BODY}" | "${ADGP_SW[@]}"
-				EXITCODE="$?"
+				declare -A TMP_OUT=( [post_json]="$( mktemp )" )
+				if [[ -z "${_PARAM[no-body]}" && "${#NOTE_BODY}" -gt 0 ]] ; then
+					printf "%s" "${NOTE_BODY}" | "${ADGP_SW[@]}" | adpn-json.py --output=application/json --prolog --epilog >> "${TMP_OUT[post_json]}"
+					EXITCODE="$?"
+				fi
+				
+				if [[ "${EXITCODE}" -eq 0 ]] ; then
+					declare -a _LABEL_SW=()
+					[[ -n "${_PARAM[remove_labels]}" ]] && _LABEL_SW+=( "$( printf -- '--data-remove_labels=%s' "${_PARAM[remove_labels]}" )" )
+					[[ -n "${_PARAM[add_labels]}" ]] && _LABEL_SW+=( "$( printf -- '--data-add_labels=%s' "${_PARAM[add_labels]}" )" )
+
+					if [[ "${#_LABEL_SW[@]}" -gt 0 ]] ; then
+						declare -a _CMD_LABELS=( "${ME}" post "${_CONTEXT_SW[@]}" "--verb=PUT" "${GITLAB_RESOURCE_ISSUE}" "${_LABEL_SW[@]}" )
+						adpn_debug 25,adpn,gitlab,http,post,issue "${LINENO}" "%s" "${_CMD_LABELS[*]}"
+						"${_CMD_LABELS[@]}" | adpn-json.py --output=application/json --into="issue" --prolog --epilog >> "${TMP_OUT[post_json]}"
+						EXITCODE="$?"
+					fi
+				fi
+				cat "${TMP_OUT[post_json]}" | adpn-json.py --cascade --output=application/json
+				
+				for FILE in "${TMP_OUT[@]}" ; do
+					rm "${FILE}"
+				done
 				
 			else 
 			
@@ -500,10 +529,11 @@ case "${CMD}" in
 			if [[ -n "${_PARAM[url]}" ]] ; then
 				API_URL="${_PARAM[url]}"
 			fi
-		
+			
+			HTTP_VERB=$( adpn_parameter_from '--verb' '--request' '\POST' )
 			declare -a CURL_SW=()
 			CURL_SW+=( "--silent" )
-			CURL_SW+=( "--request" "POST" )
+			CURL_SW+=( "--request" "${HTTP_VERB}" )
 			if [[ -n "${_PARAM[fail]}" ]] ; then
 				CURL_SW+=( "--fail" )
 			fi
@@ -516,7 +546,7 @@ case "${CMD}" in
 				case "${KEY}" in 
 				"token"|"context"|"verbose"|"quiet"|"debug"|"dry-run")
 					;;
-				"fail")
+				"verb"|"request"|"fail")
 					;;
 				"pipe")
 					PIPED_TEXT="$( cat - )"
