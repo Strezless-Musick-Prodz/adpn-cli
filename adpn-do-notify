@@ -200,7 +200,14 @@ if [[ "staged" == "${INGEST_STEP}" ]] ; then
 
 elif [[ "output" == "${INGEST_STEP}" && -n "${GITLAB_RESOURCE}" ]] ; then
 	
-	declare -a ADG_POST_NOTE=( "adpn-gitlab-do" "post" "note" "${CONTEXT_SW[@]}" "${GITLAB_RESOURCE}" )
+	declare -a _LABEL_SW=()
+	if [[ -n "${_PARAM[remove_labels]}" ]] ; then
+		_LABEL_SW+=( "$( printf -- '--remove_labels=%s' "${_PARAM[remove_labels]}" )" )
+	fi
+	if [[ -n "${_PARAM[add_labels]}" ]] ; then
+		_LABEL_SW+=( "$( printf -- '--add_labels=%s' "${_PARAM[add_labels]}" )" )
+	fi
+	declare -a ADG_POST_NOTE=( "adpn-gitlab-do" "post" "note" "${CONTEXT_SW[@]}" "${GITLAB_RESOURCE}" "${_LABEL_SW[@]}" )
 	
 	DBG_BODY="$( printf "%s" "${BODY_TEXT}" | head -c 10 )"
 	[[ "${#BODY_TEXT}" -gt "${#DBG_BODY}" ]] && DBG_BODY+="..."
@@ -219,7 +226,7 @@ elif [[ "output" == "${INGEST_STEP}" && -n "${GITLAB_RESOURCE}" ]] ; then
 			GL_AUTHOR_USERNAME="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=author | grep -E '^username\s' | cut -s --fields=2- )"
 			GL_AUTHOR_REALNAME="$( cat "${ADPN_GITLAB_POST_JSON}" | adpn-json.py --key=author | grep -E '^name\s' | cut -s --fields=2- )"
 			[[ -z "${GL_AUTHOR_REALNAME}" ]] && GL_AUTHOR_REALNAME="${GL_AUTHOR_USERNAME}"
-			[[ -n "${GL_AUTHOR_USERNAME}" ]] && [[ "${GL_AUTHOR_REALNAME}" != "${GL_AUTHOR_USERNAME}" ]] &&GL_AUTHOR_REALNAME="${GL_AUTHOR_REALNAME} (@${GL_AUTHOR_USERNAME})"
+			[[ -n "${GL_AUTHOR_USERNAME}" ]] && [[ "${GL_AUTHOR_REALNAME}" != "${GL_AUTHOR_USERNAME}" ]] && GL_AUTHOR_REALNAME="${GL_AUTHOR_REALNAME} (@${GL_AUTHOR_USERNAME})"
 			
 			GL_NOTE_URL="${GITLAB_ISSUE}"
 			[[ -n "${GL_NOTE_ID}" ]] && GL_NOTE_URL="$( printf "%s#note_%s" "${GL_NOTE_URL}" "${GL_NOTE_ID}" )"

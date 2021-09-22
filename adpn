@@ -815,6 +815,13 @@ case "${CMD}" in
 			"$( printf -- "--template:in_order_to=%s" "${AN_IN_ORDER_TO}" )"
 			"$( printf -- "--template:pipe_cmdline=%s" "${PIPE_CMDLINE%%*( )}" )"
 		)
+		declare -a _LABEL_SW=()
+		if [[ -n "${_PARAM[remove_labels]}" ]] ; then
+			_LABEL_SW+=( "$( printf -- '--remove_labels=%s' "${_PARAM[remove_labels]}" )" )
+		fi
+		if [[ -n "${_PARAM[add_labels]}" ]] ; then
+			_LABEL_SW+=( "$( printf -- '--add_labels=%s' "${_PARAM[add_labels]}" )" )
+		fi
 		
 		[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '$ %s' "${_CMDLINE1[*]}"
 		adpn_debug 100,adpn,pipe,"${SUM1[1]}" "${LINENO}" 'exact$ %s %s' "${_CMD1[0]}" "$( printf "%q " "${_CMD1[@]:1}" )"
@@ -827,8 +834,8 @@ case "${CMD}" in
 		fi
 		
 		if [[ -n "${_PARAM[force]}" || "${EXITCODE}" -eq 0 ]] ; then
-			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s' "$( printf -- "%q " "${ME}" "notify" "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" )"
-			cat "${TMPFILES[PIPE_OUT]}" | convertto_plain_text | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}"
+			[[ -z "${QQ}" ]] && adpn_notice "${LINENO}" '| %s' "$( printf -- "%q " "${ME}" "notify" "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" "${_LABEL_SW[@]}" )"
+			cat "${TMPFILES[PIPE_OUT]}" | convertto_plain_text | "${ME}" notify "${CONTEXT_SW[@]}" "${AN_TEMPLATE[@]}" "${_LABEL_SW[@]}"
 			EXITCODE="$?"
 		else
 			[[ -n "${Q}" ]] && OUTPUT_NOTE=" Output below:" || OUTPUT_NOTE=""
