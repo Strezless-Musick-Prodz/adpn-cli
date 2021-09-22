@@ -10,6 +10,7 @@ SCRIPTDIR="$(dirname "${SCRIPTPATH}")"
 SCRIPT="$(basename "${SCRIPTPATH}")"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
+source "${SCRIPTDIR}/adpn-lockss-daemon-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="[${SCRIPT}] Try '${SCRIPT} help' for more information."
@@ -116,6 +117,59 @@ case "${CMD}" in
 
 		if [[ "${EXITCODE}" -gt 0 ]] ; then
 			printf "[%s:%d] adpn-ingest-test FAILED.\n" "${SCRIPT_CMD_NAME}" "${LINENO}" 1>&2
+		fi
+		;;
+	
+	"http")
+		
+		DAEMON_USER="$( adpn_parameter_from ".daemon/user" )"
+		DAEMON_PASS="$( adpn_parameter_from ".daemon/pass" )"
+		DAEMON_PASS="$( adpn_getpassword_from "${DAEMON_PASS}" )"
+		CREDENTIALS="${DAEMON_USER}:${DAEMON_PASS}"
+		FORMAT="$( adpn_parameter_from "--format" '\text' )"
+		
+		VERB="${_ARGV[2]}"
+		[[ -z "${VERB}" ]] && VERB=GET
+		
+		URL="$( adpn_parameter_from "--url" "${_ARGV[3]}" )"
+		if [[ "${URL}" =~ ^http(s)?:// ]] ; then
+			REQ_URL="${URL}${URL_SEP}output=${FORMAT}"
+		else
+			LOCKSS_DAEMON_URL_BASE=$( lockss_daemon_url_base )
+			REQ_URL="${LOCKSS_DAEMON_URL_BASE}/${URL##/}"
+			[[ "${REQ_URL}" =~ [?] ]] && URL_SEP="&" || URL_SEP="?"
+			REQ_URL="${REQ_URL}${URL_SEP}output=${FORMAT}"
+		fi
+
+		declare -a _CURLOPT=( "--request" "${VERB}" )
+		for KEY in "${!_PARAM[@]}" ; do 
+			case "${KEY}" in 
+			"context"|"verbose"|"quiet"|"debug"|"dry-run")
+				;;
+			"verb"|"request"|"fail")
+				;;
+			"pipe")
+				PIPED_TEXT="$( cat - )"
+				PIPED_PAIR="$( printf "%s=%s" "${_PARAM[$KEY]}" "${PIPED_TEXT}" )"
+				_CURLOPT+=( '--data-urlencode' "${PIPED_PAIR}")
+				;;
+			*)
+				[[ "${KEY}" =~ ^data-(.*) ]] && FIELD="${BASH_REMATCH[1]}" || FIELD="${KEY}"
+				_CURLOPT+=( "--data-urlencode" "${FIELD}=${_PARAM[$KEY]}" )
+				;;
+			esac
+		done
+
+		curl --fail --silent "${REQ_URL}" --user "${CREDENTIALS}" "${_CURLOPT[@]}"
+		EXITCODE="$?"
+		;;
+		
+	"refresh")
+		HTML_OUT="$( "${ME}" http POST "/DebugPanel" --data-action="Reload Config" --data-url="" --data-msg="" --data-auid="" )"
+		EXITCODE="$?"
+		
+		if [[ "${EXITCODE}" -eq 0 ]] ; then
+			adpn_notice "${LINENO}" "%s" "LOCKSS Daemon Configuration reloaded."
 		fi
 		;;
 		
