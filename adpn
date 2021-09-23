@@ -276,6 +276,9 @@ case "${CMD}" in
 				INGEST_TITLE_OP="~"
 			fi
 			"${SCRIPTDIR}/adpn-titlelist-do" get --au_title="${INGEST_TITLE_OP}${INGEST_TITLE}" --batch | convertto_json_table titlesdb | get_titlesdb_identifiers ; EXITCODE="$?"
+		elif [[ ! -e "${AU}" && "${AU}" =~ ^gitlab:(.*)$ ]] ; then
+			adpn_read_json_packet_source "${AU}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${_ARGV[3]}" "-" "head -n 1" "described"
+			EXITCODE="$?"
 		elif [[ ! -e "${AU}" && "${AU}" =~ ^(.*[ ].*)$ ]] ; then
 			INGEST_TITLE="${BASH_REMATCH[1]}"
 		fi
