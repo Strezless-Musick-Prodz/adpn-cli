@@ -148,7 +148,7 @@ case "${CMD}" in
 		AV_OUTPUT="$(mktemp)" ; declare -a TEMP_CLEANUP=( "${AV_OUTPUT}" )
 		
 		PIPELINE="$( adpn_parameter_from "--pipeline" "verified:ingested" )"
-		"${ADPN}" verify --pipeline="${PIPELINE}" "${_CMD_REST[@]}" > "${AV_OUTPUT}"
+		"${ADPN}" verify --from-here --pipeline="${PIPELINE}" "${_CMD_REST[@]}" > "${AV_OUTPUT}"
 		EXITCODE="$?"
 
 		cat "${AV_OUTPUT}" | grep -E -v "${ADPN_JSON_PACKET_REGEX}" ; echo

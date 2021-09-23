@@ -385,7 +385,7 @@ function on_node_do() {
 	
 	REMOTE_SW="$( adpn_parameter_from "--remote" )"
 	[[ -z "${REMOTE_SW}" ]] && NODE_SERVER="$( adpn_parameter_from '.node-server/ssh' )" || NODE_SERVER=""
-	[[ -z "${NODE_SERVER}" ]] && EXECUTE_AT="--node-server" || EXECUTE_AT="--remote=${NODE_SERVER}"
+	[[ -z "${NODE_SERVER}" || -n "${_PARAM[from-here]}" ]] && EXECUTE_AT="--as-node-server" || EXECUTE_AT="--remote=${NODE_SERVER}"
 	"${args[@]:0:1}" "${EXECUTE_AT}" "${args[@]:1}" || result="$?"
 	return "${result}"
 }
