@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# adpn-workflow-aliases: Define some common subroutines for getting data in and out from adpn-cli workflows
+
+[[ -r "${_ADPN_CONF_DIR}" ]] && [[ -r "${_ADPN_CONF_DIR}/steps.tsv" ]] && _ADPN_STEPS_FILE="${_ADPN_CONF_DIR}/steps.tsv" || _ADPN_STEPS_FILE=""
+
+function adpn_workflow_get_steps() {
+	local result=255
+	
+	cat "${_ADPN_STEPS_FILE}" ; result="$?"
+	return "${result}"
+}
+
+function adpn_workflow_get_step() {
+	local result=255
+	local lineno="$1" ; shift
+	local LINES=""
+	local LINE=""
+	local FLAGS SW
+	
+	if [[ "${lineno}" =~ ^[0-9]$ ]] ; then
+		LINES="$( adpn_workflow_get_steps | tail -n "+${lineno}" )" ; result="$?"
+	else 
+		LINES="$( adpn_workflow_get_steps | grep -E "^${lineno}\b" )" ; result="$?"
+	fi
+	LINE="$( printf "%s\n" "${LINES}" | head -n 1 )"
+	
+	local -a _PIPE_SW=() _CMD_SW=()
+	if [[ -n "${LINE}" ]] ; then
+		CMD="$( printf "%s\n" "${LINE}" | cut -sf 2 | sed -E 's/(^\s+|\s+$)//g' )"
+		SW="$( printf "%s\n" "${LINE}" | cut -sf 3 | sed -E 's/(^\s+|\s+$)//g' )"
+		TITLE="$( printf "%s\n" "${LINE}" | cut -sf 4 | sed -E 's/(^\s+|\s+$)//g' )"
+		MESSAGE="$( printf "%s\n" "${LINE}" | cut -sf 5 | sed -E 's/(^\s+|\s+$)//g' )"
+		
+		[[ -z "${SW}" || "${SW}" =~ ^--$ ]] || _CMD_SW+=( "${SW}" )
+		
+		_PIPE_SW+=( "$( printf -- "--label=%q" "${TITLE}" )" )
+		_PIPE_SW+=( "$( printf -- "--in-order-to=%q" "${MESSAGE}" )" )
+		SW=""
+		for FIELD in 6 7 ; do
+			FLAGS="$( printf "%s\n" "${LINE}" | cut -sf "${FIELD}" | sed -E 's/(^\s+|\s+$)//g' )"
+			if [[ -n "${FLAGS}" ]] ; then
+				if [[ "${FLAGS}" =~ ^[+](.*)$ ]] ; then
+					FLAGS="${BASH_REMATCH[1]}"
+					SW="--add_labels=%q"
+				elif [[ "${FLAGS}" =~ ^[-](.*)$ ]] ; then
+					FLAGS="${BASH_REMATCH[1]}"
+					SW="--remove_labels=%q"
+				else
+					SW="--add_labels=%q"
+				fi
+				_PIPE_SW+=( "$( printf -- "${SW}" "${FLAGS}" )" )
+			fi
+		done
+		
+		printf "%s pipe %s -- %s %s %s\n" "${ADPN}" "${_PIPE_SW[*]}" "${CMD}" "${_CMD_SW[*]}" "$(printf "%q " "$@" )"
+	fi
+	
+	return "${result}"
+}

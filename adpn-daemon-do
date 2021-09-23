@@ -87,7 +87,7 @@ case "${CMD}" in
 		AIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_INPUT}" )
 		AIT_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIT_OUTPUT}" )
 
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AIT_INPUT}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" "${PIPEDTO}" > "${AIT_INPUT}"
 		EXITCODE="$?"
 		
 		if [[ -r "${AIT_INPUT}" ]] ; then

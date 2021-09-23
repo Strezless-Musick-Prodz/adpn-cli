@@ -118,7 +118,7 @@ case "${CMD}" in
 
 		TEMP_CLEANUP[json_input]="$(mktemp)"
 
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${TEMP_CLEANUP[json_input]}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" "${PIPEDTO}" > "${TEMP_CLEANUP[json_input]}"
 		EXITCODE="$?"
 		
 		declare -a AU_LOCALPATHS=( )

@@ -17,6 +17,9 @@ ADPN_STASH="$( readlink --canonicalize "${SCRIPTDIR}/adpn-stash-do" )"
 
 __ALIASFILE__="$( basename "${BASH_SOURCE}" )"
 
+[[ -r "${HOME}/.adpn" ]] && _ADPN_CONF_DIR="${HOME}/.adpn" || _ADPN_CONF_DIR=""
+[[ -r "${_ADPN_CONF_DIR}" ]] && [[ -r "${_ADPN_CONF_DIR}/adpnet.json" ]] && _ADPN_CONF_FILE="${_ADPN_CONF_DIR}/adpnet.json" || _ADPN_CONF_FILE=""
+
 # adpn_parameter_from: retrieve and echo a property that may be found in one of several possible sources for parameter data, including
 # command-line switches, JSON configuration files, live JSON data, user console input, and fall-back defaults.
 # example: FOOBAR=$( adpn_parameter_from "--foo" "--bar" ".baz" "<FOO [bar]: " )
@@ -755,10 +758,9 @@ function echo_header() {
 }
 
 function adpn_read_json_packet_source() {
-	local PACKET_SOURCE="${1}"
-	local ME="${2}"
-	local CONTEXT="${3}"
-	local V="${4}"
+	local PACKET_SOURCE="${1}" ; shift
+	local CONTEXT="${1}" ; shift
+	local V="${1}" ; shift
 	local result=0
 	
 	declare -a AGGP_SW=()
@@ -798,6 +800,7 @@ function adpn_write_json_packets_from () {
 	local web_url="${1}" ; shift
 	local gitlab_resource="${1}" ; shift
 	
+	local -a json_defaults=()
 	local -a json=( "$@" )
 	local -a json_overlays=(
 		"$( adpn-json.py --key="Gitlab Issue" --value="${web_url}" --prolog )"
@@ -808,7 +811,14 @@ function adpn_write_json_packets_from () {
 		printf "%s\n" "${json[@]}"
 	else
 		for json_packet in "${json[@]}" ; do
-			printf "%s\n" "${json_packet}" "${json_overlays[@]}" | adpn-json.py --cascade --output="application/json" --prolog ; printf "\n"
+			local ingest_step="$( adpn_parameter_from ".Ingest Step<${json_packet}" )"
+			local -a _kv=()
+			[[ -n "${ingest_step}" ]] && _kv+=( "--key+=adpn:workflow" "--value+=${ingest_step}" )
+			json_defaults=(
+				"$( printf '%s\n' '{ "adpn:workflow": [] }' | adpn-json.py --output=application/json --prolog "${_kv[@]}" )"
+			)
+
+			printf "%s\n" "${json_defaults[@]}" "${json_packet}" "${json_overlays[@]}" | adpn-json.py --cascade --output="application/json" --prolog ; printf "\n"
 		done
 	fi
 }
@@ -842,15 +852,20 @@ function adpn_get_json_packets() {
 }
 
 function adpn_select_json_packet() {
-	local piped_from="${1}"
+	local piped_from="${1}" ; shift
 
-	local packets_from="${2}"
+	local packets_from="${1}" ; shift
 	[[ -z "${packets_in}" ]] && packets_in="-"
 	
 	local -a filter=()
-	IFS=" " read -ra filter <<< "${3}"
+	IFS=" " read -ra filter <<< "${1}" ; shift
 	[[ "${#filter[@]}" -eq 0 ]] && filter=( "head" "-n" "1" )
 	
+	local -a addon=( "adpn-json.py" "--output=application/json" "--prolog" )
+	local addon_step="${1}" ; shift
+	#[[ -z "${addon_step}" ]] && 
+	[[ -n "${addon_step}" ]] && addon+=( "--key+=adpn:workflow" "--value+=${addon_step}" )
+
 	if [[ "-" == "${packets_from}" || -r "${packets_from}" ]] ; then
 		local GREP=""
 		local packets_recvd="$( cat "${packets_from}" )"
@@ -864,7 +879,6 @@ function adpn_select_json_packet() {
 			result="$?"
 			
 			adpn_debug 50 "${__ALIASFILE__}:${LINENO}" 'adpn-json.py >>> ~~~\n%s\n~~~\n\n' "${GREP}"
-			[[ -n "${GREP}" ]] && printf "%s" "${GREP}" | "${filter[@]}"
 		fi
 		
 		# 2. If not, or if we haven't got that step, let's take one of the packets that seems to be available
@@ -876,8 +890,10 @@ function adpn_select_json_packet() {
 			GREP="$( printf "%s" "${packets_recvd}" | adpn_get_json_packets | "${filter[@]}" )"
 			result="$?"
 			
-			[[ "${GREP}" ]] && printf "%s" "${GREP}" || result=1
+			[[ -n "${GREP}" ]] && adpn_debug 50 "${__ALIASFILE__}:${LINENO}" 'json by default >>> ~~~\n%s\n~~~\n\n' "${GREP}" || result=1
 		fi
+
+		[[ -n "${GREP}" ]] && printf "%s" "${GREP}" | "${filter[@]}" | "${addon[@]}"
 		
 		adpn_debug 20 "${__ALIASFILE__}:${LINENO}" 'JSON source (%s) = <<<EOF\n%s\nEOF;\n\n' "${AIT_INPUT}" "${GREP}"
 	else

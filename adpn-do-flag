@@ -82,10 +82,10 @@ else
 	adpn_set_pipeline_step "published:flagged" "flag"
 	
 	AIIT_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${AIIT_INPUT}" )
-		
-	declare -a AGJP_ARGV=( "${_ARGV[1]}" "${ME}" "${SCRIPT}" "${CMD}" "${V}" )
+	
+	declare -a AGJP_ARGV=( "${_ARGV[1]}" "${SCRIPT_CMD_NAME}" "${V}" )
 	adpn_debug 10 "${LINENO}" "$( printf "%s " "${AGJP_ARGV[@]}" )"
-	adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" > "${AIIT_INPUT}" ; EXITCODE="$?"
+	adpn_read_json_packet_source "${AGJP_ARGV[@]}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" "${PIPEDTO}" > "${AIIT_INPUT}" ; EXITCODE="$?"
 	
 	declare -a AF_PARAMS=( "${_ARGV[@]:2}" )
 	[[ -n "${_PARAM[key]}" ]] && AIIT_PARAM_KEY="${_PARAM[key]}" || { AIIT_PARAM_KEY="${AF_PARAMS[0]}" ; AF_PARAMS=( "${AF_PARAMS[@]:1}" ) ; }

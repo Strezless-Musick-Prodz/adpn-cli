@@ -10,6 +10,7 @@ SCRIPTDIR="$( dirname "${SCRIPTPATH}" )"
 
 source "${SCRIPTDIR}/adpn-define-aliases"
 source "${SCRIPTDIR}/adpn-lockss-daemon-aliases"
+source "${SCRIPTDIR}/adpn-workflow-aliases"
 
 __USAGE__="Usage: ${SCRIPT} [--version] [--help] <CMD> [<ARGS>]"
 __HELP__="Try '${SCRIPT} help' for more information."
@@ -167,7 +168,7 @@ case "${CMD}" in
 # @version 2021.0910
 
 		TESTDIR="${SCRIPTDIR}/json/tests"
-		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json|adpn_notice)$ ]] ; then
+		if [[ "${_ARGV[2]}" =~ ^(adpnprop|adpn_parameter_from|adpn_getpassword_from|adpn_opened_get_labels|adpn_check_au_status|adpn_plugin_parameter_from_json|adpn_notice|adpn_workflow_get_step)$ ]] ; then
 			TEST_FUNCTION="${_ARGV[2]}"
 			if [[ -n "${_PARAM[pipe]}" ]] ; then
 				PIPED_INPUT="$( cat "-" )"
@@ -367,7 +368,7 @@ case "${CMD}" in
 		TEMPFILES[STAGER_OUTPUT]="$( mktemp )"
 		TEMPFILES[STAGER_DIR]="$( mktemp -d )"
 		
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "staged" "-" "tail -n 1" > "${TEMPFILES[STAGER_INPUT]}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "staged" "-" "tail -n 1" "unstaged" > "${TEMPFILES[STAGER_INPUT]}"
 		EXITCODE="$?"
 		
 		SUBDIRECTORY="$( adpn_parameter_from "--subdirectory" "--directory" )"
@@ -631,7 +632,7 @@ case "${CMD}" in
 
 		AN_INPUT=$( mktemp )
 		
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" > "${AN_INPUT}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "head -n 1" "${PIPEDTO}" > "${AN_INPUT}"
 		
 		adpn notify < "${AN_INPUT}"
 		rm "${AN_INPUT}"
@@ -672,7 +673,7 @@ case "${CMD}" in
 		DST_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_INPUT}" )
 		DST_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_OUTPUT}" )
 		
-		adpn_read_json_packet_source "${_ARGV[2]}" "${ME}" "${SCRIPT} ${CMD}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" > "${DST_INPUT}"
+		adpn_read_json_packet_source "${_ARGV[2]}" "${SCRIPT_CMD_NAME}" "${V}" | adpn_get_json_packets | adpn_select_json_packet "${PIPEDFROM}" "-" "tail -n 1" "${PIPEDTO}" > "${DST_INPUT}"
 		EXITCODE="$?"
 
 		if [[ -s "${DST_INPUT}" ]] ; then
@@ -797,6 +798,10 @@ case "${CMD}" in
 		adpn-gitlab-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
 		;;
 	
+	"workflow")
+		adpn-workflow-do "${_ADD_CONTEXT[@]}" "${_CMD_REST[@]}" ; EXITCODE="$?"
+		;;
+		
 	"pipe")
 		declare -a _CMD1=( "${ADPN}" "${CONTEXT_SW[@]}" --passthru "${_ARGV[@]:2}" )
 		declare -a _CMDLINE1=( "${SCRIPT}" "${_ARGV[@]:2}" )
