@@ -2,7 +2,7 @@
 #
 # adpn: master script for scripted ADPNet operations.
 #
-# @version 2021.0922
+# @version 2021.0924
 
 SCRIPTPATH="$( which "$0" )"
 SCRIPTPATH="$( readlink --canonicalize "${SCRIPTPATH}" )"
@@ -662,16 +662,20 @@ case "${CMD}" in
 # If one or more test conditions are provided in options, then the command will return exit code
 # 0=all test conditions were met; 1=one or more tests failed.
 #
-# @version 2021.0824
+# @version 2021.0924
 		
 		declare -a TEMP_CLEANUP=()
 
-		PIPELINE="$( adpn_parameter_from "--pipeline" "published:unstaged" )"
-		if [[ -n "${PIPELINE}" ]] ; then
-			PIPEDFROM=$( printf "%s" "${PIPELINE}" | cut --field=1 --delimiter=":" )
-			PIPEDTO=$( printf "%s" "${PIPELINE}" | cut --field=2 --delimiter=":" )
-			adpn_debug 2 "${LINENO}" "SWITCH='%s', PIPELINE='%s': PIPEDFROM='%s', PIPEDTO='%s'\n" "${_SWITCHES[pipeline]}" "${PIPELINE}" "${PIPEDFROM}" "${PIPEDTO}" 1>&2
-		fi
+		declare -a _CONFIRMED_TESTS=()
+		_PIPELINE_FROM=""
+		[[ -n "${_PARAM[added]}" ]] && _CONFIRMED_TESTS+=( "${_PARAM[added]}" ) && _PIPELINE_FROM=verified
+		[[ -n "${_PARAM[crawled]}" ]] && _CONFIRMED_TESTS+=( "${_PARAM[crawled]}" ) && _PIPELINE_FROM=ingested
+		[[ -n "${_PARAM[preserved]}" ]] && _CONFIRMED_TESTS+=( "${_PARAM[preserved]}" ) && _PIPELINE_FROM=published
+		[[ -n "${_PARAM[down]}" ]] && _CONFIRMED_TESTS+=( "${_PARAM[down]}" ) && _PIPELINE_FROM="confirmed-preserved"
+		[[ "${#_ARGV[@]}" -gt 3 ]] && _CONFIRMED_TESTS+=( "${_ARGV[@]:3}" )
+		_PIPELINE_TO="$( join_by "-" "confirmed" "${_CONFIRMED_TESTS[@]}" )"
+
+		adpn_set_pipeline_step "${_PIPELINE_FROM}:${_PIPELINE_TO}" "confirm"
 
 		DST_INPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_INPUT}" )
 		DST_OUTPUT="$(mktemp)" ; TEMP_CLEANUP+=( "${DST_OUTPUT}" )
@@ -689,10 +693,10 @@ case "${CMD}" in
 
 			declare -a DST_GREP_OPT=( "Volume" )
 			declare -a DST_GREP_TESTS=( )
-			[[ "${_PARAM[added]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~Waiting for [A-Za-z]+' 'LastCompletedPoll=~.*' )
-			[[ "${_PARAM[crawled]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~(Waiting for Poll|[0-9.]*[%] Agreement)' 'LastCompletedCrawl=>0' 'LastCompletedPoll=~.*' )
-			[[ "${_PARAM[preserved]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl Result" "Last Completed Poll" "Last Poll Result" ) && DST_GREP_TESTS+=( 'Status=100.00% Agreement' 'LastCompletedCrawl=>0' 'LastCompletedPoll=>0' )
-			[[ "${_PARAM[down]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" "Available From Publisher" ) && DST_GREP_TESTS+=( "AvailableFromPublisher=No" )
+			[[ -n "${_PARAM[added]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~Waiting for [A-Za-z]+' 'LastCompletedPoll=~.*' )
+			[[ -n "${_PARAM[crawled]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" ) && DST_GREP_TESTS+=( 'Status=~(Waiting for Poll|[0-9.]*[%] Agreement)' 'LastCompletedCrawl=>0' 'LastCompletedPoll=~.*' )
+			[[ -n "${_PARAM[preserved]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl Result" "Last Completed Poll" "Last Poll Result" ) && DST_GREP_TESTS+=( 'Status=100.00% Agreement' 'LastCompletedCrawl=>0' 'LastCompletedPoll=>0' )
+			[[ -n "${_PARAM[down]}" ]] && DST_GREP_OPT+=( "Disk Usage" "Status" "Last Completed Crawl" "Last Crawl" "Last Crawl Result" "Available From Publisher" ) && DST_GREP_TESTS+=( "AvailableFromPublisher=No" )
 			[[ "${#_ARGV[@]}" -gt 3 ]] && DST_GREP_OPT+=( "${_ARGV[@]:3}" )
 			[[ "${#DST_GREP_OPT[@]}" -le 1 ]] && DST_GREP_OPT+=( ".*" )
 			

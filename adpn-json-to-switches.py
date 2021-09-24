@@ -68,7 +68,8 @@ Written to stdout, one switch per line. For example:
 			"Packaged In": "packaged-in",
 			"Packaged By": "packaged-by",
 			"Gitlab Issue": "gitlab-issue",
-			"Gitlab Resource": "gitlab-resource"
+			"Gitlab Resource": "gitlab-resource",
+			"adpn:workflow": "adpn:workflow"
 		}
 		
 	def key_to_switch (self, key, value=None) :
@@ -83,13 +84,39 @@ Written to stdout, one switch per line. For example:
 		else :
 			self.write_switches_from_json()
 	
+	def write_key_value_from_switch (self, switch, key, value, table) :
+		if value is None :
+			pass
+		elif type(value) is list :
+			for item in value :
+				self.write_key_value_from_switch(switch, key, item, table)
+		else :
+			print( "\t".join( [ key, value ] ) )
+		table[switch] = None # Do this once only
+	
 	def write_tsv_from_switches (self) :
 		to_print = { **self.switches }
 		for (key, switch) in self.key_mappings.items() :
-			if to_print.get(switch) is not None :
-				print( "\t".join( [ key, to_print.get(switch) ] ) )
-				to_print[switch] = None # Do this once only
-				
+			self.write_key_value_from_switch(switch, key, to_print.get(switch), to_print)
+	
+	def write_switch_from_key_value (self, key, value, switch=None) :
+		switch_name = switch if switch is not None else key
+		sw = None
+		if value is not None :
+			if type(value) is bool :
+				sw = ('--%(sw)s' % { "sw": switch_name }) if value else None
+			elif type(value) is int :
+				sw = ('--%(sw)s=%(v)d' % { "sw": switch_name, "v": value })
+			elif type(value) is float :
+				sw = ('--%(sw)s=%(v)f' % { "sw": switch_name, "v": value })
+			elif type(value) is list :
+				for item in value :
+					self.write_switch_from_key_value(key, item)
+			else :
+				sw = ('--%(sw)s=%(v)s' % { "sw": switch_name, "v": str(value) })
+		if sw is not None :
+			print(sw)
+	
 	def write_switches_from_json (self) :
 		try :
 			jsonInput = myPyJSON(splat=True, cascade=True)
@@ -103,18 +130,7 @@ Written to stdout, one switch per line. For example:
 			
 			for (key, switch) in self.key_mappings.items() :
 				value = table.get(key)
-				sw = None
-				if value is not None :
-					if type(value) is bool :
-						sw = ('--%(sw)s' % { "sw": switch }) if value else None
-					elif type(table.get(key)) is int :
-						sw = ('--%(sw)s=%(v)d' % { "sw": switch, "v": value })
-					elif type(table.get(key)) is float :
-						sw = ('--%(sw)s=%(v)f' % { "sw": switch, "v": value })
-					else :
-						sw = ('--%(sw)s=%(v)s' % { "sw": switch, "v": str(value) })
-				if sw is not None :
-					print(sw)
+				self.write_switch_from_key_value(key, value, switch)
 			
 			if ('parameters' in table) :
 				if len(table) > 0 :
@@ -180,7 +196,7 @@ if __name__ == '__main__' :
 	scriptname = sys.argv[0]
 	scriptname = os.path.basename(scriptname)
 
-	(sys.argv, switches) = myPyCommandLine(sys.argv).parse()
+	(sys.argv, switches) = myPyCommandLine(sys.argv, defaults={ "adpn:workflow": [] }).parse()
 	
 	exitcode = 0
 	script = ADPNJSONToSwitches(scriptname, switches)

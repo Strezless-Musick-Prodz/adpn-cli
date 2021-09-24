@@ -47,7 +47,14 @@ if __name__ == '__main__' :
 				value=fields[1]
 
 			if 'application/json' == switches['output'] :
-				table[key] = value
+				if table.get(key) is None :
+					table[key] = value
+				elif type(table.get(key)) is list :
+					table.get(key).append(value)
+				elif re.match(r'[^:]+:[^+]', key) :
+					table[key] = [ table.get(key), value ]
+				else :
+					table[key] = value
 			else :
 				print(key.upper() + ":\t" + value)
 		

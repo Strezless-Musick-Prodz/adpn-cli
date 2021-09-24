@@ -16,7 +16,7 @@
 # same switch is provided on the command line, the value on the command line overrides the
 # value provided in the defaults.conf file.
 #
-# @version 2021.0402
+# @version 2021.0924
 
 __doc__="""
 Usage:
@@ -187,7 +187,8 @@ adpn_command_line "${SWITCHFILES[@]}"
 
 for KEY in "${!_PARAM[@]}" ; do
 	VALUE="${_PARAM[$KEY]}"
-	case "${KEY}" in
+	SWITCH_KEY="$( printf "${KEY}" | sed -E 's/[#][0-9]+$//g' )"
+	case "${SWITCH_KEY}" in
 		"jar")
 			JAR="${VALUE}"
 			;;
@@ -197,7 +198,7 @@ for KEY in "${!_PARAM[@]}" ; do
 		"batch"|"local"|"remote"|"verbose")
 			# NOOP: adpn-ingest-test operational parameters, not a passthru
 			;;
-		"au_title"|"staged"|"staged-to"|"staged-by"|"verified-by"|"packaged-in"|"packaged-by"|"gitlab-issue"|"gitlab-resource"|"file-size"|"peer"|"peer-from"|"peer-to"|"ingest-report"|"gitlab-issue"|"gitlab-resource")
+		"au_title"|"staged"|"staged-to"|"staged-by"|"verified-by"|"packaged-in"|"packaged-by"|"gitlab-issue"|"gitlab-resource"|"file-size"|"peer"|"peer-from"|"peer-to"|"ingest-report"|"gitlab-issue"|"gitlab-resource"|"adpn:workflow")
 			# NOOP: adpn-ingest-test descriptive passthru parameters
 			;;
 		"daemon"|"plugin"|"plugin-regex"|"plugin-keywords"|"plugin-id"|"user")
@@ -363,7 +364,7 @@ else
 
 	declare -a TO_TSV=( \
 		"peer-from" "peer-to" \
-		"ingest-report" \
+		"ingest-report" "adpn:workflow" \
 		"staged-to" "staged-by" \
 		"verified-by" \
 		"packaged-in" "packaged-by" \
@@ -371,6 +372,12 @@ else
 	)
 	for KEY in "${TO_TSV[@]}" ; do
 		[[ -n "${_SWITCHES[$KEY]}" ]] && adpn-json-to-switches.py --reverse "${_SWITCHES[$KEY]}" >> "${PLUGINTXT}"
+		
+		I=2 ; KEY_I="${KEY}#${I}"
+		while [[ -n "${_SWITCHES[$KEY_I]}" ]] ; do
+			adpn-json-to-switches.py --reverse "${_SWITCHES[$KEY_I]}" >> "${PLUGINTXT}"
+			I=$(( I + 1 )) ; KEY_I="${KEY}#${I}"
+		done
 	done
 	
 	if [[ ! -z "${_PARAM[pipeline]}" ]] ; then
@@ -411,6 +418,7 @@ else
 	if [[ "${LOCKSSRETRIEVEJAR}" -eq 0 ]] ; then
 		pluginprop "${PLUGINTXT}" "PARAM[(].*[)]:"
 	fi
+	
 	######################################################################################
 	### adpn-ingest-test-url-ok.py: if all Plugin Parameters provided, test URLs OK ######
 	######################################################################################
