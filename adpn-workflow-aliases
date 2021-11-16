@@ -20,6 +20,8 @@ function adpn_workflow_get_step() {
 	
 	if [[ "${lineno}" =~ ^[0-9]$ ]] ; then
 		LINES="$( adpn_workflow_get_steps | tail -n "+${lineno}" )" ; result="$?"
+	elif [[ "${lineno}" =~ ^-([A-Za-z]+: .*)$ ]] ; then
+		LINES="$( adpn_workflow_get_steps | grep -F -i -- $'\t'"${lineno}" )"
 	else 
 		LINES="$( adpn_workflow_get_steps | grep -E "^${lineno}\b" )" ; result="$?"
 	fi
@@ -53,7 +55,11 @@ function adpn_workflow_get_step() {
 			fi
 		done
 		
-		printf "%s pipe %s -- %s %s %s\n" "${ADPN}" "${_PIPE_SW[*]}" "${CMD}" "${_CMD_SW[*]}" "$(printf "%q " "$@" )"
+		if [[ "${CMD}" =~ ^([^&]+)(&&)([^&]+)$ ]] ; then
+			printf "%s %s %s && %s %s %s %s %s\n" "${ADPN}" "${BASH_REMATCH[1]}" "$( printf "%q " "$@")" "${ADPN}" "${BASH_REMATCH[3]}" "${_PIPE_SW[*]}" "${_CMD_SW[*]}" "$( printf "%q " "$@")"
+		else
+			printf "%s pipe %s -- %s %s %s\n" "${ADPN}" "${_PIPE_SW[*]}" "${CMD}" "${_CMD_SW[*]}" "$(printf "%q " "$@" )"
+		fi
 	fi
 	
 	return "${result}"

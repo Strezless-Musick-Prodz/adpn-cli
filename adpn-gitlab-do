@@ -410,6 +410,11 @@ case "${CMD}" in
 		# Treat this as a request for the Gitlab private access token as stored in adpnet.json or the encrypted KeePass database
 			
 			"${ME}" token "${ADG_ARGV[@]}" ; EXITCODE="$?"
+		
+		elif [[ "${OBJECT}" == "labels" ]] ; then
+		
+			ISH_JSON="$( "${ME}" issue --output=application/json "${ADG_ARGV[@]}" )" ; EXITCODE="$?"
+			[[ "${EXITCODE}" -eq 0 ]] && printf "%s" "${ISH_JSON}" | adpn-json.py --key="labels"
 			
 		else 
 		# Treat this as one or more direct requests to the Gitlab API / refs <https://docs.gitlab.com/ee/api/README.html>
