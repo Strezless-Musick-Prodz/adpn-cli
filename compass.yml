@@ -1,0 +1,13 @@
+name: adpn-cli
+id: ari:cloud:compass:1051b516-7af4-47f5-9157-912549a8adef:component/f21c7ce4-c402-48e4-8dd8-7e9eb713fe26/a64a749c-4533-41fb-a8ec-cd71928f4a23
+description: ADPN Command-Line Tool
+configVersion: 1
+typeId: SERVICE
+fields:
+  tier: 4
+links: []
+relationships:
+  DEPENDS_ON: []
+labels:
+  - source:github
+customFields: null
